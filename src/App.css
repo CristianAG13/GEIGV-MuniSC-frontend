@@ -1,42 +1,531 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* Estilos específicos del Portal Municipal */
+
+/* Layout principal */
+.main-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+
+    background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url("./assets/Monumento.jpg") center/cover no-repeat;
+  /* asegura que se vea */
+  min-height: 72vh;         /* o 100vh si quieres pantalla completa */
+  position: relative;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Header */
+.main-header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 15px 0;
+    position: relative;
+    z-index: 100;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
-.card {
-  padding: 2em;
+.municipal-logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
 
-.read-the-docs {
-  color: #888;
+.logo-image {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    box-shadow: var(--shadow);
+}
+
+.logo-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.logo-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--dark-gray);
+    margin: 0;
+}
+
+.logo-subtitle {
+    font-size: 14px;
+    color: var(--medium-gray);
+    margin: 0;
+}
+
+.header-title {
+    text-align: center;
+    flex: 1;
+}
+
+.portal-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--dark-gray);
+    margin: 0 0 5px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.portal-subtitle {
+    font-size: 14px;
+    color: var(--medium-gray);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.header-btn {
+    padding: 10px 20px;
+    border: 2px solid var(--primary-green);
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+.btn-login {
+    background: var(--primary-green);
+    color: var(--white);
+}
+
+.btn-login:hover {
+    background: var(--primary-green-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+}
+
+.btn-register {
+    background: transparent;
+    color: var(--dark-gray);
+}
+
+.btn-register:hover {
+    background: var(--light-gray);
+}
+
+/* Contenido principal */
+.main-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.content-container {
+    max-width: 1200px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 60px;
+    align-items: center;
+}
+
+.content-left {
+    color: var(--white);
+}
+
+.welcome-title {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.welcome-subtitle {
+    font-size: 20px;
+    margin-bottom: 30px;
+    opacity: 0.9;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.welcome-description {
+    font-size: 16px;
+    line-height: 1.6;
+    opacity: 0.8;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* Formulario de login */
+.login-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dark-gray);
+    margin-bottom: 10px;
+}
+
+.login-subtitle {
+    font-size: 14px;
+    color: var(--medium-gray);
+    margin-bottom: 20px;
+}
+
+.login-form {
+    width: 100%;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--dark-gray);
+    font-size: 14px;
+}
+
+.form-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--white);
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--dark-gray);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--primary-green);
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--medium-gray);
+    font-size: 16px;
+}
+
+.input-with-icon .form-input {
+    padding-left: 48px;
+}
+
+.login-actions {
+    margin-top: 30px;
+}
+
+.btn-login-submit {
+    width: 100%;
+    background: var(--primary-green);
+    color: var(--white);
+    border: none;
+    padding: 14px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 15px;
+}
+
+.btn-login-submit:hover {
+    background: var(--primary-green-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+}
+
+.btn-digital-signature {
+    width: 100%;
+    background: transparent;
+    color: var(--dark-gray);
+    border: 2px solid var(--border-color);
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+}
+
+.btn-digital-signature:hover {
+    background: var(--light-gray);
+    border-color: var(--medium-gray);
+}
+
+.login-links {
+    text-align: center;
+}
+
+.forgot-password {
+    color: var(--primary-green);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+.forgot-password:hover {
+    text-decoration: underline;
+}
+
+.back-link {
+    color: var(--medium-gray);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border: 2px solid var(--border-color);
+    padding: 10px 20px;
+    border-radius: 4px;
+    display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+.back-link:hover {
+    background: var(--light-gray);
+    border-color: var(--medium-gray);
+}
+
+/* Footer */
+.main-footer {
+    background: rgba(0, 0, 0, 0.8);
+    color: var(--white);
+    padding: 20px 0;
+    text-align: center;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.footer-text {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.footer-icons {
+    display: flex;
+    gap: 15px;
+}
+
+.footer-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.footer-icon:hover {
+    background: var(--primary-green);
+    transform: translateY(-2px);
+}
+
+/* Dashboard (para después del login) */
+.dashboard-container {
+    min-height: 100vh;
+    background: var(--light-gray);
+}
+
+.dashboard-header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border-color);
+    padding: 15px 0;
+}
+
+.dashboard-nav {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dashboard-logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.dashboard-user {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.user-info {
+    text-align: right;
+}
+
+.user-name {
+    font-weight: 600;
+    color: var(--dark-gray);
+    margin: 0;
+}
+
+.user-role {
+    font-size: 12px;
+    color: var(--medium-gray);
+    margin: 0;
+}
+
+.logout-btn {
+    background: var(--primary-green);
+    color: var(--white);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    background: var(--primary-green-hover);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .content-container {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        text-align: center;
+    }
+    
+    .login-card {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    .portal-title {
+        font-size: 24px;
+    }
+    
+    .welcome-title {
+        font-size: 36px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-container {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+    }
+    
+    .header-left {
+        justify-content: center;
+    }
+    
+    .header-actions {
+        justify-content: center;
+    }
+    
+    .portal-title {
+        font-size: 20px;
+    }
+    
+    .welcome-title {
+        font-size: 28px;
+    }
+    
+    .welcome-subtitle {
+        font-size: 18px;
+    }
+    
+    .login-card {
+        padding: 30px 20px;
+        margin: 0 10px;
+    }
+    
+    .footer-container {
+        flex-direction: column;
+        gap: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 20px 10px;
+    }
+    
+    .welcome-title {
+        font-size: 24px;
+    }
+    
+    .welcome-subtitle {
+        font-size: 16px;
+    }
+    
+    .login-card {
+        padding: 20px 15px;
+    }
+    
+    .login-title {
+        font-size: 20px;
+    }
 }
