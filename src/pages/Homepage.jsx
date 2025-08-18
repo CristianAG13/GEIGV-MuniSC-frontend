@@ -485,17 +485,17 @@ export default function Homepage() {
 
   const heroSlides = [
     {
-      image: "/placeholder.svg?height=500&width=1920",
+      image: "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop",
       title: "Bienvenidos a la Municipalidad de Santa Cruz",
       subtitle: "Trabajando juntos por el desarrollo de nuestra comunidad",
     },
     {
-      image: "/placeholder.svg?height=500&width=1920",
+      image: "https://images.pexels.com/photos/3184338/pexels-photo-3184338.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop",
       title: "Servicios de Calidad para Nuestros Ciudadanos",
       subtitle: "Comprometidos con la excelencia en cada servicio que brindamos",
     },
     {
-      image: "/placeholder.svg?height=500&width=1920",
+      image: "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop",
       title: "Infraestructura Vial de Primera",
       subtitle: "Manteniendo y mejorando nuestras carreteras para el progreso",
     },
@@ -536,7 +536,7 @@ export default function Homepage() {
       content:
         "El pasado viernes se inauguró el nuevo Centro de Salud de Santa Cruz, con consultorios especializados, sala de emergencias, laboratorio y farmacia. Operará 24/7 con personal altamente calificado.",
       date: "15 de enero, 2024",
-      image: "/placeholder.svg?height=300&width=400",
+      image: "https://images.pexels.com/photos/263402/pexels-photo-263402.jpeg?auto=compress&cs=tinysrgb&w=800",
       category: "SALUD",
     },
     {
@@ -546,7 +546,7 @@ export default function Homepage() {
       content:
         "Proyecto de reparación y asfaltado de 25 km de caminos que conectan comunidades. Incluye alcantarillas, drenaje y carpeta asfáltica en los tramos más transitados.",
       date: "8 de enero, 2024",
-      image: "/placeholder.svg?height=300&width=400",
+      image: "https://images.pexels.com/photos/1563356/pexels-photo-1563356.jpeg?auto=compress&cs=tinysrgb&w=800",
       category: "INFRAESTRUCTURA",
     },
     {
@@ -556,7 +556,7 @@ export default function Homepage() {
       content:
         "Del 15 al 18 de febrero se realizará el Festival Cultural Santa Cruz 2024: folclor, artesanías, comida típica y mucho más. Entrada gratuita en el Parque Central.",
       date: "3 de enero, 2024",
-      image: "/placeholder.svg?height=300&width=400",
+      image: "https://images.pexels.com/photos/1190297/pexels-photo-1190297.jpeg?auto=compress&cs=tinysrgb&w=800",
       category: "CULTURA",
     },
   ];
