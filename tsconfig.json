@@ -1,0 +1,34 @@
+// {
+//   "compilerOptions": {
+//     "allowJs": true,
+//     "jsx": "react-jsx",
+//     "checkJs": false,
+//     "module": "ESNext",
+//     "target": "ES6",
+//     "moduleResolution": "node",
+//     "strict": true,
+//     "esModuleInterop": true,
+//     "skipLibCheck": true,
+//     "forceConsistentCasingInFileNames": true
+//   },
+//   "include": ["src"],
+//   "exclude": ["node_modules"]
+// }
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "baseUrl": "src",
+    "outDir": "dist",
+    "paths": { "pages/*": ["pages/*"] }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
