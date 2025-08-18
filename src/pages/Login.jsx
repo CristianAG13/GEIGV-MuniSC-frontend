@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { MapPin, AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import apiClient from "../config/api.js";
-
+import bgImg from '../assets/Monumento.jpg'; // ajusta el ../ según tu carpeta
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -103,7 +103,7 @@ export default function Login() {
     <div
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
-        backgroundImage: `url('\assets\Monumento.jpg')`,
+        backgroundImage: `url(${bgImg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
