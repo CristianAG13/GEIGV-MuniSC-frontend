@@ -3,19 +3,22 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import muniLogo from "../assets/logo.png";
+import authService from "../services/authService";
 
 export default function Register() {
   const [formData, setFormData] = useState({
+    name: "",
+    lastname: "",
     email: "",
     password: "",
-    name: "",
-    lastName: "",
+    confirmPassword: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const navigate = useNavigate();
 
@@ -29,6 +32,7 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
 
     // Validaciones básicas en front
     if (formData.password !== formData.confirmPassword) {
@@ -39,27 +43,40 @@ export default function Register() {
       setError("La contraseña debe tener al menos 6 caracteres");
       return;
     }
-    const ageNum = parseInt(formData.age, 10);
-    if (isNaN(ageNum) || ageNum < 18 || ageNum > 65) {
-      setError("La edad debe estar entre 18 y 65 años");
+    if (!formData.name.trim()) {
+      setError("El nombre es requerido");
       return;
     }
-    if (!formData.gender) {
-      setError("Por favor selecciona un género");
+    if (!formData.lastname.trim()) {
+      setError("El apellido es requerido");
+      return;
+    }
+    if (!formData.email.trim()) {
+      setError("El email es requerido");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Aquí harías tu request real al backend
-      // await api.post('/register', {...formData})
+      const result = await authService.register({
+        name: formData.name.trim(),
+        lastname: formData.lastname.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+      });
 
-      // Demo: simula éxito
-      await new Promise((r) => setTimeout(r, 900));
-      // Redirige a donde quieras
-      navigate("/login");
+      if (result.success) {
+        setSuccessMessage("Cuenta creada exitosamente. Redirigiendo al login...");
+        // Esperar un poco para mostrar el mensaje y luego redirigir
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
+      } else {
+        setError(result.error || "Error al crear la cuenta");
+      }
     } catch (err) {
+      console.error("Error inesperado:", err);
       setError("Error de conexión. Intenta nuevamente.");
     } finally {
       setIsLoading(false);
@@ -95,14 +112,20 @@ export default function Register() {
               </div>
             )}
 
+            {successMessage && (
+              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
+                {successMessage}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre *
                 </label>
                 <input
-                  name="firstName"
-                  value={formData.firstName}
+                  name="name"
+                  value={formData.name}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
                   placeholder="Tu nombre"
@@ -115,8 +138,8 @@ export default function Register() {
                   Apellido *
                 </label>
                 <input
-                  name="lastName"
-                  value={formData.lastName}
+                  name="lastname"
+                  value={formData.lastname}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
                   placeholder="Tu apellido"

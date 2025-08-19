@@ -95,12 +95,64 @@ class AuthService {
     return localStorage.getItem('token');
   }
 
+  // Registrar nuevo usuario
+  async register(userData) {
+    try {
+      console.log('Intentando registro con:', { 
+        email: userData.email, 
+        url: apiClient.defaults.baseURL + '/auth/register' 
+      });
+
+      const response = await apiClient.post('/auth/register', {
+        email: userData.email,
+        password: userData.password,
+        name: userData.name,
+        lastname: userData.lastname,
+        // Puedes añadir más campos según tu backend
+      });
+
+      console.log('Respuesta del registro:', response.data);
+
+      return {
+        success: true,
+        message: response.data.message || 'Usuario registrado exitosamente',
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Error en registro:', error);
+      
+      let message = 'Error al registrar usuario';
+      if (error.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (error.response?.status === 400) {
+        message = 'Datos de registro inválidos';
+      } else if (error.response?.status === 409) {
+        message = 'El usuario ya existe';
+      } else if (error.response?.status >= 500) {
+        message = 'Error del servidor. Intente más tarde.';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
+      }
+
+      return {
+        success: false,
+        error: message,
+      };
+    }
+  }
+
   // Recuperar contraseña
   async forgotPassword(email) {
     try {
+      console.log('Solicitud de recuperación de contraseña para:', email);
+      
       const response = await apiClient.post('/auth/forgot-password', {
         email,
       });
+
+      console.log('Respuesta de forgot password:', response.data);
 
       return {
         success: true,
@@ -112,6 +164,16 @@ class AuthService {
       let message = 'Error al procesar solicitud';
       if (error.response?.data?.message) {
         message = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (error.response?.status === 404) {
+        message = 'No se encontró una cuenta con ese correo electrónico';
+      } else if (error.response?.status === 400) {
+        message = 'Correo electrónico inválido';
+      } else if (error.response?.status >= 500) {
+        message = 'Error del servidor. Intente más tarde.';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
       }
 
       return {
