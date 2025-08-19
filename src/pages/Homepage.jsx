@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import muniLogo from "../assets/logo.png";
 import {
   MapPin,
   Phone,
@@ -132,6 +133,12 @@ export default function Homepage() {
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 Iniciar Sesión
+              </Link>
+              <Link
+                to="/register"
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Registrarse
               </Link>
             </div>
           </div>
@@ -321,15 +328,19 @@ export default function Homepage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start space-x-3 mb-4">
-                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                  <MapPin className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Municipalidad de</h3>
-                  <p className="text-sm">Santa Cruz</p>
-                </div>
-              </div>
+               <div className="flex items-center gap-3 justify-start">
+  <img
+    src={muniLogo}
+    alt="Municipalidad de Santa Cruz"
+    className="h-14 w-auto object-contain shrink-0"
+  />
+  <div className="leading-tight text-left">
+    <h3 className="text-lg font-bold">Municipalidad de</h3>
+    <p className="text-sm">Santa Cruz</p>
+  </div>
+</div>
+
+              <br />
               <div className="flex justify-center md:justify-start space-x-4 mb-4">
                 <a href="#" className="text-blue-400 hover:text-blue-300">
                   <Facebook className="w-6 h-6" />
@@ -338,7 +349,6 @@ export default function Homepage() {
                   <MessageCircle className="w-6 h-6" />
                 </a>
               </div>
-              <p className="text-gray-400 text-sm">Municipalidad de Santa Cruz</p>
             </div>
 
             <div>
@@ -368,8 +378,11 @@ export default function Homepage() {
               <div className="flex items-start space-x-3">
                 <Clock className="w-5 h-5 text-blue-400 mt-1" />
                 <div className="text-sm">
-                  <p>Lunes a Viernes</p>
+                  <p>Lunes a Jueves</p>
                   <p>7:00 AM - 4:00 PM</p>
+                  <br />
+                   <p>Viernes</p>
+                  <p>7:00 AM - 3:00 PM</p>
                 </div>
               </div>
             </div>
