@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react"
+import authService from "../services/authService"
 
 
 const ForgotPasswordPage = () => {
@@ -10,18 +11,26 @@ const ForgotPasswordPage = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
+    setSuccessMessage("")
 
     try {
-      // Simulación de envío de email (reemplazar con tu lógica real)
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      setIsSuccess(true)
+      const result = await authService.forgotPassword(email)
+      
+      if (result.success) {
+        setSuccessMessage(result.message)
+        setIsSuccess(true)
+      } else {
+        setError(result.error || "Error al enviar el correo. Intenta nuevamente.")
+      }
     } catch (err) {
-      setError("Error al enviar el correo. Intenta nuevamente.")
+      console.error("Error inesperado:", err)
+      setError("Error de conexión. Intenta nuevamente.")
     } finally {
       setIsLoading(false)
     }
@@ -39,8 +48,7 @@ const ForgotPasswordPage = () => {
           <h2 className="text-2xl font-bold text-gray-800 mb-4">¡Correo Enviado!</h2>
 
           <p className="text-gray-600 mb-6">
-            Hemos enviado las instrucciones para restablecer tu contraseña a{" "}
-            <span className="font-medium text-gray-800">{email}</span>
+            {successMessage || `Hemos enviado las instrucciones para restablecer tu contraseña a ${email}`}
           </p>
 
           <p className="text-sm text-gray-500 mb-8">
@@ -59,6 +67,8 @@ const ForgotPasswordPage = () => {
               onClick={() => {
                 setIsSuccess(false)
                 setEmail("")
+                setSuccessMessage("")
+                setError("")
               }}
               className="w-full text-gray-600 hover:text-gray-800 py-2 transition-colors"
             >
