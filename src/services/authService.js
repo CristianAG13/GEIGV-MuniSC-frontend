@@ -72,6 +72,7 @@ class AuthService {
     }
   }
 
+  
   // Cerrar sesión
   logout() {
     localStorage.removeItem('token');
@@ -143,45 +144,114 @@ class AuthService {
     }
   }
 
-  // Recuperar contraseña
+  // Método mejorado para forgot password
   async forgotPassword(email) {
     try {
-      console.log('Solicitud de recuperación de contraseña para:', email);
-      
-      const response = await apiClient.post('/auth/forgot-password', {
-        email,
+      // 1. Hacer llamada a tu API backend
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email })
       });
 
-      console.log('Respuesta de forgot password:', response.data);
+      const result = await response.json();
 
-      return {
-        success: true,
-        message: response.data.message || 'Instrucciones enviadas a su correo',
-      };
-    } catch (error) {
-      console.error('Error en forgot password:', error);
-      
-      let message = 'Error al procesar solicitud';
-      if (error.response?.data?.message) {
-        message = error.response.data.message;
-      } else if (error.response?.data?.error) {
-        message = error.response.data.error;
-      } else if (error.response?.status === 404) {
-        message = 'No se encontró una cuenta con ese correo electrónico';
-      } else if (error.response?.status === 400) {
-        message = 'Correo electrónico inválido';
-      } else if (error.response?.status >= 500) {
-        message = 'Error del servidor. Intente más tarde.';
-      } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
+      if (response.ok && result.success) {
+        // 2. Si es exitoso, opcionalmente preparar el template para mostrar preview
+        // (esto sería solo para desarrollo/testing)
+        if (process.env.NODE_ENV === 'development') {
+          await this.generateEmailPreview(email, result.resetToken);
+        }
+
+        return {
+          success: true,
+          message: 'Se ha enviado un correo con las instrucciones para restablecer tu contraseña.'
+        };
+      } else {
+        return {
+          success: false,
+          error: result.message || 'Error al procesar la solicitud'
+        };
       }
-
+    } catch (error) {
+      console.error('Error en forgotPassword:', error);
       return {
         success: false,
-        error: message,
+        error: 'Error de conexión. Verifica tu conexión a internet.'
       };
     }
   }
+
+  // Método para generar preview del email (solo desarrollo)
+  async generateEmailPreview(email, resetToken) {
+    try {
+      const template = await this.loadEmailTemplate('reset-password');
+      const resetUrl = `${window.location.origin}/reset-password/${resetToken}`;
+      const emailHtml = template.replace(/{{RESET_URL}}/g, resetUrl);
+      
+      // Abrir en nueva ventana para preview
+      const previewWindow = window.open('', '_blank', 'width=600,height=800');
+      previewWindow.document.write(emailHtml);
+      previewWindow.document.close();
+      
+      console.log('📧 Preview del email generado');
+    } catch (error) {
+      console.error('Error generando preview:', error);
+    }
+  }
+
+  async loadEmailTemplate(templateName) {
+    try {
+      const response = await fetch(`/email-templates/${templateName}.html`);
+      if (!response.ok) throw new Error('Template no encontrado');
+      return await response.text();
+    } catch (error) {
+      console.error('Error cargando template:', error);
+      // Template básico de fallback
+      return this.getBasicEmailTemplate();
+    }
+  }
+  // Recuperar contraseña
+  // async forgotPassword(email) {
+  //   try {
+  //     console.log('Solicitud de recuperación de contraseña para:', email);
+      
+  //     const response = await apiClient.post('/auth/forgot-password', {
+  //       email,
+  //     });
+
+  //     console.log('Respuesta de forgot password:', response.data);
+
+  //     return {
+  //       success: true,
+  //       message: response.data.message || 'Instrucciones enviadas a su correo',
+  //     };
+  //   } catch (error) {
+  //     console.error('Error en forgot password:', error);
+      
+  //     let message = 'Error al procesar solicitud';
+  //     if (error.response?.data?.message) {
+  //       message = error.response.data.message;
+  //     } else if (error.response?.data?.error) {
+  //       message = error.response.data.error;
+  //     } else if (error.response?.status === 404) {
+  //       message = 'No se encontró una cuenta con ese correo electrónico';
+  //     } else if (error.response?.status === 400) {
+  //       message = 'Correo electrónico inválido';
+  //     } else if (error.response?.status >= 500) {
+  //       message = 'Error del servidor. Intente más tarde.';
+  //     } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+  //       message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
+  //     }
+
+  //     return {
+  //       success: false,
+  //       error: message,
+  //     };
+  //   }
+  // }
 
   // Verificar token de reseteo
   async verifyResetToken(token) {
