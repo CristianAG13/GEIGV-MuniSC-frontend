@@ -32,6 +32,11 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Manejar respuestas vacías o errores de JSON
+    if (error.response && error.response.status === 404) {
+      console.error('Endpoint no encontrado:', error.config.url);
+    }
+    
     if (error.response?.status === 401) {
       // Token expirado o inválido
       localStorage.removeItem('token');

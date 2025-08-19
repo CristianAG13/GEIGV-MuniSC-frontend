@@ -144,128 +144,89 @@ class AuthService {
     }
   }
 
-  // Método mejorado para forgot password
+  // Recuperar contraseña
   async forgotPassword(email) {
     try {
-      // 1. Hacer llamada a tu API backend
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email })
+      console.log('Solicitud de recuperación de contraseña para:', email);
+      console.log('URL del endpoint:', apiClient.defaults.baseURL + '/auth/forgot-password');
+      
+      const response = await apiClient.post('/auth/forgot-password', {
+        email,
       });
 
-      const result = await response.json();
+      console.log('Respuesta de forgot password:', response.data);
 
-      if (response.ok && result.success) {
-        // 2. Si es exitoso, opcionalmente preparar el template para mostrar preview
-        // (esto sería solo para desarrollo/testing)
-        if (process.env.NODE_ENV === 'development') {
-          await this.generateEmailPreview(email, result.resetToken);
-        }
-
-        return {
-          success: true,
-          message: 'Se ha enviado un correo con las instrucciones para restablecer tu contraseña.'
-        };
-      } else {
-        return {
-          success: false,
-          error: result.message || 'Error al procesar la solicitud'
-        };
-      }
+      return {
+        success: true,
+        message: response.data.message || 'Instrucciones enviadas a su correo',
+      };
     } catch (error) {
-      console.error('Error en forgotPassword:', error);
+      console.error('Error en forgot password:', error);
+      
+      let message = 'Error al procesar solicitud';
+      
+      // Verificar si hay respuesta del servidor
+      if (error.response) {
+        console.log('Error response status:', error.response.status);
+        console.log('Error response data:', error.response.data);
+        
+        // Intentar extraer el mensaje de diferentes formas
+        if (error.response.data) {
+          if (typeof error.response.data === 'string') {
+            message = error.response.data;
+          } else if (error.response.data.message) {
+            message = error.response.data.message;
+          } else if (error.response.data.error) {
+            message = error.response.data.error;
+          }
+        }
+        
+        // Mensajes específicos por código de estado
+        if (error.response.status === 404) {
+          message = 'Endpoint no encontrado. Verifique que el backend tenga la ruta /auth/forgot-password';
+        } else if (error.response.status === 400) {
+          message = 'Correo electrónico inválido';
+        } else if (error.response.status >= 500) {
+          message = 'Error del servidor. Intente más tarde.';
+        }
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose en el puerto 3001.';
+      }
+
       return {
         success: false,
-        error: 'Error de conexión. Verifica tu conexión a internet.'
+        error: message,
       };
     }
   }
-
-  // Método para generar preview del email (solo desarrollo)
-  async generateEmailPreview(email, resetToken) {
-    try {
-      const template = await this.loadEmailTemplate('reset-password');
-      const resetUrl = `${window.location.origin}/reset-password/${resetToken}`;
-      const emailHtml = template.replace(/{{RESET_URL}}/g, resetUrl);
-      
-      // Abrir en nueva ventana para preview
-      const previewWindow = window.open('', '_blank', 'width=600,height=800');
-      previewWindow.document.write(emailHtml);
-      previewWindow.document.close();
-      
-      console.log('📧 Preview del email generado');
-    } catch (error) {
-      console.error('Error generando preview:', error);
-    }
-  }
-
-  async loadEmailTemplate(templateName) {
-    try {
-      const response = await fetch(`/email-templates/${templateName}.html`);
-      if (!response.ok) throw new Error('Template no encontrado');
-      return await response.text();
-    } catch (error) {
-      console.error('Error cargando template:', error);
-      // Template básico de fallback
-      return this.getBasicEmailTemplate();
-    }
-  }
-  // Recuperar contraseña
-  // async forgotPassword(email) {
-  //   try {
-  //     console.log('Solicitud de recuperación de contraseña para:', email);
-      
-  //     const response = await apiClient.post('/auth/forgot-password', {
-  //       email,
-  //     });
-
-  //     console.log('Respuesta de forgot password:', response.data);
-
-  //     return {
-  //       success: true,
-  //       message: response.data.message || 'Instrucciones enviadas a su correo',
-  //     };
-  //   } catch (error) {
-  //     console.error('Error en forgot password:', error);
-      
-  //     let message = 'Error al procesar solicitud';
-  //     if (error.response?.data?.message) {
-  //       message = error.response.data.message;
-  //     } else if (error.response?.data?.error) {
-  //       message = error.response.data.error;
-  //     } else if (error.response?.status === 404) {
-  //       message = 'No se encontró una cuenta con ese correo electrónico';
-  //     } else if (error.response?.status === 400) {
-  //       message = 'Correo electrónico inválido';
-  //     } else if (error.response?.status >= 500) {
-  //       message = 'Error del servidor. Intente más tarde.';
-  //     } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-  //       message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
-  //     }
-
-  //     return {
-  //       success: false,
-  //       error: message,
-  //     };
-  //   }
-  // }
 
   // Verificar token de reseteo
   async verifyResetToken(token) {
     try {
-      const response = await apiClient.get(`/auth/verify-reset-token/${token}`);
+      const response = await fetch('http://localhost:3001/api/v1/auth/verify-reset-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
       
-      return {
-        success: true,
-        data: response.data,
-      };
+      const data = await response.json();
+      
+      if (response.ok) {
+        return {
+          success: true,
+          data: data,
+        };
+      } else {
+        return {
+          success: false,
+          error: data.message || 'Token inválido o expirado',
+        };
+      }
     } catch (error) {
+      console.error('Error verificando token:', error);
       return {
         success: false,
-        error: 'Token inválido o expirado',
+        error: 'Error de conexión al verificar el token',
       };
     }
   }
@@ -273,26 +234,33 @@ class AuthService {
   // Resetear contraseña
   async resetPassword(token, newPassword) {
     try {
-      const response = await apiClient.post('/auth/reset-password', {
-        token,
-        password: newPassword,
+      const response = await fetch('http://localhost:3001/api/v1/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          token,
+          newPassword: newPassword  // Cambié de 'password' a 'newPassword'
+        })
       });
-
-      return {
-        success: true,
-        message: response.data.message || 'Contraseña actualizada exitosamente',
-      };
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        return {
+          success: true,
+          message: data.message || 'Contraseña actualizada exitosamente',
+        };
+      } else {
+        return {
+          success: false,
+          error: data.message || 'Error al resetear contraseña',
+        };
+      }
     } catch (error) {
       console.error('Error en reset password:', error);
-      
-      let message = 'Error al resetear contraseña';
-      if (error.response?.data?.message) {
-        message = error.response.data.message;
-      }
-
       return {
         success: false,
-        error: message,
+        error: 'Error de conexión al resetear contraseña',
       };
     }
   }

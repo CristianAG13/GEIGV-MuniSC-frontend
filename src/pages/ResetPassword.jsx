@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Lock, CheckCircle } from "lucide-react";
 import authService from "../services/authService";
 
@@ -16,7 +16,8 @@ const ResetPassword = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [tokenValid, setTokenValid] = useState(false);
 
-  const { token } = useParams();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -180,6 +181,7 @@ const ResetPassword = () => {
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
                 required
                 value={formData.password}
                 onChange={handleChange}
@@ -207,6 +209,7 @@ const ResetPassword = () => {
                 id="confirmPassword"
                 name="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
