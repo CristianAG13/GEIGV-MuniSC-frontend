@@ -155,6 +155,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MapPin, AlertCircle } from "lucide-react";
 import bgImg from '../assets/Monumento.jpg'; // ajusta el ../ según tu carpeta
+import muniLogo from "../assets/logo.png";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -202,15 +203,19 @@ export default function Login() {
 
       <div className="max-w-md w-full relative z-10">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-              <MapPin className="w-7 h-7 text-white" />
-            </div>
+          <div className="w-full max-w-5xl px-4 sm:px-6 mx-auto">
+             <div className="flex items-center gap-4 justify-start"></div>
+            <img
+              src={muniLogo}
+              alt="Municipalidad de Santa Cruz"
+              className="mx-auto block h-16 w-auto object-contain" // ← tamaño y centrado
+            />
             <div>
-              <h1 className="text-2xl font-bold text-white drop-shadow-lg">Sistema de Gestión Vial</h1>
-              <p className="text-sm text-gray-200 drop-shadow">Municipalidad de Santa Cruz</p>
+              <h1 className="text-2xl font-bold text-black drop-shadow-lg">Sistema de Gestión Vial</h1>
+              <h1 className="text-2xl font-bold text-black drop-shadow-lg">Municipalidad de Santa Cruz</h1>
             </div>
           </div>
+          <br />
           <p className="text-gray-200 drop-shadow">
             Plataforma integral para la gestión y control de actividades viales
           </p>
@@ -268,13 +273,12 @@ export default function Login() {
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
-          </form>
-        </div>
-
-        <div className="text-center mt-6">
-          <Link to="/" className="text-white hover:text-gray-200 text-sm drop-shadow">
+            <div className="text-center">
+              <Link to="/" className="text-sm text-blue-600 hover:text-blue-800">
             ← Volver al inicio
           </Link>
+            </div>
+          </form>
         </div>
 
         <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-lg mt-4">
