@@ -144,6 +144,7 @@ class AuthService {
     }
   }
 
+
   // Recuperar contraseña
   async forgotPassword(email) {
     try {
@@ -264,6 +265,69 @@ class AuthService {
       };
     }
   }
+  // Función para obtener perfil del usuario desde el backend
+  async getUserProfile() {
+    try {
+      const token = this.getToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+
+      const response = await apiClient.get('/auth/profile');
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Error obteniendo perfil:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Error al obtener perfil',
+      };
+    }
+  }
+
+  // Función para refrescar datos del usuario
+  async refreshUserData() {
+    try {
+      const profileResult = await this.getUserProfile();
+      if (profileResult.success) {
+        localStorage.setItem('user', JSON.stringify(profileResult.data));
+        return {
+          success: true,
+          data: profileResult.data,
+        };
+      } else {
+        return profileResult;
+      }
+    } catch (error) {
+      console.error('Error refrescando datos del usuario:', error);
+      return {
+        success: false,
+        error: 'Error al actualizar datos del usuario',
+      };
+    }
+  }
+
+  // Función para actualizar perfil del usuario
+  async updateProfile(userData) {
+    try {
+      const response = await apiClient.patch('/auth/profile', userData);
+      localStorage.setItem('user', JSON.stringify(response.data));
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Error actualizando perfil:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Error al actualizar perfil',
+      };
+    }
+  }
 }
+
+
 
 export default new AuthService();
