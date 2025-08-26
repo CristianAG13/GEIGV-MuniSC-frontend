@@ -2,27 +2,22 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import Homepage from "./pages/Homepage.jsx";
-import Login from "./pages/Login.jsx";
+import AuthPage from "./pages/AuthPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
-import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx"; 
 
 
 export default function App() {
   return (
-
     <AuthProvider>
       <Routes>
-        {/* Públicas */}
-        <Route path="/" element={<Homepage />} />
-        <Route path="/login" element={<Login />} />
+        {/* Ruta principal - Página de autenticación */}
+        <Route path="/" element={<AuthPage />} />
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/register" element={<AuthPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/register" element={<Register />} />
-         
-        
 
         {/* Protegidas */}
         <Route 
@@ -33,11 +28,9 @@ export default function App() {
             </ProtectedRoute>
           } 
         />
-                {/* catch-all */}
+        
+        {/* catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
-
-
-    
       </Routes>
     </AuthProvider>
   );
