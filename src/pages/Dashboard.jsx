@@ -3,12 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   LogOut, User, Users, Menu, X, Plus, Edit, Trash2,
   Home, MapPin, CheckCircle, Clock, UserCheck, Loader,
-  FileText, Truck, BarChart3, Settings
+  FileText, Truck, BarChart3, Settings, UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import TransporteModule from '../features/transporte/TransporteModule';
+import RequestRoleComponent from '../components/RequestRoleComponent';
+import RoleRequestNotifications from '../components/RoleRequestNotifications';
+import RoleRequestsManagement from '../components/RoleRequestsManagement';
 import { 
   sidebarData, 
   categoryLabels, 
@@ -208,6 +211,19 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* Componente para solicitar rol si no tiene rol asignado */}
+        {!user?.rol && !user?.role && (
+          <RequestRoleComponent 
+            user={user} 
+            onRequestSent={() => {
+              // Opcional: actualizar datos del usuario después de enviar solicitud
+              if (refreshUser) {
+                refreshUser();
+              }
+            }}
+          />
+        )}
 
         {/* Sistema Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -416,6 +432,8 @@ export default function Dashboard() {
         return renderDashboard();
       case 'usuarios':
         return renderUsuarios();
+      case 'solicitudes-rol':
+        return <RoleRequestsManagement />;
       case 'transporte':
         return <TransporteModule />;
       case 'proyectos-cuadrilla':
@@ -598,27 +616,32 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="lg:hidden flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">
-                {user?.name || 'Usuario'} {user?.lastname || ''}
-              </p>
-              <p className="text-xs text-gray-600">
-                {user?.rol
-                  ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1)
-                  : 'Sin rol'}
-              </p>
+          <div className="flex items-center gap-4">
+            {/* Notificaciones de solicitudes de rol para admins */}
+            <RoleRequestNotifications userRole={user?.rol} />
+            
+            <div className="lg:hidden flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  {user?.name || 'Usuario'} {user?.lastname || ''}
+                </p>
+                <p className="text-xs text-gray-600">
+                  {user?.rol
+                    ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1)
+                    : 'Sin rol'}
+                </p>
+              </div>
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Cerrar Sesión
+              </button>
             </div>
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Cerrar Sesión
-            </button>
           </div>
         </div>
       </header>

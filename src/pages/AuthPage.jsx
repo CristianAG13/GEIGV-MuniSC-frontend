@@ -13,7 +13,15 @@ export default function AuthPage() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState("login");
   const navigate = useNavigate();
-  const { login, loading } = useAuth();
+  const { login, loading, isAuthenticated } = useAuth();
+
+  // Redirigir al dashboard si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      console.log('Usuario ya autenticado, redirigiendo al dashboard');
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   // Detectar la pestaña según la URL
   useEffect(() => {
@@ -153,6 +161,40 @@ export default function AuthPage() {
       setIsRegistering(false);
     }
   };
+
+  // Mostrar loading mientras se verifica la autenticación inicial
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-4 relative"
+        style={{
+          backgroundImage: `url(${bgImg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative z-10 text-center">
+          <div className="w-full max-w-5xl px-4 sm:px-6 mx-auto mb-8">
+            <img
+              src={muniLogo}
+              alt="Municipalidad de Santa Cruz"
+              className="mx-auto block h-16 w-auto object-contain"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-white drop-shadow-lg">Sistema de Gestión Vial</h1>
+              <h1 className="text-2xl font-bold text-white drop-shadow-lg">Municipalidad de Santa Cruz</h1>
+            </div>
+          </div>
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-xl p-8 max-w-md mx-auto">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Verificando autenticación...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
