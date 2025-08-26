@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  LogOut, User, Menu, X,
-  Home, MapPin, CheckCircle, Loader,
+  LogOut, User, Users, Menu, X, Plus, Edit, Trash2,
+  Home, MapPin, CheckCircle, Clock, UserCheck, Loader,
   FileText, Truck, BarChart3, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import rolesService from '../services/rolesService';
+import usersService from '../services/usersService';
 import TransporteModule from '../features/transporte/TransporteModule';
 import { 
   sidebarData, 
@@ -19,6 +21,11 @@ export default function Dashboard() {
   const { user, logout, loading: authLoading, refreshUser } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [editingUser, setEditingUser] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Estados para el sidebar que se actualizarán cuando el usuario esté disponible
   const [userPermissions, setUserPermissions] = useState([]);
@@ -51,8 +58,118 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  // Cargar datos cuando se active la sección de usuarios
+  useEffect(() => {
+    if (activeSection === 'usuarios') {
+      loadData();
+    }
+  }, [activeSection]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [usersData, rolesData] = await Promise.all([
+        usersService.getAllUsers(),
+        rolesService.getActiveRoles()
+      ]);
+      setUsers(usersData);
+      setRoles(rolesData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
+  };
+
+  const handleEditUser = (user) => {
+    setEditingUser({
+      ...user,
+      nombre: user.name,
+      apellido: user.lastname
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveUser = async () => {
+    try {
+      await usersService.updateUser(editingUser.id, {
+        email: editingUser.email,
+        name: editingUser.nombre,
+        lastname: editingUser.apellido,
+      });
+      await loadData();
+      setShowEditModal(false);
+      setEditingUser(null);
+    } catch (error) {
+      alert('Error actualizando usuario: ' + error.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm('¿Está seguro de eliminar este usuario?')) {
+      try {
+        await usersService.deleteUser(userId);
+        await loadData();
+      } catch (error) {
+        alert('Error eliminando usuario: ' + error.message);
+      }
+    }
+  };
+
+  const handleRoleChange = async (userId, roleName) => {
+    try {
+      if (roleName === '') {
+        await usersService.assignRoles(userId, []);
+      } else {
+        const role = roles.find(r => r.name === roleName);
+        if (role) {
+          await usersService.assignRoles(userId, [role.id]);
+        }
+      }
+      await loadData();
+    } catch (error) {
+      alert('Error asignando rol: ' + error.message);
+    }
+  };
+
+  const getStatusBadge = (user) => {
+    let estado;
+    const hasBeenProcessed = user.updatedAt !== user.createdAt;
+    
+    if (!user.roles || user.roles.length === 0) {
+      if (hasBeenProcessed) {
+        estado = 'inactivo';
+      } else {
+        estado = 'pendiente';
+      }
+    } else if (user.isActive) {
+      estado = 'activo';
+    } else {
+      estado = 'inactivo';
+    }
+
+    const styles = {
+      activo: 'bg-green-100 text-green-800 border-green-200',
+      inactivo: 'bg-red-100 text-red-800 border-red-200',
+      pendiente: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    };
+    
+    const icons = {
+      activo: <CheckCircle className="w-3 h-3" />,
+      inactivo: <X className="w-3 h-3" />,
+      pendiente: <Clock className="w-3 h-3" />
+    };
+
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${styles[estado]}`}>
+        {icons[estado]}
+        {estado.charAt(0).toUpperCase() + estado.slice(1)}
+      </span>
+    );
   };
 
   const renderDashboard = () => {
@@ -195,10 +312,110 @@ export default function Dashboard() {
     );
   };
 
+  const renderUsuarios = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Gestión de usuarios</h1>
+        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+          <Plus className="w-4 h-4" />
+          Nuevo usuario
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Cargando usuarios...</span>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">ID</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-72">EMAIL</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">NOMBRE</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">APELLIDO</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">ROL</th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">ESTADO</th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 w-20">
+                      {user.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-72">
+                      <div className="truncate max-w-xs" title={user.email}>
+                        {user.email}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-40">
+                      <div className="truncate" title={user.name || 'N/A'}>
+                        {user.name || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-40">
+                      <div className="truncate" title={user.lastname || 'N/A'}>
+                        {user.lastname || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap w-40">
+                      <select
+                        value={user.roles && user.roles.length > 0 ? user.roles[0].name : ''}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Sin rol</option>
+                        {roles.map(role => (
+                          <option key={role.id} value={role.name}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap w-32">
+                      <div className="flex justify-center">
+                        {getStatusBadge(user)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 w-32">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-50 transition-colors"
+                          title="Editar"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-50 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
         return renderDashboard();
+      case 'usuarios':
+        return renderUsuarios();
       case 'transporte':
         return <TransporteModule />;
       case 'proyectos-cuadrilla':
@@ -409,6 +626,74 @@ export default function Dashboard() {
       {/* Main */}
       <main className="flex-1 overflow-y-auto p-6">{renderContent()}</main>
     </div>
+
+    {/* Edit User Modal */}
+    {showEditModal && editingUser && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h2 className="text-lg font-bold mb-4">Editar Usuario</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={editingUser.email}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, email: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre
+              </label>
+              <input
+                type="text"
+                value={editingUser.nombre || ''}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, nombre: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Apellido
+              </label>
+              <input
+                type="text"
+                value={editingUser.apellido || ''}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, apellido: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveUser}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Overlay para mobile */}
     {sidebarOpen && (
