@@ -85,10 +85,11 @@ export const AuthProvider = ({ children }) => {
     const currentUser = authService.getCurrentUser();
     if (currentUser && authService.isAuthenticated()) {
       setUser(currentUser);
-      // Opcionalmente, refrescar datos del usuario desde el backend
+      // Refrescar datos del usuario desde el backend para obtener roles actualizados
       refreshUserFromBackend();
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   // Función para refrescar datos del usuario desde el backend
@@ -104,17 +105,21 @@ export const AuthProvider = ({ children }) => {
   // };
 
   const refreshUserFromBackend = async () => {
-  try {
-    const result = await authService.refreshUserData();
-    if (result.success) {
-      // Asegúrate de que incluya los roles
-      setUser(result.data);
-      console.log('Usuario actualizado:', result.data); // Para debug
+    try {
+      const result = await authService.refreshUserData();
+      if (result.success) {
+        // Asegúrate de que incluya los roles
+        setUser(result.data);
+        console.log('Usuario actualizado desde backend:', result.data); // Para debug
+      } else {
+        console.warn('No se pudo refrescar datos del usuario:', result.error);
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error refreshing user data:', error);
-  }
-};
+  };
 
   const login = async (email, password) => {
     setLoading(true);
@@ -123,6 +128,21 @@ export const AuthProvider = ({ children }) => {
       
       if (result.success) {
         setUser(result.data.user);
+        console.log('Login exitoso, usuario establecido:', result.data.user);
+        
+        // Refrescar datos del usuario para asegurar que tenga todos los datos actualizados
+        setTimeout(async () => {
+          try {
+            const refreshResult = await authService.refreshUserData();
+            if (refreshResult.success) {
+              setUser(refreshResult.data);
+              console.log('Datos del usuario refrescados después del login:', refreshResult.data);
+            }
+          } catch (error) {
+            console.warn('Error refrescando datos después del login:', error);
+          }
+        }, 100);
+        
         return { success: true };
       } else {
         return { success: false, error: result.error };
