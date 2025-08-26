@@ -104,14 +104,15 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 relative"
-      style={{
-        backgroundImage: `url('\assets\Monumento.jpg')`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+       className="min-h-screen flex items-center justify-center p-4 relative"
+       style={{
+       backgroundImage: `url(${bgImg})`,
+       backgroundSize: "cover",
+       backgroundPosition: "center",
+       backgroundRepeat: "no-repeat",
+  }}
+>
+
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="max-w-md w-full relative z-10">
