@@ -111,7 +111,15 @@ class AuthService {
   // Verificar si el usuario está autenticado
   isAuthenticated() {
     const token = localStorage.getItem('token');
-    return !!token;
+    if (!token) return false;
+    
+    // Verificar si el token ha expirado
+    if (this.isTokenExpired()) {
+      this.logout(); // Limpiar datos si el token expiró
+      return false;
+    }
+    
+    return true;
   }
 
   // Obtener el usuario actual
@@ -123,6 +131,51 @@ class AuthService {
   // Obtener el token actual
   getToken() {
     return localStorage.getItem('token');
+  }
+
+  // Verificar si el token ha expirado
+  isTokenExpired() {
+    const token = this.getToken();
+    if (!token) return true;
+
+    try {
+      // Decodificar el payload del JWT sin verificar la firma
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Date.now() / 1000;
+      
+      // Verificar si el token ha expirado
+      return payload.exp < currentTime;
+    } catch (error) {
+      console.error('Error al verificar expiración del token:', error);
+      return true; // Si hay error, considerar el token como expirado
+    }
+  }
+
+  // Limpiar datos de autenticación si el token ha expirado
+  checkTokenExpiration() {
+    if (this.isTokenExpired()) {
+      console.log('Token expirado, limpiando datos de autenticación');
+      this.logout();
+      return false;
+    }
+    return true;
+  }
+
+  // Obtener tiempo restante del token en segundos
+  getTokenTimeRemaining() {
+    const token = this.getToken();
+    if (!token) return 0;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Date.now() / 1000;
+      const timeRemaining = payload.exp - currentTime;
+      
+      return Math.max(0, timeRemaining);
+    } catch (error) {
+      console.error('Error al calcular tiempo restante del token:', error);
+      return 0;
+    }
   }
 
   // Registrar nuevo usuario

@@ -7,10 +7,10 @@ import {
 // Configuración de permisos por rol
 export const rolePermissions = {
   user: ['dashboard', 'transporte', 'proyectos-cuadrilla'],
-  admin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes'],
+  admin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'solicitudes-rol'],
   manager: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes'],
   guest: ['dashboard'],
-  superadmin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'configuracion']
+  superadmin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'configuracion', 'solicitudes-rol']
 };
 
 // Datos de navegación del sidebar organizados por categorías
@@ -32,6 +32,14 @@ export const sidebarData = {
       icon: Users, 
       permission: 'usuarios',
       description: 'Administrar usuarios del sistema',
+      category: 'management'
+    },
+    { 
+      id: 'solicitudes-rol', 
+      name: 'Solicitudes de Rol', 
+      icon: UserCheck, 
+      permission: 'solicitudes-rol',
+      description: 'Gestionar solicitudes de roles de usuarios',
       category: 'management'
     },
     { 

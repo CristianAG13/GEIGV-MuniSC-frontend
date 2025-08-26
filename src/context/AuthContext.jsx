@@ -3,15 +3,7 @@ import authService from '../services/authService.js';
 
 const AuthContext = createContext();
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth debe ser usado dentro de AuthProvider');
-  }
-  return context;
-};
-
-export const AuthProvider = ({ children }) => {
+const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,8 +15,23 @@ export const AuthProvider = ({ children }) => {
       // Refrescar datos del usuario desde el backend para obtener roles actualizados
       refreshUserFromBackend();
     } else {
+      // Si el token expiró o no existe, limpiar el estado
+      authService.logout();
       setLoading(false);
     }
+
+    // Configurar verificación periódica de expiración del token (cada 5 minutos)
+    const tokenCheckInterval = setInterval(() => {
+      if (!authService.isAuthenticated()) {
+        setUser(null);
+        console.log('Token expirado, cerrando sesión automáticamente');
+      }
+    }, 5 * 60 * 1000); // 5 minutos
+
+    // Limpiar el intervalo cuando el componente se desmonte
+    return () => {
+      clearInterval(tokenCheckInterval);
+    };
   }, []);
 
   // Función para refrescar datos del usuario desde el backend
@@ -114,6 +121,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Función para obtener información del token
+  const getTokenInfo = () => {
+    return {
+      timeRemaining: authService.getTokenTimeRemaining(),
+      isExpired: authService.isTokenExpired(),
+    };
+  };
+
   const value = {
     user,
     login,
@@ -122,6 +137,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     refreshUser,
     updateProfile,
+    getTokenInfo,
   };
 
   return (
@@ -130,3 +146,15 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+// Hook personalizado - exportado al final
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth debe ser usado dentro de AuthProvider');
+  }
+  return context;
+};
+
+// Exportaciones al final del archivo
+export { AuthProvider, useAuth };
