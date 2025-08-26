@@ -31,6 +31,22 @@ class AuthService {
         user = responseData.data.user || responseData.data.usuario || { email };
       }
 
+      // Procesar el usuario para extraer el rol correctamente
+      if (user && user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
+        // Si tiene un array de roles, tomar el primero
+        user.rol = user.roles[0].name || user.roles[0];
+        console.log('Rol extraído de array de roles:', user.rol);
+      } else if (user && user.role) {
+        // Si tiene un campo role
+        user.rol = user.role;
+        console.log('Rol extraído de campo role:', user.rol);
+      } else if (user && user.rol) {
+        // Si ya tiene rol
+        console.log('Rol ya presente:', user.rol);
+      } else {
+        console.warn('No se encontró rol en los datos del usuario:', user);
+      }
+
       if (!token) {
         console.error('No se encontró token en la respuesta:', responseData);
         return {
@@ -42,6 +58,19 @@ class AuthService {
       // Guardar token y datos del usuario en localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+
+      // Intentar obtener el perfil completo del usuario con roles después del login
+      try {
+        const profileResult = await this.getUserProfile();
+        if (profileResult.success && profileResult.data) {
+          console.log('Perfil completo obtenido:', profileResult.data);
+          // Actualizar con los datos completos del perfil (incluye roles)
+          localStorage.setItem('user', JSON.stringify(profileResult.data));
+          user = profileResult.data;
+        }
+      } catch (profileError) {
+        console.warn('No se pudo obtener el perfil completo, usando datos básicos:', profileError);
+      }
 
       return {
         success: true,
@@ -292,10 +321,28 @@ class AuthService {
     try {
       const profileResult = await this.getUserProfile();
       if (profileResult.success) {
-        localStorage.setItem('user', JSON.stringify(profileResult.data));
+        let userData = profileResult.data;
+        
+        // Procesar el usuario para extraer el rol correctamente
+        if (userData && userData.roles && Array.isArray(userData.roles) && userData.roles.length > 0) {
+          // Si tiene un array de roles, tomar el primero
+          userData.rol = userData.roles[0].name || userData.roles[0];
+          console.log('Rol extraído de array de roles (refresh):', userData.rol);
+        } else if (userData && userData.role) {
+          // Si tiene un campo role
+          userData.rol = userData.role;
+          console.log('Rol extraído de campo role (refresh):', userData.rol);
+        } else if (userData && userData.rol) {
+          // Si ya tiene rol
+          console.log('Rol ya presente (refresh):', userData.rol);
+        } else {
+          console.warn('No se encontró rol en los datos del usuario (refresh):', userData);
+        }
+        
+        localStorage.setItem('user', JSON.stringify(userData));
         return {
           success: true,
-          data: profileResult.data,
+          data: userData,
         };
       } else {
         return profileResult;

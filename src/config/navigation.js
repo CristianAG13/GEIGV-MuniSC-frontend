@@ -86,7 +86,13 @@ export const categoryLabels = {
 
 // Función para obtener permisos de un usuario
 export const getUserPermissions = (userRole) => {
-  return rolePermissions[userRole] || ['dashboard'];
+  // Si no hay rol, devolver permisos mínimos
+  if (!userRole) {
+    return ['dashboard'];
+  }
+  
+  const permissions = rolePermissions[userRole] || ['dashboard'];
+  return permissions;
 };
 
 // Función para obtener todos los elementos del sidebar en formato plano
