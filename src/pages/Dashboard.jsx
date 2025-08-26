@@ -8,6 +8,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
+import TransporteModule from '../features/transporte/TransporteModule';
+import { 
+  sidebarData, 
+  categoryLabels, 
+  getUserPermissions, 
+  getFilteredSidebarByCategory 
+} from '../config/navigation';
 
 
 export default function Dashboard() {
@@ -40,33 +47,11 @@ export default function Dashboard() {
     }
   };
 
-  const getPermissions = (userRole) => {
-    const permissions = {
-      // user: ['dashboard'],
-      // admin: ['dashboard', 'usuarios'],
-      // manager: ['dashboard', 'usuarios'],
-      // guest: ['dashboard'],
-      // superadmin: ['dashboard', 'usuarios']
-      user: ['dashboard', 'proyectos-cuadrilla', 'proyectos-maquinaria'],
-      admin: ['dashboard', 'usuarios', 'proyectos-cuadrilla', 'proyectos-maquinaria', 'reportes'],
-      manager: ['dashboard', 'usuarios', 'proyectos-cuadrilla', 'proyectos-maquinaria', 'reportes'],
-      guest: ['dashboard'],
-      superadmin: ['dashboard', 'usuarios', 'proyectos-cuadrilla', 'proyectos-maquinaria', 'reportes', 'configuracion']
-    };
-    return permissions[userRole] || ['dashboard'];
-  };
+  // Obtener permisos del usuario usando la configuración centralizada
+  const userPermissions = getUserPermissions(user?.rol);
   
-  const userPermissions = getPermissions(user?.rol);
-
-  const sidebarItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: Home, permission: 'dashboard' },
-    { id: 'usuarios', name: 'Usuarios', icon: Users, permission: 'usuarios' },
-    { id: 'proyectos-cuadrilla', name: 'Proyectos Cuadrilla Manual', icon: FileText, permission: 'proyectos-cuadrilla' },
-    { id: 'proyectos-maquinaria', name: 'Maquinaria', icon: Truck, permission: 'proyectos-maquinaria' },
-    { id: 'reportes', name: 'Reportes', icon: BarChart3, permission: 'reportes' },
-    { id: 'configuracion', name: 'Configuración', icon: Settings, permission: 'configuracion' },
-  
-  ];
+  // Obtener datos del sidebar filtrados por permisos del usuario
+  const filteredSidebarData = getFilteredSidebarByCategory(user?.rol);
 
   const handleLogout = () => {
     logout();
@@ -382,6 +367,8 @@ export default function Dashboard() {
         return renderDashboard();
       case 'usuarios':
         return renderUsuarios();
+      case 'transporte':
+        return <TransporteModule />;
       case 'proyectos-cuadrilla':
         return (
           <div className="text-center py-12">
@@ -390,56 +377,6 @@ export default function Dashboard() {
             <p className="text-gray-600">Módulo en desarrollo - Gestión de proyectos con personal manual</p>
           </div>
         );
-      case 'proyectos-maquinaria':
-        return (
-          <div className="text-center py-12">
-            <Truck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Proyectos Maquinaria</h2>
-            <p className="text-gray-600">Módulo en desarrollo - Gestión de proyectos con maquinaria</p>
-          </div>
-        );
-      case 'proyectos-maquinaria':
-  return (
-    
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Gestión de maquinaria</h1>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
-          <Plus className="w-4 h-4" />
-          Nuevo Equipo
-        </button>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">EQUIPO</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PLACA</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HORAS MÁQUINA</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KILOMETRAJE</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LITROS DIESEL</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ACTIVIDAD</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CANTIDAD</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ESTACIÓN</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FECHA</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {/* Aquí luego mapearías la data de maquinaria */}
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" colSpan={9}>
-                  No hay registros de maquinaria.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
       case 'reportes':
         return (
           <div className="text-center py-12">
@@ -660,34 +597,67 @@ export default function Dashboard() {
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 px-4 pt-14 pb-4">
-        <ul className="space-y-2">
-          {sidebarItems
-            .filter((item) => userPermissions.includes(item.permission))
-            .map((item) => (
-              <li key={item.id}>
+      <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto">
+        {/* Información del usuario */}
+        <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.name || 'Usuario'} {user?.lastname || ''}
+              </p>
+              <p className="text-xs text-gray-600 truncate">
+                {user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Sin rol'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Menú de navegación */}
+        <div className="space-y-1">
+          {Object.keys(filteredSidebarData).map(category => (
+            <div key={category}>
+              {filteredSidebarData[category].map((item) => (
                 <button
+                  key={item.id}
                   onClick={() => {
                     setActiveSection(item.id);
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all ${
+                  title={item.description}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                     activeSection === item.id
-                      ? 'bg-blue-50 text-blue-700 shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <item.icon className="w-5 h-5" />
-                  {item.name}
+                  <item.icon className={`w-5 h-5 ${
+                    activeSection === item.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                  }`} />
+                  <span className="truncate">{item.name}</span>
                 </button>
-              </li>
-            ))}
-        </ul>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Botón de cerrar sesión en el sidebar */}
+        <div className="mt-auto pt-6">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all group"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
       </nav>
     </div>
 
     {/* Contenido principal */}
-    <div className="flex-1 flex flex-col h-[100vh] lg:pl-64">
+    <div className="flex-1 flex flex-col h-screen">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="flex items-center justify-between px-6 py-4">
@@ -698,9 +668,13 @@ export default function Dashboard() {
             >
               <Menu className="w-5 h-5" />
             </button>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <MapPin className="w-4 h-4" />
+              <span>Sistema de Gestión Vial - Municipalidad de Santa Cruz</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="lg:hidden flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium text-gray-900">
                 {user?.name || 'Usuario'} {user?.lastname || ''}
@@ -726,7 +700,7 @@ export default function Dashboard() {
       </header>
 
       {/* Main */}
-      <main className=" flex-1 overflow-y-auto p-6 bg-gray-50">{renderContent()}</main>
+      <main className="flex-1 overflow-y-auto p-6">{renderContent()}</main>
     </div>
 
     {/* Edit User Modal */}
