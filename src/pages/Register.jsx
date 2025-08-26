@@ -125,6 +125,7 @@ export default function Register() {
                 </label>
                 <input
                   name="name"
+                  autoComplete="given-name"
                   value={formData.name}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
@@ -139,6 +140,7 @@ export default function Register() {
                 </label>
                 <input
                   name="lastname"
+                  autoComplete="family-name"
                   value={formData.lastname}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
@@ -156,6 +158,7 @@ export default function Register() {
               <input
                 type="email"
                 name="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
@@ -173,6 +176,7 @@ export default function Register() {
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md pr-10 focus:ring-2 focus:ring-blue-500"
@@ -199,6 +203,7 @@ export default function Register() {
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   name="confirmPassword"
+                  autoComplete="new-password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-md pr-10 focus:ring-2 focus:ring-blue-500"
