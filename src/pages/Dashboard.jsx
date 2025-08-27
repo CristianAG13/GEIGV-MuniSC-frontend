@@ -568,127 +568,122 @@ export default function Dashboard() {
   
     <div className="h-screen flex bg-gray-50">
       
-    {/* Sidebar */}
-    <div
-      className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
-    >
-      {/* Header del Sidebar */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-santa-cruz-blue-200 bg-gradient-to-r from-santa-cruz-blue-500 to-santa-cruz-green-600 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm">
-            <img 
-              src={logo} 
-              alt="Logo Municipalidad Santa Cruz" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white">Sistema Vial</h1>
-            <p className="text-xs text-santa-cruz-gold-200">Municipalidad Santa Cruz</p>
-          </div>
-        </div>
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="lg:hidden p-2 rounded-md text-white hover:text-santa-cruz-gold-200 hover:bg-white hover:bg-opacity-20 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+{/* Sidebar */}
+<div
+  className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform ${
+    sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+  } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
+>
+  {/* Header del Sidebar (NO SE MUEVE) */}
+  <div className="flex items-center justify-between h-16 px-4 border-b border-santa-cruz-blue-200 bg-gradient-to-r from-santa-cruz-blue-500 to-santa-cruz-green-600 flex-shrink-0">
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm">
+        <img 
+          src={logo} 
+          alt="Logo Municipalidad Santa Cruz" 
+          className="w-full h-full object-contain"
+        />
       </div>
+      <div>
+        <h1 className="text-sm font-bold text-white">Sistema Vial</h1>
+        <p className="text-xs text-santa-cruz-gold-200">Municipalidad Santa Cruz</p>
+      </div>
+    </div>
+    <button
+      onClick={() => setSidebarOpen(false)}
+      className="lg:hidden p-2 rounded-md text-white hover:text-santa-cruz-gold-200 hover:bg-white hover:bg-opacity-20 transition-colors"
+    >
+      <X className="w-5 h-5" />
+    </button>
+  </div>
 
-      {/* Navegación */}
-      <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto">
-        {/* Información del usuario */}
-        <div className="mb-6 p-3 bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 rounded-lg border border-santa-cruz-blue-200">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-santa-cruz-blue-600 to-santa-cruz-green-600 rounded-full flex items-center justify-center">
-              <User className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.name || 'Usuario'} {user?.lastname || ''}
-              </p>
-              <p className="text-xs text-santa-cruz-blue-600 truncate">
-                {user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Sin rol'}
-              </p>
-            </div>
-            {/* Botón de actualización temporal */}
-            {!user?.rol && (
+  {/* Navegación */}
+  <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto flex flex-col">
+    {/* Menú de navegación */}
+    <div className="space-y-1">
+      {Object.keys(filteredSidebarData).length > 0 ? (
+        Object.keys(filteredSidebarData).map(category => (
+          <div key={category}>
+            {filteredSidebarData[category].map((item) => (
               <button
-                onClick={async () => {
-                  console.log('Actualizando datos del usuario...');
-                  if (refreshUser) {
-                    const result = await refreshUser();
-                    if (result.success) {
-                      console.log('Datos actualizados exitosamente');
-                    } else {
-                      console.error('Error actualizando datos:', result.error);
-                    }
-                  }
+                key={item.id}
+                onClick={() => {
+                  setActiveSection(item.id);
+                  setSidebarOpen(false);
                 }}
-                className="p-1 text-santa-cruz-blue-600 hover:text-santa-cruz-blue-800 hover:bg-santa-cruz-blue-50 rounded"
-                title="Actualizar datos del usuario"
+                title={item.description}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                  activeSection === item.id
+                    ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
               >
-                <Settings className="w-4 h-4" />
+                <item.icon className={`w-5 h-5 ${
+                  activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                }`} />
+                <span className="truncate">{item.name}</span>
               </button>
-            )}
+            ))}
           </div>
+        ))
+      ) : (
+        <div className="text-center py-8">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Settings className="w-6 h-6 text-gray-400" />
+          </div>
+          <p className="text-sm text-gray-500">Cargando módulos...</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {user?.rol ? `Rol: ${user.rol}` : 'Verificando permisos...'}
+          </p>
         </div>
-
-        {/* Menú de navegación */}
-        <div className="space-y-1">
-          {Object.keys(filteredSidebarData).length > 0 ? (
-            Object.keys(filteredSidebarData).map(category => (
-              <div key={category}>
-                {filteredSidebarData[category].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveSection(item.id);
-                      setSidebarOpen(false);
-                    }}
-                    title={item.description}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
-                      activeSection === item.id
-                        ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                  >
-                    <item.icon className={`w-5 h-5 ${
-                      activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
-                    }`} />
-                    <span className="truncate">{item.name}</span>
-                  </button>
-                ))}
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Settings className="w-6 h-6 text-gray-400" />
-              </div>
-              <p className="text-sm text-gray-500">Cargando módulos...</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {user?.rol ? `Rol: ${user.rol}` : 'Verificando permisos...'}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Botón de cerrar sesión en el sidebar */}
-        <div className="mt-auto pt-6">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all group"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Cerrar Sesión</span>
-          </button>
-        </div>
-      </nav>
+      )}
     </div>
 
+    {/* Línea divisoria */}
+    <hr className="my-6 border-t border-gray-200" />
+
+    {/* Información del usuario y botón de cerrar sesión */}
+    <div>
+      <div className="mb-4 p-3 bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 rounded-lg border border-santa-cruz-blue-200">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-santa-cruz-blue-600 to-santa-cruz-green-600 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {user?.name || 'Usuario'} {user?.lastname || ''}
+            </p>
+            <p className="text-xs text-santa-cruz-blue-600 truncate">
+              {user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Sin rol'}
+            </p>
+          </div>
+          {/* Botón de actualización temporal */}
+          {!user?.rol && (
+            <button
+              onClick={async () => {
+                if (refreshUser) {
+                  const result = await refreshUser();
+                  // ...feedback...
+                }
+              }}
+              className="p-1 text-santa-cruz-blue-600 hover:text-santa-cruz-blue-800 hover:bg-santa-cruz-blue-50 rounded"
+              title="Actualizar datos del usuario"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all group"
+      >
+        <LogOut className="w-5 h-5" />
+        <span>Cerrar Sesión</span>
+      </button>
+    </div>
+  </nav>
+</div>
     {/* Contenido principal */}
     <div className="flex-1 flex flex-col h-screen">
       {/* Header */}
