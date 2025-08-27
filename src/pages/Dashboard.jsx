@@ -20,6 +20,7 @@ import {
   getUserPermissions, 
   getFilteredSidebarByCategory 
 } from '../config/navigation';
+import logo from '../assets/logo.png';
 
 
 export default function Dashboard() {
@@ -30,6 +31,13 @@ export default function Dashboard() {
   const [roles, setRoles] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    lastname: '',
+    email: '',
+    password: ''
+  });
   const [loading, setLoading] = useState(false);
 
   // Estados para el sidebar que se actualizarán cuando el usuario esté disponible
@@ -117,6 +125,51 @@ export default function Dashboard() {
       apellido: user.lastname
     });
     setShowEditModal(true);
+  };
+
+  const handleCreateUser = () => {
+    setNewUser({
+      name: '',
+      lastname: '',
+      email: '',
+      password: ''
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleSaveNewUser = async () => {
+    try {
+      // Validaciones básicas
+      if (!newUser.name.trim() || !newUser.lastname.trim() || !newUser.email.trim() || !newUser.password.trim()) {
+        showError('Campos requeridos', 'Todos los campos son obligatorios');
+        return;
+      }
+
+      if (newUser.password.length < 6) {
+        showError('Contraseña inválida', 'La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+
+      // Crear el usuario usando el endpoint de administración
+      await usersService.createUser({
+        name: newUser.name.trim(),
+        lastname: newUser.lastname.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+      });
+
+      await loadData();
+      setShowCreateModal(false);
+      setNewUser({
+        name: '',
+        lastname: '',
+        email: '',
+        password: ''
+      });
+      showSuccess('Usuario creado', 'El usuario ha sido creado exitosamente');
+    } catch (error) {
+      showError('Error al crear usuario', error.message);
+    }
   };
 
   const handleSaveUser = async () => {
@@ -214,24 +267,35 @@ export default function Dashboard() {
         </div>
 
         {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-8 text-white">
-          <h2 className="text-2xl font-bold mb-3">
-            ¡Bienvenido, {user?.name || 'Usuario'} {user?.lastname || ''}!
-          </h2>
-          <p className="text-blue-100 text-lg mb-2">
-            Sistema de Gestión Vial - Municipalidad de Santa Cruz
-          </p>
+        <div className="bg-gradient-to-r from-santa-cruz-blue-600 to-santa-cruz-green-600 rounded-xl p-8 text-white shadow-lg">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center p-1">
+              <img 
+                src={logo} 
+                alt="Logo Municipalidad Santa Cruz" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">
+                ¡Bienvenido, {user?.name || 'Usuario'} {user?.lastname || ''}!
+              </h2>
+              <p className="text-santa-cruz-gold-200 text-lg">
+                Sistema de Gestión Vial - Municipalidad de Santa Cruz
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-4 text-sm">
-            <span className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full">
+            <span className="bg-santa-cruz-gold-500 bg-opacity-20 px-3 py-1 rounded-full border border-santa-cruz-gold-400 border-opacity-30">
               Email: {user?.email || 'No disponible'}
             </span>
-            <span className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full">
+            <span className="bg-santa-cruz-gold-500 bg-opacity-20 px-3 py-1 rounded-full border border-santa-cruz-gold-400 border-opacity-30">
               Rol: {user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Sin rol'}
             </span>
           </div>
           {!user?.rol && (
-            <div className="mt-3 p-3 bg-yellow-500 bg-opacity-20 rounded-lg">
-              <p className="text-yellow-100 text-sm">
+            <div className="mt-3 p-3 bg-santa-cruz-gold-500 bg-opacity-20 rounded-lg border border-santa-cruz-gold-400 border-opacity-30">
+              <p className="text-santa-cruz-gold-100 text-sm">
                 ⚠️ Su cuenta está pendiente de aprobación. Contacte al administrador para obtener acceso completo.
               </p>
             </div>
@@ -260,8 +324,8 @@ export default function Dashboard() {
                 <p className="text-lg font-semibold text-gray-900 mt-1">Vehículos y Maquinaria</p>
                 <p className="text-sm text-gray-500 mt-2">Control de flota vehicular municipal</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Truck className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-santa-cruz-blue-100 rounded-full">
+                <Truck className="w-6 h-6 text-santa-cruz-blue-600" />
               </div>
             </div>
           </div>
@@ -273,8 +337,8 @@ export default function Dashboard() {
                 <p className="text-lg font-semibold text-gray-900 mt-1">Cuadrillas y Obras</p>
                 <p className="text-sm text-gray-500 mt-2">Gestión de proyectos de infraestructura</p>
               </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <FileText className="w-6 h-6 text-green-600" />
+              <div className="p-3 bg-santa-cruz-green-100 rounded-full">
+                <FileText className="w-6 h-6 text-santa-cruz-green-600" />
               </div>
             </div>
           </div>
@@ -286,8 +350,8 @@ export default function Dashboard() {
                 <p className="text-lg font-semibold text-gray-900 mt-1">Estadísticas</p>
                 <p className="text-sm text-gray-500 mt-2">Informes de gestión y rendimiento</p>
               </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <BarChart3 className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-santa-cruz-gold-100 rounded-full">
+                <BarChart3 className="w-6 h-6 text-santa-cruz-gold-600" />
               </div>
             </div>
           </div>
@@ -358,7 +422,10 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Gestión de usuarios</h1>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+        <button 
+          onClick={handleCreateUser}
+          className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+        >
           <Plus className="w-4 h-4" />
           Nuevo usuario
         </button>
@@ -366,7 +433,7 @@ export default function Dashboard() {
 
       {loading ? (
         <div className="flex justify-center items-center py-12">
-          <Loader className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader className="w-8 h-8 animate-spin text-santa-cruz-blue-600" />
           <span className="ml-2 text-gray-600">Cargando usuarios...</span>
         </div>
       ) : (
@@ -428,7 +495,7 @@ export default function Dashboard() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleEditUser(user)}
-                          className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-50 transition-colors"
+                          className="text-santa-cruz-blue-600 hover:text-santa-cruz-blue-800 p-2 rounded-md hover:bg-santa-cruz-blue-50 transition-colors"
                           title="Editar"
                         >
                           <Edit className="w-4 h-4" />
@@ -489,7 +556,7 @@ export default function Dashboard() {
   if (authLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader className="w-8 h-8 animate-spin text-santa-cruz-blue-600" />
         <span className="ml-2 text-gray-600">
           {authLoading ? "Verificando autenticación..." : "Cargando usuario..."}
         </span>
@@ -508,19 +575,23 @@ export default function Dashboard() {
       } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}
     >
       {/* Header del Sidebar */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0">
+      <div className="flex items-center justify-between h-16 px-4 border-b border-santa-cruz-blue-200 bg-gradient-to-r from-santa-cruz-blue-500 to-santa-cruz-green-600 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <MapPin className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm">
+            <img 
+              src={logo} 
+              alt="Logo Municipalidad Santa Cruz" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-gray-900">Sistema Vial</h1>
-            <p className="text-xs text-gray-600">Santa Cruz</p>
+            <h1 className="text-sm font-bold text-white">Sistema Vial</h1>
+            <p className="text-xs text-santa-cruz-gold-200">Municipalidad Santa Cruz</p>
           </div>
         </div>
         <button
           onClick={() => setSidebarOpen(false)}
-          className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600"
+          className="lg:hidden p-2 rounded-md text-white hover:text-santa-cruz-gold-200 hover:bg-white hover:bg-opacity-20 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -529,16 +600,16 @@ export default function Dashboard() {
       {/* Navegación */}
       <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto">
         {/* Información del usuario */}
-        <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-3 bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 rounded-lg border border-santa-cruz-blue-200">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-santa-cruz-blue-600 to-santa-cruz-green-600 rounded-full flex items-center justify-center">
               <User className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
                 {user?.name || 'Usuario'} {user?.lastname || ''}
               </p>
-              <p className="text-xs text-gray-600 truncate">
+              <p className="text-xs text-santa-cruz-blue-600 truncate">
                 {user?.rol ? user.rol.charAt(0).toUpperCase() + user.rol.slice(1) : 'Sin rol'}
               </p>
             </div>
@@ -556,7 +627,7 @@ export default function Dashboard() {
                     }
                   }
                 }}
-                className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                className="p-1 text-santa-cruz-blue-600 hover:text-santa-cruz-blue-800 hover:bg-santa-cruz-blue-50 rounded"
                 title="Actualizar datos del usuario"
               >
                 <Settings className="w-4 h-4" />
@@ -580,12 +651,12 @@ export default function Dashboard() {
                     title={item.description}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                       activeSection === item.id
-                        ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200'
+                        ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                     }`}
                   >
                     <item.icon className={`w-5 h-5 ${
-                      activeSection === item.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                      activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
                     }`} />
                     <span className="truncate">{item.name}</span>
                   </button>
@@ -631,7 +702,9 @@ export default function Dashboard() {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="w-4 h-4" />
+              <div className="w-4 h-4 bg-gradient-to-br from-santa-cruz-blue-500 to-santa-cruz-green-500 rounded-sm flex items-center justify-center">
+                <div className="w-2 h-2 bg-white rounded-sm"></div>
+              </div>
               <span>Sistema de Gestión Vial - Municipalidad de Santa Cruz</span>
             </div>
           </div>
@@ -732,6 +805,92 @@ export default function Dashboard() {
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Guardar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Create User Modal */}
+    {showCreateModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h2 className="text-lg font-bold mb-4">Crear Nuevo Usuario</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre *
+              </label>
+              <input
+                type="text"
+                value={newUser.name}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, name: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ingrese el nombre"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Apellido *
+              </label>
+              <input
+                type="text"
+                value={newUser.lastname}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, lastname: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ingrese el apellido"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email *
+              </label>
+              <input
+                type="email"
+                value={newUser.email}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, email: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="ejemplo@correo.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Contraseña *
+              </label>
+              <input
+                type="password"
+                value={newUser.password}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, password: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveNewUser}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Crear Usuario
             </button>
           </div>
         </div>
