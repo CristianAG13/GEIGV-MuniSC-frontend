@@ -8,10 +8,12 @@ import {
 import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
+import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import TransporteModule from '../features/transporte/TransporteModule';
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
 import RoleRequestsManagement from '../components/RoleRequestsManagement';
+import SweetAlertDemo from '../components/SweetAlertDemo';
 import { 
   sidebarData, 
   categoryLabels, 
@@ -84,8 +86,28 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    const result = await confirmAction(
+      '¿Cerrar sesión?',
+      '¿Está seguro que desea cerrar su sesión actual?',
+      {
+        confirmButtonText: 'Sí, cerrar sesión',
+        cancelButtonText: 'Cancelar',
+        icon: 'question'
+      }
+    );
+    
+    if (result.isConfirmed) {
+      logout();
+      showSuccess(
+        'Sesión cerrada',
+        'Ha cerrado sesión exitosamente',
+        {
+          timer: 2000,
+          showConfirmButton: false
+        }
+      );
+    }
   };
 
   const handleEditUser = (user) => {
@@ -107,18 +129,21 @@ export default function Dashboard() {
       await loadData();
       setShowEditModal(false);
       setEditingUser(null);
+      showSuccess('Usuario actualizado', 'El usuario ha sido actualizado exitosamente');
     } catch (error) {
-      alert('Error actualizando usuario: ' + error.message);
+      showError('Error al actualizar', error.message);
     }
   };
 
   const handleDeleteUser = async (userId) => {
-    if (window.confirm('¿Está seguro de eliminar este usuario?')) {
+    const result = await confirmDelete('este usuario');
+    if (result.isConfirmed) {
       try {
         await usersService.deleteUser(userId);
         await loadData();
+        showSuccess('Usuario eliminado', 'El usuario ha sido eliminado exitosamente');
       } catch (error) {
-        alert('Error eliminando usuario: ' + error.message);
+        showError('Error al eliminar', error.message);
       }
     }
   };
@@ -134,8 +159,9 @@ export default function Dashboard() {
         }
       }
       await loadData();
+      showSuccess('Rol asignado', 'El rol ha sido asignado exitosamente');
     } catch (error) {
-      alert('Error asignando rol: ' + error.message);
+      showError('Error al asignar rol', error.message);
     }
   };
 
@@ -453,13 +479,7 @@ export default function Dashboard() {
           </div>
         );
       case 'configuracion':
-        return (
-          <div className="text-center py-12">
-            <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Configuración</h2>
-            <p className="text-gray-600">Módulo en desarrollo - Configuración del sistema</p>
-          </div>
-        );
+        return <SweetAlertDemo />;
       default:
         return renderDashboard();
     }

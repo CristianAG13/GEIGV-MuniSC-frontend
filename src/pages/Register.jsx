@@ -4,6 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import muniLogo from "../assets/logo.png";
 import authService from "../services/authService";
+import { showSuccess, showError, showValidationError } from "../utils/sweetAlert";
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -35,24 +36,25 @@ export default function Register() {
     setSuccessMessage("");
 
     // Validaciones básicas en front
+    const errors = [];
     if (formData.password !== formData.confirmPassword) {
-      setError("Las contraseñas no coinciden");
-      return;
+      errors.push("Las contraseñas no coinciden");
     }
     if (formData.password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
-      return;
+      errors.push("La contraseña debe tener al menos 6 caracteres");
     }
     if (!formData.name.trim()) {
-      setError("El nombre es requerido");
-      return;
+      errors.push("El nombre es requerido");
     }
     if (!formData.lastname.trim()) {
-      setError("El apellido es requerido");
-      return;
+      errors.push("El apellido es requerido");
     }
     if (!formData.email.trim()) {
-      setError("El email es requerido");
+      errors.push("El email es requerido");
+    }
+
+    if (errors.length > 0) {
+      showValidationError(errors);
       return;
     }
 
@@ -67,17 +69,23 @@ export default function Register() {
       });
 
       if (result.success) {
-        setSuccessMessage("Cuenta creada exitosamente. Redirigiendo al login...");
-        // Esperar un poco para mostrar el mensaje y luego redirigir
+        showSuccess(
+          'Cuenta creada exitosamente',
+          'Redirigiendo al login...',
+          {
+            timer: 2000,
+            showConfirmButton: false
+          }
+        );
         setTimeout(() => {
           navigate("/login");
         }, 2000);
       } else {
-        setError(result.error || "Error al crear la cuenta");
+        showError('Error al crear cuenta', result.error || "Error al crear la cuenta");
       }
     } catch (err) {
       console.error("Error inesperado:", err);
-      setError("Error de conexión. Intenta nuevamente.");
+      showError('Error de conexión', 'Intenta nuevamente');
     } finally {
       setIsLoading(false);
     }

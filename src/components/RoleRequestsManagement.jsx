@@ -4,6 +4,7 @@ import {
   Search, Calendar, AlertTriangle, RefreshCw 
 } from 'lucide-react';
 import roleRequestService from '../services/roleRequestService';
+import { showSuccess, showError, promptTextarea, confirmAction } from '../utils/sweetAlert';
 
 const RoleRequestsManagement = () => {
   const [requests, setRequests] = useState([]);
@@ -72,37 +73,44 @@ const RoleRequestsManagement = () => {
   };
 
   const handleApprove = async (requestId) => {
-    if (window.confirm('¿Está seguro de aprobar esta solicitud?')) {
+    const result = await confirmAction('¿Aprobar solicitud?', '¿Está seguro de aprobar esta solicitud?');
+    if (result.isConfirmed) {
       try {
-        const result = await roleRequestService.approveRequest(requestId);
-        if (result.success) {
-          alert('Solicitud aprobada exitosamente');
+        const response = await roleRequestService.approveRequest(requestId);
+        if (response.success) {
+          showSuccess('Solicitud aprobada', 'La solicitud ha sido aprobada exitosamente');
           loadAllRequests();
           loadStats();
         } else {
-          alert('Error al aprobar solicitud: ' + result.error);
+          showError('Error al aprobar', response.error);
         }
       } catch (error) {
-        alert('Error inesperado al aprobar solicitud');
+        showError('Error inesperado', 'No se pudo aprobar la solicitud');
       }
     }
   };
 
   const handleReject = async (requestId) => {
-    const reason = prompt('Motivo del rechazo (opcional):');
-    if (reason === null) return;
-
-    try {
-      const result = await roleRequestService.rejectRequest(requestId, reason);
-      if (result.success) {
-        alert('Solicitud rechazada');
-        loadAllRequests();
-        loadStats();
-      } else {
-        alert('Error al rechazar solicitud: ' + result.error);
+    const result = await promptTextarea(
+      'Rechazar solicitud',
+      'Ingrese el motivo del rechazo (opcional):',
+      'Motivo del rechazo...',
+      { required: false }
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        const response = await roleRequestService.rejectRequest(requestId, result.value || '');
+        if (response.success) {
+          showSuccess('Solicitud rechazada', 'La solicitud ha sido rechazada');
+          loadAllRequests();
+          loadStats();
+        } else {
+          showError('Error al rechazar', response.error);
+        }
+      } catch (error) {
+        showError('Error inesperado', 'No se pudo rechazar la solicitud');
       }
-    } catch (error) {
-      alert('Error inesperado al rechazar solicitud');
     }
   };
 

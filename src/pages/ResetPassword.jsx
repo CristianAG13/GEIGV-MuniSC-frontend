@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Lock, CheckCircle } from "lucide-react";
 import authService from "../services/authService";
+import { showSuccess, showError, showValidationError } from "../utils/sweetAlert";
 
 const ResetPassword = () => {
   const [formData, setFormData] = useState({
@@ -57,12 +58,16 @@ const ResetPassword = () => {
     setError("");
 
     // Validaciones
+    const errors = [];
     if (formData.password !== formData.confirmPassword) {
-      setError("Las contraseñas no coinciden");
-      return;
+      errors.push("Las contraseñas no coinciden");
     }
     if (formData.password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+      errors.push("La contraseña debe tener al menos 6 caracteres");
+    }
+
+    if (errors.length > 0) {
+      showValidationError(errors);
       return;
     }
 
@@ -73,16 +78,23 @@ const ResetPassword = () => {
       
       if (result.success) {
         setIsSuccess(true);
-        // Redirigir al login después de 3 segundos
+        showSuccess(
+          'Contraseña actualizada',
+          'Su contraseña ha sido actualizada exitosamente. Redirigiendo al login...',
+          {
+            timer: 3000,
+            showConfirmButton: false
+          }
+        );
         setTimeout(() => {
           navigate("/login");
         }, 3000);
       } else {
-        setError(result.error || "Error al resetear la contraseña");
+        showError('Error al resetear contraseña', result.error || "Error al resetear la contraseña");
       }
     } catch (err) {
       console.error("Error inesperado:", err);
-      setError("Error de conexión. Intenta nuevamente.");
+      showError('Error de conexión', 'Intenta nuevamente');
     } finally {
       setIsLoading(false);
     }

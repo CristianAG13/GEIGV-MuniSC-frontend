@@ -13,6 +13,7 @@ import BoletaMunicipal from './components/BoletaMunicipal';
 import BoletaAlquiler from './components/BoletaAlquiler';
 import { Receipt, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { showSuccess, showError, confirmDelete } from '../../utils/sweetAlert';
 
 const TransporteModule = () => {
   const [activeTab, setActiveTab] = useState('vehiculos');
@@ -108,25 +109,24 @@ const TransporteModule = () => {
 
           case 'boletaMunicipal':
         await transporteService.createBoletaMunicipal(data);
-        // Mostrar notificación de éxito
-        alert('Boleta municipal guardada exitosamente');
+        showSuccess('Boleta guardada', 'Boleta municipal guardada exitosamente');
         break;
         
       case 'boletaAlquiler':
         await transporteService.createBoletaAlquiler(data);
-        // Mostrar notificación de éxito
-        alert('Boleta de alquiler guardada exitosamente');
+        showSuccess('Boleta guardada', 'Boleta de alquiler guardada exitosamente');
         break;
       }
       handleCloseModal();
       loadData();
     } catch (error) {
-      alert('Error al guardar: ' + error.message);
+      showError('Error al guardar', error.message);
     }
   };
 
   const handleDelete = async (id, type) => {
-    if (window.confirm('¿Está seguro de eliminar este elemento?')) {
+    const result = await confirmDelete('este elemento');
+    if (result.isConfirmed) {
       try {
         switch (type) {
           case 'vehiculo':
@@ -137,8 +137,9 @@ const TransporteModule = () => {
             break;
         }
         loadData();
+        showSuccess('Eliminado', 'El elemento ha sido eliminado exitosamente');
       } catch (error) {
-        alert('Error al eliminar: ' + error.message);
+        showError('Error al eliminar', error.message);
       }
     }
   };
