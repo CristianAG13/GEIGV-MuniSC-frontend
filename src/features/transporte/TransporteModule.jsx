@@ -9,6 +9,10 @@ import transporteService from '../../services/transporteService';
 import VehiculoForm from './components/VehiculoForm';
 import MaquinariaForm from './components/MaquinariaForm';
 import AsignacionForm from './components/AsignacionForm';
+import BoletaMunicipal from './components/BoletaMunicipal';
+import BoletaAlquiler from './components/BoletaAlquiler';
+import { Receipt, FileText } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const TransporteModule = () => {
   const [activeTab, setActiveTab] = useState('vehiculos');
@@ -21,6 +25,8 @@ const TransporteModule = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
+  const [asignacionActiva, setAsignacionActiva] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadData();
@@ -50,6 +56,19 @@ const TransporteModule = () => {
     }
   };
 
+  
+  
+  // Al abrir el modal de boleta, primero verificar si hay asignación
+  const handleOpenBoletaMunicipal = async (maquinariaId) => {
+    try {
+      const asignacion = await transporteService.getAsignacionActiva(maquinariaId);
+      setAsignacionActiva(asignacion);
+      handleOpenModal('boletaMunicipal');
+    } catch (error) {
+      // Si no hay asignación, usar el usuario actual
+      handleOpenModal('boletaMunicipal');
+    }
+  };
   const handleOpenModal = (type, item = null) => {
     setModalType(type);
     setEditingItem(item);
@@ -86,6 +105,18 @@ const TransporteModule = () => {
             await transporteService.createAsignacion(data);
           }
           break;
+
+          case 'boletaMunicipal':
+        await transporteService.createBoletaMunicipal(data);
+        // Mostrar notificación de éxito
+        alert('Boleta municipal guardada exitosamente');
+        break;
+        
+      case 'boletaAlquiler':
+        await transporteService.createBoletaAlquiler(data);
+        // Mostrar notificación de éxito
+        alert('Boleta de alquiler guardada exitosamente');
+        break;
       }
       handleCloseModal();
       loadData();
@@ -269,14 +300,32 @@ const TransporteModule = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Maquinaria</h2>
+        <div className="flex gap-2">
+        <button
+          onClick={() => handleOpenModal('boletaMunicipal')}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <Receipt className="w-4 h-4" />
+          Boleta Municipal
+        </button>
+        <button
+          onClick={() => handleOpenModal('boletaAlquiler')}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <FileText className="w-4 h-4" />
+          Boleta Alquiler
+        </button>
         <button
           onClick={() => handleOpenModal('maquinaria')}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
           Nueva Maquinaria
         </button>
       </div>
+    </div>
+        
+      
 
       {/* Filtros y búsqueda */}
       <div className="flex gap-4 items-center">
@@ -544,7 +593,13 @@ const TransporteModule = () => {
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold">
-                {editingItem ? 'Editar' : 'Nuevo'} {modalType === 'vehiculo' ? 'Vehículo' : modalType === 'maquinaria' ? 'Maquinaria' : 'Asignación'}
+              { /* {editingItem ? 'Editar' : 'Nuevo'} {modalType === 'vehiculo' ? 'Vehículo' : modalType === 'maquinaria' ? 'Maquinaria' : 'Asignación'}*/}
+                 {/* Actualizar el título según el tipo de modal */}
+          {modalType === 'vehiculo' && (editingItem ? 'Editar' : 'Nuevo') + ' Vehículo'}
+          {modalType === 'maquinaria' && (editingItem ? 'Editar' : 'Nueva') + ' Maquinaria'}
+          {modalType === 'asignacion' && 'Nueva Asignación'}
+          {modalType === 'boletaMunicipal' && 'Nueva Boleta Municipal'}
+          {modalType === 'boletaAlquiler' && 'Nueva Boleta de Alquiler'}
               </h2>
               <button
                 onClick={handleCloseModal}
@@ -577,6 +632,31 @@ const TransporteModule = () => {
                 onCancel={handleCloseModal}
               />
             )}
+
+            
+
+   {modalType === 'boletaMunicipal' && (
+  <BoletaMunicipal
+    onSave={handleSave}
+    onCancel={handleCloseModal}
+    operador={{
+      id: user?.id,
+      nombre: `${user?.name} ${user?.lastname}`
+    }}
+  />
+)}
+
+{modalType === 'boletaAlquiler' && (
+  <BoletaAlquiler
+    onSave={handleSave}
+    onCancel={handleCloseModal}
+    operador={{
+      id: user?.id,
+      nombre: `${user?.name} ${user?.lastname}`
+    }}
+  />
+)}
+
           </div>
         </div>
       )}
@@ -585,3 +665,12 @@ const TransporteModule = () => {
 };
 
 export default TransporteModule;
+
+
+// {modalType === 'boletaAlquiler' && (
+//         <BoletaAlquiler
+//           onSave={handleSave}
+//           onCancel={handleCloseModal}
+//           operador={/* Aquí debes pasar el operador actual */}
+//         />
+//       )}

@@ -217,7 +217,86 @@ class TransporteService {
       throw new Error(error.response?.data?.message || 'Error al obtener reporte de mantenimientos');
     }
   }
+
+  // ===== GESTIÓN DE BOLETAS =====
+
+  // Crear boleta municipal
+  async createBoletaMunicipal(data) {
+    try {
+      const response = await apiClient.post('/transporte/boletas-municipales', data);
+      return response.data;
+    } catch (error) {
+      console.error('Error creando boleta municipal:', error);
+      throw new Error(error.response?.data?.message || 'Error al crear boleta municipal');
+    }
+  }
+
+  // Obtener boletas municipales
+  async getBoletasMunicipales(filters = {}) {
+    try {
+      const response = await apiClient.get('/transporte/boletas-municipales', { params: filters });
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo boletas municipales:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener boletas municipales');
+    }
+  }
+
+  // Crear boleta de alquiler
+  async createBoletaAlquiler(data) {
+    try {
+      const response = await apiClient.post('/transporte/boletas-alquiler', data);
+      return response.data;
+    } catch (error) {
+      console.error('Error creando boleta de alquiler:', error);
+      throw new Error(error.response?.data?.message || 'Error al crear boleta de alquiler');
+    }
+  }
+
+  // Obtener boletas de alquiler
+  async getBoletasAlquiler(filters = {}) {
+    try {
+      const response = await apiClient.get('/transporte/boletas-alquiler', { params: filters });
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo boletas de alquiler:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener boletas de alquiler');
+    }
+  }
+
+  // ===== REPORTES Y CÁLCULOS ADICIONALES =====
+
+  // Reporte de consumo de maquinaria
+  async getCalculosConsumo(maquinariaId, fechaInicio, fechaFin) {
+    try {
+      const response = await apiClient.get(`/transporte/reportes/consumo/${maquinariaId}`, {
+        params: { fechaInicio, fechaFin }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo cálculos de consumo:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener cálculos de consumo');
+    }
+  }
+
+  // Reporte de estaciones
+  async getReporteEstaciones(fechaInicio, fechaFin) {
+    try {
+      const response = await apiClient.get('/transporte/reportes/estaciones', {
+        params: { fechaInicio, fechaFin }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo reporte de estaciones:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener reporte de estaciones');
+    }
+  }
+
+
+  
 }
 
 const transporteService = new TransporteService();
 export default transporteService;
+
+
