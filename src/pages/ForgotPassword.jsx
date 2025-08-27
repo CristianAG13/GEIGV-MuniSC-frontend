@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react"
 import authService from "../services/authService"
+import { showSuccess, showError } from "../utils/sweetAlert"
 
 
 const ForgotPasswordPage = () => {
@@ -25,12 +26,16 @@ const ForgotPasswordPage = () => {
       if (result.success) {
         setSuccessMessage(result.message)
         setIsSuccess(true)
+        showSuccess(
+          '¡Correo enviado!',
+          result.message || `Hemos enviado las instrucciones para restablecer tu contraseña a ${email}`
+        );
       } else {
-        setError(result.error || "Error al enviar el correo. Intenta nuevamente.")
+        showError('Error al enviar correo', result.error || "Error al enviar el correo. Intenta nuevamente.");
       }
     } catch (err) {
       console.error("Error inesperado:", err)
-      setError("Error de conexión. Intenta nuevamente.")
+      showError('Error de conexión', 'Intenta nuevamente');
     } finally {
       setIsLoading(false)
     }

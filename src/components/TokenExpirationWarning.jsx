@@ -1,5 +1,6 @@
 import useTokenMonitor from '../hooks/useTokenMonitor';
 import { useAuth } from '../context/AuthContext';
+import { confirmAction, showSuccess, showToast } from '../utils/sweetAlert';
 
 const TokenExpirationWarning = () => {
   const { logout, refreshUser } = useAuth();
@@ -8,8 +9,37 @@ const TokenExpirationWarning = () => {
   const handleExtendSession = async () => {
     try {
       await refreshUser();
+      showToast('Sesión extendida exitosamente', 'success');
     } catch (error) {
       console.error('Error al extender sesión:', error);
+      showToast('Error al extender sesión', 'error');
+    }
+  };
+
+  const handleLogout = async () => {
+    const result = await confirmAction(
+      'Su sesión está por expirar',
+      '¿Desea cerrar sesión ahora o extender su tiempo?',
+      {
+        confirmButtonText: 'Cerrar sesión',
+        cancelButtonText: 'Extender sesión',
+        icon: 'warning',
+        confirmButtonColor: '#f59e0b'
+      }
+    );
+    
+    if (result.isConfirmed) {
+      logout();
+      showSuccess(
+        'Sesión cerrada',
+        'Su sesión ha sido cerrada por seguridad',
+        {
+          timer: 2000,
+          showConfirmButton: false
+        }
+      );
+    } else if (result.isDismissed) {
+      handleExtendSession();
     }
   };
 
@@ -44,7 +74,7 @@ const TokenExpirationWarning = () => {
             Extender sesión
           </button>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="bg-yellow-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-yellow-700 transition-colors"
           >
             Cerrar sesión

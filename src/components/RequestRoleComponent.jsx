@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Send, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import roleRequestService from '../services/roleRequestService';
+import { showSuccess, showError, confirmAction } from '../utils/sweetAlert';
 
 const RequestRoleComponent = ({ user, onRequestSent }) => {
   const [showModal, setShowModal] = useState(false);
@@ -90,37 +91,38 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
       console.log('Resultado del envío:', result);
       
       if (result.success) {
-        alert('Solicitud enviada exitosamente. Será revisada por un administrador.');
+        showSuccess('Solicitud enviada', 'Su solicitud será revisada por un administrador');
         setShowModal(false);
         setSelectedRole('');
         setJustification('');
         loadData();
         if (onRequestSent) onRequestSent();
       } else {
-        alert('Error al enviar solicitud: ' + result.error);
+        showError('Error al enviar solicitud', result.error);
         console.error('Error detallado:', result);
       }
       
     } catch (error) {
       console.error('Error inesperado:', error);
-      alert('Error inesperado al enviar solicitud: ' + error.message);
+      showError('Error inesperado', error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCancelRequest = async (requestId) => {
-    if (window.confirm('¿Está seguro de cancelar esta solicitud?')) {
+    const result = await confirmAction('¿Cancelar solicitud?', '¿Está seguro de cancelar esta solicitud?');
+    if (result.isConfirmed) {
       try {
-        const result = await roleRequestService.cancelRequest(requestId);
-        if (result.success) {
-          alert('Solicitud cancelada exitosamente');
+        const response = await roleRequestService.cancelRequest(requestId);
+        if (response.success) {
+          showSuccess('Solicitud cancelada', 'La solicitud ha sido cancelada exitosamente');
           loadData();
         } else {
-          alert('Error al cancelar solicitud: ' + result.error);
+          showError('Error al cancelar', response.error);
         }
       } catch (error) {
-        alert('Error inesperado al cancelar solicitud');
+        showError('Error inesperado', 'No se pudo cancelar la solicitud');
       }
     }
   };
