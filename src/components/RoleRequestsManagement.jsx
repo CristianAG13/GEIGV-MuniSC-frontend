@@ -76,16 +76,31 @@ const RoleRequestsManagement = () => {
     const result = await confirmAction('¿Aprobar solicitud?', '¿Está seguro de aprobar esta solicitud?');
     if (result.isConfirmed) {
       try {
+        console.log('=== APROBANDO SOLICITUD ===');
+        console.log('Request ID:', requestId);
+        
         const response = await roleRequestService.approveRequest(requestId);
+        console.log('Respuesta de aprobación:', response);
+        
         if (response.success) {
-          showSuccess('Solicitud aprobada', 'La solicitud ha sido aprobada exitosamente');
-          loadAllRequests();
-          loadStats();
+          showSuccess(
+            'Solicitud aprobada', 
+            'La solicitud ha sido aprobada exitosamente. El usuario ahora tiene acceso con el rol asignado.',
+            { timer: 5000 }
+          );
+          
+          // Recargar datos con un pequeño delay para asegurar que el backend haya procesado todo
+          setTimeout(async () => {
+            await loadAllRequests();
+            await loadStats();
+          }, 1000);
         } else {
-          showError('Error al aprobar', response.error);
+          showError('Error al aprobar', response.error || 'No se pudo aprobar la solicitud');
+          console.error('Error en la aprobación:', response);
         }
       } catch (error) {
-        showError('Error inesperado', 'No se pudo aprobar la solicitud');
+        console.error('Error inesperado en handleApprove:', error);
+        showError('Error inesperado', `No se pudo aprobar la solicitud: ${error.message}`);
       }
     }
   };

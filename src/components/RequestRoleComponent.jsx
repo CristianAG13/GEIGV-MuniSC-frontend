@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Send, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import roleRequestService from '../services/roleRequestService';
+import authService from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 import { showSuccess, showError, confirmAction } from '../utils/sweetAlert';
 
 const RequestRoleComponent = ({ user, onRequestSent }) => {
+  const { refreshUser } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
   const [justification, setJustification] = useState('');
@@ -15,7 +18,23 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
 
   useEffect(() => {
     loadData();
-  }, []);
+    
+    // Verificar cambios en el usuario cada 10 segundos si hay solicitudes pendientes
+    const checkUserUpdates = setInterval(async () => {
+      if (user && !user.rol && !user.role) {
+        try {
+          console.log('Verificando actualizaciones del usuario...');
+          if (onRequestSent) {
+            onRequestSent(); // Esto debería activar refreshUser en el contexto padre
+          }
+        } catch (error) {
+          console.error('Error verificando actualizaciones:', error);
+        }
+      }
+    }, 10000); // Cada 10 segundos
+
+    return () => clearInterval(checkUserUpdates);
+  }, [user, onRequestSent]);
 
   const loadData = async () => {
     try {
@@ -65,46 +84,51 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
 
   const handleSubmitRequest = async () => {
     if (!selectedRole || !justification.trim()) {
-      alert('Por favor complete todos los campos');
+      showError('Campos requeridos', 'Por favor complete todos los campos');
       return;
     }
 
     // Quitar restricción de longitud mínima
     if (justification.trim().length < 5) {
-      alert('La justificación debe tener al menos 5 caracteres');
+      showError('Justificación muy corta', 'La justificación debe tener al menos 5 caracteres');
       return;
     }
 
     setLoading(true);
     try {
       // Intentar envío real al backend
-      console.log('Datos que se envían:');
-      console.log('- selectedRole (valor del select):', selectedRole);
-      console.log('- selectedRole.toLowerCase():', selectedRole.toLowerCase());
-      console.log('- justification:', justification);
-      console.log('- Payload completo:', { 
-        requestedRole: selectedRole.toLowerCase(), 
-        justification 
-      });
+      console.log('=== ENVIANDO SOLICITUD DE ROL ===');
+      console.log('Usuario actual:', user);
+      console.log('Rol seleccionado:', selectedRole);
+      console.log('Justificación:', justification);
       
       const result = await roleRequestService.requestRole(selectedRole, justification);
-      console.log('Resultado del envío:', result);
+      console.log('Resultado del servicio:', result);
       
       if (result.success) {
-        showSuccess('Solicitud enviada', 'Su solicitud será revisada por un administrador');
+        showSuccess('Solicitud enviada', 'Su solicitud será revisada por un administrador. Recibirá una notificación cuando sea procesada.');
         setShowModal(false);
         setSelectedRole('');
         setJustification('');
-        loadData();
-        if (onRequestSent) onRequestSent();
+        await loadData(); // Recargar datos
+        
+        // Notificar al componente padre para que actualice datos del usuario
+        if (onRequestSent) {
+          try {
+            await onRequestSent();
+            console.log('Componente padre notificado exitosamente');
+          } catch (error) {
+            console.error('Error notificando al componente padre:', error);
+          }
+        }
       } else {
-        showError('Error al enviar solicitud', result.error);
+        showError('Error al enviar solicitud', result.error || 'No se pudo enviar la solicitud');
         console.error('Error detallado:', result);
       }
       
     } catch (error) {
-      console.error('Error inesperado:', error);
-      showError('Error inesperado', error.message);
+      console.error('Error inesperado en handleSubmitRequest:', error);
+      showError('Error inesperado', `No se pudo enviar la solicitud: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -161,7 +185,14 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
   };
 
   // Verificar si el usuario ya tiene un rol asignado
-  if (!user || user.rol || user.role) {
+  console.log('=== VERIFICANDO ESTADO DEL USUARIO ===');
+  console.log('Usuario completo:', user);
+  console.log('user.rol:', user?.rol);
+  console.log('user.role:', user?.role);
+  console.log('user.roles:', user?.roles);
+  
+  // Si el usuario tiene un rol asignado, no mostrar este componente
+  if (!user || user.rol || user.role || (user.roles && user.roles.length > 0)) {
     return null;
   }
 
@@ -189,9 +220,79 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
                   Solicitar Rol
                 </button>
               ) : (
-                <div className="mt-3 inline-flex items-center px-3 py-2 text-sm text-yellow-800 bg-yellow-100 rounded-md">
-                  <Clock className="w-4 h-4 mr-2" />
-                  Ya tiene una solicitud pendiente
+                <div className="mt-3 flex items-center space-x-3">
+                  <div className="inline-flex items-center px-3 py-2 text-sm text-yellow-800 bg-yellow-100 rounded-md">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Ya tiene una solicitud pendiente
+                  </div>
+                  <button
+                    onClick={async () => {
+                      console.log('=== VERIFICACIÓN MANUAL DEL ROL ===');
+                      try {
+                        // Paso 1: Verificar estado de la solicitud
+                        console.log('1. Verificando estado de solicitud...');
+                        const requestResponse = await roleRequestService.getMyRequests();
+                        console.log('Respuesta de solicitudes:', requestResponse);
+                        
+                        if (requestResponse.success && requestResponse.data && requestResponse.data.length > 0) {
+                          // Buscar la solicitud más reciente
+                          const request = requestResponse.data[0]; // Tomar la primera (más reciente)
+                          console.log('Solicitud encontrada:', request);
+                          console.log('Estado de solicitud:', request.status);
+                          
+                          if (request.status === 'approved') {
+                            console.log('2. Solicitud aprobada, refrescando perfil...');
+                            
+                            // Paso 2: Forzar refresh del perfil
+                            const result = await refreshUser();
+                            console.log('Resultado de actualización manual:', result);
+                            
+                            // Paso 3: Verificar datos actualizados
+                            const updatedUser = authService.getCurrentUser();
+                            console.log('Usuario después de refresh:', updatedUser);
+                            
+                            // Paso 4: Verificar si el rol se reflejó
+                            if (updatedUser && (updatedUser.rol || updatedUser.role || (updatedUser.roles && updatedUser.roles.length > 0))) {
+                              showSuccess('¡Rol asignado!', `Su rol ha sido actualizado correctamente. Recargando página...`);
+                              setTimeout(() => window.location.reload(), 1500);
+                            } else {
+                              // Paso 5: Si aún no se refleja, mostrar información detallada
+                              showError('Problema de sincronización', 
+                                `Su solicitud está aprobada pero el sistema no ha sincronizado el rol. 
+                                Estado de solicitud: ${request.status}
+                                Rol solicitado: ${request.requestedRole || request.role?.name}
+                                Por favor contacte al administrador.`);
+                              
+                              console.log('=== PROBLEMA DE SINCRONIZACIÓN ===');
+                              console.log('Solicitud aprobada pero rol no reflejado en usuario');
+                              console.log('Datos de solicitud:', request);
+                              console.log('Datos de usuario:', updatedUser);
+                            }
+                          } else {
+                            showSuccess('Estado verificado', `Su solicitud está en estado: ${request.status}`);
+                          }
+                        } else {
+                          // Si no hay solicitud, hacer refresh normal
+                          console.log('2. No hay solicitud activa, haciendo refresh normal...');
+                          const result = await refreshUser();
+                          console.log('Resultado de refresh:', result);
+                          
+                          if (result.success) {
+                            showSuccess('Estado verificado', 'Su información ha sido actualizada');
+                          } else {
+                            showError('Error', 'No se pudo verificar el estado del rol');
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error en verificación manual:', error);
+                        showError('Error', 'Error al verificar el estado del rol');
+                      }
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Verificar Estado
+                  </button>
                 </div>
               )
             ) : (
