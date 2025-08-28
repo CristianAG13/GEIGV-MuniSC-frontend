@@ -10,6 +10,7 @@ import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import TransporteModule from '../features/transporte/TransporteModule';
+import { OperadoresModule } from '../features/operadores';
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
 import RoleRequestsManagement from '../components/RoleRequestsManagement';
@@ -570,6 +571,8 @@ export default function Dashboard() {
         return <RoleRequestsManagement />;
       case 'transporte':
         return <TransporteModule />;
+      case 'operadores':
+        return <OperadoresModule />;
       case 'proyectos-cuadrilla':
         return (
           <div className="text-center py-12">
