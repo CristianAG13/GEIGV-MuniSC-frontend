@@ -10,6 +10,7 @@ import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import TransporteModule from '../features/transporte/TransporteModule';
+import { OperadoresModule } from '../features/operadores';
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
 import RoleRequestsManagement from '../components/RoleRequestsManagement';
@@ -260,9 +261,39 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Principal</h1>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <MapPin className="w-4 h-4" />
-            Municipalidad de Santa Cruz
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <MapPin className="w-4 h-4" />
+              Municipalidad de Santa Cruz
+            </div>
+            
+            {/* Botón temporal para debug - solo para usuarios sin rol */}
+            {!user?.rol && !user?.role && (
+              <button
+                onClick={async () => {
+                  console.log('🔄 Forzando actualización de datos del usuario...');
+                  try {
+                    if (refreshUser) {
+                      const result = await refreshUser();
+                      if (result.success) {
+                        console.log('✅ Actualización exitosa');
+                        alert('Datos actualizados. Si tenía un rol aprobado, debería aparecer ahora.');
+                      } else {
+                        console.error('❌ Error en actualización:', result.error);
+                        alert('Error al actualizar datos: ' + result.error);
+                      }
+                    }
+                  } catch (error) {
+                    console.error('❌ Error inesperado:', error);
+                    alert('Error inesperado: ' + error.message);
+                  }
+                }}
+                className="px-3 py-1 text-xs bg-santa-cruz-blue-600 text-white rounded hover:bg-santa-cruz-blue-700 transition-colors"
+                title="Actualizar datos del usuario"
+              >
+                🔄 Verificar Rol
+              </button>
+            )}
           </div>
         </div>
 
@@ -306,10 +337,21 @@ export default function Dashboard() {
         {!user?.rol && !user?.role && (
           <RequestRoleComponent 
             user={user} 
-            onRequestSent={() => {
-              // Opcional: actualizar datos del usuario después de enviar solicitud
-              if (refreshUser) {
-                refreshUser();
+            onRequestSent={async () => {
+              console.log('=== REFRESCANDO DATOS DEL USUARIO ===');
+              try {
+                if (refreshUser) {
+                  const result = await refreshUser();
+                  if (result.success) {
+                    console.log('✅ Datos del usuario actualizados exitosamente');
+                  } else {
+                    console.error('❌ Error actualizando datos del usuario:', result.error);
+                  }
+                } else {
+                  console.warn('⚠️ refreshUser no está disponible');
+                }
+              } catch (error) {
+                console.error('❌ Error inesperado al refrescar usuario:', error);
               }
             }}
           />
@@ -529,6 +571,8 @@ export default function Dashboard() {
         return <RoleRequestsManagement />;
       case 'transporte':
         return <TransporteModule />;
+      case 'operadores':
+        return <OperadoresModule />;
       case 'proyectos-cuadrilla':
         return (
           <div className="text-center py-12">

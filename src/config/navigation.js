@@ -1,16 +1,16 @@
 // config/navigation.js
 import { 
   Home, Users, Truck, FileText, BarChart3, Settings,
-  MapPin, CheckCircle, Clock, UserCheck, Wrench
+  MapPin, CheckCircle, Clock, UserCheck, Wrench, HardHat
 } from 'lucide-react';
 
 // Configuración de permisos por rol
 export const rolePermissions = {
   user: ['dashboard', 'transporte', 'proyectos-cuadrilla'],
-  admin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'solicitudes-rol'],
-  manager: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes'],
+  admin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'solicitudes-rol', 'operadores'],
+  manager: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'operadores'],
   guest: ['dashboard'],
-  superadmin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'configuracion', 'solicitudes-rol']
+  superadmin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'configuracion', 'solicitudes-rol', 'operadores']
 };
 
 // Datos de navegación del sidebar organizados por categorías
@@ -48,6 +48,14 @@ export const sidebarData = {
       icon: Truck, 
       permission: 'transporte',
       description: 'Administrar vehículos y maquinaria',
+      category: 'management'
+    },
+    { 
+      id: 'operadores', 
+      name: 'Gestión de Operadores', 
+      icon: HardHat, 
+      permission: 'operadores',
+      description: 'Administrar operadores de maquinaria y vehículos',
       category: 'management'
     }
   ],
