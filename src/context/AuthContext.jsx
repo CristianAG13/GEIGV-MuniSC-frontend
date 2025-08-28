@@ -20,19 +20,21 @@ const AuthProvider = ({ children }) => {
       setLoading(false);
     }
 
-    // Configurar verificación periódica de expiración del token (cada 5 minutos)
+    // Configurar verificación periódica de expiración del token (cada minuto)
     const tokenCheckInterval = setInterval(() => {
-      if (!authService.isAuthenticated()) {
-        setUser(null);
+      const wasAuthenticated = !!user;
+      if (wasAuthenticated && !authService.isAuthenticated()) {
         console.log('Token expirado, cerrando sesión automáticamente');
+        // Usar logout con parámetro de expiración
+        logout(true);
       }
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 60 * 1000); // 1 minuto
 
     // Limpiar el intervalo cuando el componente se desmonte
     return () => {
       clearInterval(tokenCheckInterval);
     };
-  }, []);
+  }, [user]);
 
   // Función para refrescar datos del usuario desde el backend
   const refreshUserFromBackend = async () => {
@@ -85,10 +87,15 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = (byExpiration = false) => {
     authService.logout();
     setUser(null);
-    window.location.href = '/login';
+    
+    if (byExpiration) {
+      window.location.href = '/login?expired=true';
+    } else {
+      window.location.href = '/login';
+    }
   };
 
   // Función para actualizar los datos del usuario (útil cuando un admin cambia el rol)

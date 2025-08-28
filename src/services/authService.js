@@ -103,7 +103,12 @@ class AuthService {
 
   
   // Cerrar sesión
-  logout() {
+  logout(preserveExpiredReason = false) {
+    // Si no queremos preservar el motivo, limpiamos todo
+    if (!preserveExpiredReason) {
+      localStorage.removeItem('sessionExpiredReason');
+    }
+    
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   }
@@ -115,6 +120,9 @@ class AuthService {
     
     // Verificar si el token ha expirado
     if (this.isTokenExpired()) {
+      console.log('Token expirado, cerrando sesión');
+      // Guardamos un indicador para saber que se cerró por expiración
+      localStorage.setItem('sessionExpiredReason', 'token_expired');
       this.logout(); // Limpiar datos si el token expiró
       return false;
     }
