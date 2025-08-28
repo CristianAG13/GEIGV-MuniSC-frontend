@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   LogOut, User, Users, Menu, X, Plus, Edit, Trash2,
   Home, MapPin, CheckCircle, Clock, UserCheck, Loader,
-  FileText, Truck, BarChart3, Settings, UserPlus
+  FileText, Truck, BarChart3, Settings, UserPlus, HardHat
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
@@ -357,105 +357,149 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Sistema Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Gestión de Transporte</p>
-                <p className="text-lg font-semibold text-gray-900 mt-1">Vehículos y Maquinaria</p>
-                <p className="text-sm text-gray-500 mt-2">Control de flota vehicular municipal</p>
-              </div>
-              <div className="p-3 bg-santa-cruz-blue-100 rounded-full">
-                <Truck className="w-6 h-6 text-santa-cruz-blue-600" />
+        {/* Módulos Principales - Ordenados */}
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-blue-600 pl-3">
+            Gestión de Equipamiento y Personal
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Maquinaria */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Gestión Principal</p>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">Vehículos y Maquinaria</p>
+                  <p className="text-sm text-gray-500 mt-2">Control de flota vehicular municipal</p>
+                  <button 
+                    onClick={() => setActiveSection('transporte')}
+                    className="mt-4 px-4 py-2 bg-santa-cruz-blue-600 text-white rounded-lg hover:bg-santa-cruz-blue-700 transition-colors text-sm inline-flex items-center"
+                  >
+                    <Truck className="w-4 h-4 mr-2" />
+                    Acceder
+                  </button>
+                </div>
+                <div className="p-3 bg-santa-cruz-blue-100 rounded-full">
+                  <Truck className="w-8 h-8 text-santa-cruz-blue-600" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Proyectos Viales</p>
-                <p className="text-lg font-semibold text-gray-900 mt-1">Cuadrillas y Obras</p>
-                <p className="text-sm text-gray-500 mt-2">Gestión de proyectos de infraestructura</p>
-              </div>
-              <div className="p-3 bg-santa-cruz-green-100 rounded-full">
-                <FileText className="w-6 h-6 text-santa-cruz-green-600" />
+            {/* Operadores */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Recursos Humanos</p>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">Operadores</p>
+                  <p className="text-sm text-gray-500 mt-2">Gestión de operadores de maquinaria</p>
+                  <button 
+                    onClick={() => setActiveSection('operadores')}
+                    className="mt-4 px-4 py-2 bg-santa-cruz-green-600 text-white rounded-lg hover:bg-santa-cruz-green-700 transition-colors text-sm inline-flex items-center"
+                  >
+                    <HardHat className="w-4 h-4 mr-2" />
+                    Acceder
+                  </button>
+                </div>
+                <div className="p-3 bg-santa-cruz-green-100 rounded-full">
+                  <HardHat className="w-8 h-8 text-santa-cruz-green-600" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Reportes y Análisis</p>
-                <p className="text-lg font-semibold text-gray-900 mt-1">Estadísticas</p>
-                <p className="text-sm text-gray-500 mt-2">Informes de gestión y rendimiento</p>
-              </div>
-              <div className="p-3 bg-santa-cruz-gold-100 rounded-full">
-                <BarChart3 className="w-6 h-6 text-santa-cruz-gold-600" />
+            {/* Proyectos Cuadrilla */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Proyectos</p>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">Cuadrillas y Obras</p>
+                  <p className="text-sm text-gray-500 mt-2">Gestión de proyectos de infraestructura</p>
+                  <button 
+                    onClick={() => setActiveSection('proyectos-cuadrilla')}
+                    className="mt-4 px-4 py-2 bg-santa-cruz-gold-600 text-white rounded-lg hover:bg-santa-cruz-gold-700 transition-colors text-sm inline-flex items-center"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Acceder
+                  </button>
+                </div>
+                <div className="p-3 bg-santa-cruz-gold-100 rounded-full">
+                  <FileText className="w-8 h-8 text-santa-cruz-gold-600" />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Acciones Rápidas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button 
-              onClick={() => setActiveSection('transporte')}
-              className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
-            >
-              <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-700 transition-colors">
-                <Truck className="w-5 h-5 text-white" />
+        {/* Sistema de Análisis y Reportes */}
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-green-600 pl-3">
+            Análisis y Reportes
+          </h3>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-semibold text-gray-900">Estadísticas y Reportes</p>
+                <p className="text-sm text-gray-500 mt-2">Informes de gestión, rendimiento y análisis de operaciones</p>
+                <button 
+                  onClick={() => setActiveSection('reportes')}
+                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Ver Reportes
+                </button>
               </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-900">Ver Transporte</p>
-                <p className="text-sm text-gray-600">Gestionar vehículos</p>
+              <div className="p-3 bg-purple-100 rounded-full">
+                <BarChart3 className="w-10 h-10 text-purple-600" />
               </div>
-            </button>
-
-            <button 
-              onClick={() => setActiveSection('proyectos-cuadrilla')}
-              className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group"
-            >
-              <div className="p-2 bg-green-600 rounded-lg group-hover:bg-green-700 transition-colors">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-900">Ver Proyectos</p>
-                <p className="text-sm text-gray-600">Gestionar cuadrillas</p>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => setActiveSection('reportes')}
-              className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group"
-            >
-              <div className="p-2 bg-purple-600 rounded-lg group-hover:bg-purple-700 transition-colors">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-900">Ver Reportes</p>
-                <p className="text-sm text-gray-600">Análisis y estadísticas</p>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => setActiveSection('configuracion')}
-              className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
-            >
-              <div className="p-2 bg-gray-600 rounded-lg group-hover:bg-gray-700 transition-colors">
-                <Settings className="w-5 h-5 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-gray-900">Configuración</p>
-                <p className="text-sm text-gray-600">Ajustes del sistema</p>
-              </div>
-            </button>
+            </div>
           </div>
         </div>
+
+        {/* Acciones Administrativas */}
+        {(user?.rol === 'admin' || user?.rol === 'superadmin') && (
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-gray-600 pl-3">
+              Administración
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-gray-900">Gestión de Usuarios</p>
+                    <p className="text-sm text-gray-500 mt-2">Administrar usuarios y roles del sistema</p>
+                    <button 
+                      onClick={() => setActiveSection('usuarios')}
+                      className="mt-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm inline-flex items-center"
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Gestionar Usuarios
+                    </button>
+                  </div>
+                  <div className="p-3 bg-gray-100 rounded-full">
+                    <Users className="w-8 h-8 text-gray-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-gray-900">Solicitudes de Rol</p>
+                    <p className="text-sm text-gray-500 mt-2">Aprobar o rechazar solicitudes de acceso</p>
+                    <button 
+                      onClick={() => setActiveSection('solicitudes-rol')}
+                      className="mt-4 px-4 py-2 bg-santa-cruz-blue-600 text-white rounded-lg hover:bg-santa-cruz-blue-700 transition-colors text-sm inline-flex items-center"
+                    >
+                      <UserCheck className="w-4 h-4 mr-2" />
+                      Ver Solicitudes
+                    </button>
+                  </div>
+                  <div className="p-3 bg-santa-cruz-blue-100 rounded-full">
+                    <UserCheck className="w-8 h-8 text-santa-cruz-blue-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -644,32 +688,163 @@ export default function Dashboard() {
   {/* Navegación */}
   <nav className="flex-1 px-4 pt-6 pb-4 overflow-y-auto flex flex-col">
     {/* Menú de navegación */}
-    <div className="space-y-1">
+    <div className="space-y-4">
       {Object.keys(filteredSidebarData).length > 0 ? (
-        Object.keys(filteredSidebarData).map(category => (
-          <div key={category}>
-            {filteredSidebarData[category].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveSection(item.id);
-                  setSidebarOpen(false);
-                }}
-                title={item.description}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
-                  activeSection === item.id
-                    ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <item.icon className={`w-5 h-5 ${
-                  activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
-                }`} />
-                <span className="truncate">{item.name}</span>
-              </button>
-            ))}
-          </div>
-        ))
+        <>
+          {/* Dashboard siempre primero */}
+          {filteredSidebarData.main && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+                Principal
+              </h3>
+              <div className="space-y-1">
+                {filteredSidebarData.main.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveSection(item.id);
+                      setSidebarOpen(false);
+                    }}
+                    title={item.description}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                      activeSection === item.id
+                        ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    <item.icon className={`w-5 h-5 ${
+                      activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                    }`} />
+                    <span className="truncate">{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Módulos de Gestión - priorizar estos según solicitud */}
+          {filteredSidebarData.management && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+                Gestión
+              </h3>
+              <div className="space-y-1">
+                {/* Priorizar estos tres módulos */}
+                {filteredSidebarData.management
+                  .filter(item => ['transporte', 'operadores'].includes(item.id))
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSection(item.id);
+                        setSidebarOpen(false);
+                      }}
+                      title={item.description}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                        activeSection === item.id
+                          ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      <item.icon className={`w-5 h-5 ${
+                        activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                      }`} />
+                      <span className="truncate">{item.name}</span>
+                    </button>
+                  ))}
+                
+                {/* Otros elementos de gestión */}
+                {filteredSidebarData.management
+                  .filter(item => !['transporte', 'operadores'].includes(item.id))
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSection(item.id);
+                        setSidebarOpen(false);
+                      }}
+                      title={item.description}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                        activeSection === item.id
+                          ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      <item.icon className={`w-5 h-5 ${
+                        activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                      }`} />
+                      <span className="truncate">{item.name}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Proyectos - destacarlos */}
+          {filteredSidebarData.projects && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+                Proyectos
+              </h3>
+              <div className="space-y-1">
+                {filteredSidebarData.projects.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveSection(item.id);
+                      setSidebarOpen(false);
+                    }}
+                    title={item.description}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                      activeSection === item.id
+                        ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    <item.icon className={`w-5 h-5 ${
+                      activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                    }`} />
+                    <span className="truncate">{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Resto de categorías */}
+          {Object.keys(filteredSidebarData)
+            .filter(category => !['main', 'management', 'projects'].includes(category))
+            .map(category => (
+              <div key={category}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-3">
+                  {categoryLabels[category] || category}
+                </h3>
+                <div className="space-y-1">
+                  {filteredSidebarData[category].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSection(item.id);
+                        setSidebarOpen(false);
+                      }}
+                      title={item.description}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+                        activeSection === item.id
+                          ? 'bg-gradient-to-r from-santa-cruz-blue-50 to-santa-cruz-green-50 text-santa-cruz-blue-700 shadow-sm border border-santa-cruz-blue-200'
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      <item.icon className={`w-5 h-5 ${
+                        activeSection === item.id ? 'text-santa-cruz-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                      }`} />
+                      <span className="truncate">{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          }
+        </>
       ) : (
         <div className="text-center py-8">
           <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">

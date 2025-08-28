@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { MapPin, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { MapPin, AlertCircle, CheckCircle, XCircle, Clock } from "lucide-react";
 import bgImg from '../assets/Monumento.jpg'; // ajusta el ../ según tu carpeta
 import { useAuth } from "../context/AuthContext.jsx";
 import apiClient from "../config/api.js";
@@ -12,9 +12,19 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [backendStatus, setBackendStatus] = useState("checking"); // checking, connected, disconnected
+  const [sessionExpired, setSessionExpired] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const { login, loading } = useAuth();
+  
+  // Verificar si el usuario fue redirigido por expiración del token
+  useEffect(() => {
+    const expired = searchParams.get('expired') === 'true';
+    if (expired) {
+      setSessionExpired(true);
+    }
+  }, [searchParams]);
 
   // Verificar conexión con el backend al cargar el componente
   useEffect(() => {
@@ -173,6 +183,16 @@ export default function Login() {
               <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md">
                 <AlertCircle className="w-4 h-4" />
                 <span className="text-sm">{error}</span>
+              </div>
+            )}
+            
+            {sessionExpired && (
+              <div className="flex items-center space-x-2 text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-300">
+                <Clock className="w-5 h-5" />
+                <div>
+                  <p className="font-medium">Sesión finalizada</p>
+                  <p className="text-sm">Su sesión ha expirado por motivos de seguridad. Por favor inicie sesión nuevamente.</p>
+                </div>
               </div>
             )}
 
