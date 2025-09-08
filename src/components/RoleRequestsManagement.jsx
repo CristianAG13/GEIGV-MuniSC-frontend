@@ -61,17 +61,12 @@ const RoleRequestsManagement = () => {
     // Filtrar por término de búsqueda
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(req => {
-        const roleName = req.role?.name || 
-                        (typeof req.requestedRole === 'string' 
-                          ? req.requestedRole 
-                          : req.requestedRole?.name) || '';
-                          
-        return req.user?.name?.toLowerCase().includes(term) ||
-               req.user?.lastname?.toLowerCase().includes(term) ||
-               req.user?.email?.toLowerCase().includes(term) ||
-               roleName.toLowerCase().includes(term);
-      });
+      filtered = filtered.filter(req => 
+        req.user?.name?.toLowerCase().includes(term) ||
+        req.user?.lastname?.toLowerCase().includes(term) ||
+        req.user?.email?.toLowerCase().includes(term) ||
+        req.role?.name?.toLowerCase().includes(term)
+      );
     }
 
     setFilteredRequests(filtered);
@@ -81,31 +76,16 @@ const RoleRequestsManagement = () => {
     const result = await confirmAction('¿Aprobar solicitud?', '¿Está seguro de aprobar esta solicitud?');
     if (result.isConfirmed) {
       try {
-        console.log('=== APROBANDO SOLICITUD ===');
-        console.log('Request ID:', requestId);
-        
         const response = await roleRequestService.approveRequest(requestId);
-        console.log('Respuesta de aprobación:', response);
-        
         if (response.success) {
-          showSuccess(
-            'Solicitud aprobada', 
-            'La solicitud ha sido aprobada exitosamente. El usuario ahora tiene acceso con el rol asignado.',
-            { timer: 5000 }
-          );
-          
-          // Recargar datos con un pequeño delay para asegurar que el backend haya procesado todo
-          setTimeout(async () => {
-            await loadAllRequests();
-            await loadStats();
-          }, 1000);
+          showSuccess('Solicitud aprobada', 'La solicitud ha sido aprobada exitosamente');
+          loadAllRequests();
+          loadStats();
         } else {
-          showError('Error al aprobar', response.error || 'No se pudo aprobar la solicitud');
-          console.error('Error en la aprobación:', response);
+          showError('Error al aprobar', response.error);
         }
       } catch (error) {
-        console.error('Error inesperado en handleApprove:', error);
-        showError('Error inesperado', `No se pudo aprobar la solicitud: ${error.message}`);
+        showError('Error inesperado', 'No se pudo aprobar la solicitud');
       }
     }
   };
@@ -316,10 +296,7 @@ const RoleRequestsManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-blue-600">
-                        {request.role?.name || 
-                         (typeof request.requestedRole === 'string' 
-                          ? request.requestedRole 
-                          : request.requestedRole?.name) || 'No especificado'}
+                        {request.role?.name}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -394,18 +371,8 @@ const RoleRequestsManagement = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Rol Solicitado</label>
-                  <p className="text-sm text-gray-900">
-                    {selectedRequest.role?.name || 
-                     (typeof selectedRequest.requestedRole === 'string' 
-                      ? selectedRequest.requestedRole 
-                      : selectedRequest.requestedRole?.name) || 'No especificado'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {selectedRequest.role?.description || 
-                     (typeof selectedRequest.requestedRole === 'object' 
-                      ? selectedRequest.requestedRole?.description 
-                      : '')}
-                  </p>
+                  <p className="text-sm text-gray-900">{selectedRequest.role?.name}</p>
+                  <p className="text-xs text-gray-500">{selectedRequest.role?.description}</p>
                 </div>
               </div>
               

@@ -56,8 +56,10 @@ class AuthService {
       }
 
       // Guardar token y datos del usuario en localStorage
-      localStorage.setItem('token', token);
+      // Guardar token y datos del usuario en localStorage
+       localStorage.setItem('access_token', token);  // ✅ corregido
       localStorage.setItem('user', JSON.stringify(user));
+
 
       // Intentar obtener el perfil completo del usuario con roles después del login
       try {
@@ -109,13 +111,13 @@ class AuthService {
       localStorage.removeItem('sessionExpiredReason');
     }
     
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');  // ✅ corregido
     localStorage.removeItem('user');
   }
 
   // Verificar si el usuario está autenticado
   isAuthenticated() {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     if (!token) return false;
     
     // Verificar si el token ha expirado
@@ -138,7 +140,7 @@ class AuthService {
 
   // Obtener el token actual
   getToken() {
-    return localStorage.getItem('token');
+    return localStorage.getItem('access_token');
   }
 
   // Verificar si el token ha expirado
@@ -405,54 +407,25 @@ class AuthService {
     try {
       console.log('=== INICIANDO REFRESH DE DATOS DEL USUARIO ===');
       const profileResult = await this.getUserProfile();
-      
-      console.log('=== RESULTADO DEL PERFIL ===');
-      console.log('Success:', profileResult.success);
-      console.log('Data:', profileResult.data);
-      
+
       if (profileResult.success) {
         let userData = profileResult.data;
-        console.log('=== PROCESANDO DATOS DEL USUARIO ===');
-        console.log('Datos originales:', userData);
-        
-        // Procesar el usuario para extraer el rol correctamente
+
         if (userData && userData.roles && Array.isArray(userData.roles) && userData.roles.length > 0) {
-          // Si tiene un array de roles, tomar el primero
           userData.rol = userData.roles[0].name || userData.roles[0];
-          console.log('✅ Rol extraído de array de roles (refresh):', userData.rol);
-        } else if (userData && userData.role) {
-          // Si tiene un campo role
-          userData.rol = userData.role;
-          console.log('✅ Rol extraído de campo role (refresh):', userData.rol);
-        } else if (userData && userData.rol) {
-          // Si ya tiene rol
-          console.log('✅ Rol ya presente (refresh):', userData.rol);
-        } else {
-          console.warn('⚠️ No se encontró rol en los datos del usuario (refresh):', userData);
         }
-        
-        console.log('=== DATOS FINALES DEL USUARIO ===');
-        console.log('userData final:', userData);
-        
+
         localStorage.setItem('user', JSON.stringify(userData));
-        console.log('✅ Datos guardados en localStorage');
-        
-        return {
-          success: true,
-          data: userData,
-        };
+        return { success: true, data: userData };
       } else {
-        console.error('❌ Error en profileResult:', profileResult);
         return profileResult;
       }
     } catch (error) {
       console.error('❌ Error refrescando datos del usuario:', error);
-      return {
-        success: false,
-        error: 'Error al actualizar datos del usuario',
-      };
+      return { success: false, error: 'Error al actualizar datos del usuario' };
     }
   }
+
 
   // Función para actualizar perfil del usuario
   async updateProfile(userData) {

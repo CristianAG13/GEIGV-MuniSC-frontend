@@ -1,19 +1,55 @@
+
 // config/navigation.js
 import { 
   Home, Users, Truck, FileText, BarChart3, Settings,
-  MapPin, CheckCircle, Clock, UserCheck, Wrench, HardHat
+  UserCheck, HardHat, Wrench, ClipboardList
 } from 'lucide-react';
 
-// Configuración de permisos por rol
+// ========================
+// CONFIG DE PERMISOS POR ROL
+// ========================
 export const rolePermissions = {
-  user: ['dashboard', 'transporte', 'proyectos-cuadrilla'],
-  admin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'solicitudes-rol', 'operadores'],
-  manager: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'operadores'],
+  user: ['dashboard'], // usuario normal solo ve su dashboard
+  operator: ['dashboard', 'reportes-maquinaria'], // operadores solo reportes
+  admin: [
+    'dashboard', 
+    'usuarios', 
+    'transporte', 
+    'proyectos-cuadrilla', 
+    'reportes', 
+    'solicitudes-rol', 
+    'operadores',
+    'maquinaria',
+    'reportes-maquinaria'
+  ],
+  superadmin: [
+    'dashboard', 
+    'usuarios', 
+    'transporte', 
+    'proyectos-cuadrilla', 
+    'reportes', 
+    'configuracion', 
+    'solicitudes-rol', 
+    'operadores',
+    'maquinaria',
+    'reportes-maquinaria'
+  ],
   guest: ['dashboard'],
-  superadmin: ['dashboard', 'usuarios', 'transporte', 'proyectos-cuadrilla', 'reportes', 'configuracion', 'solicitudes-rol', 'operadores']
+  manager: [
+    'dashboard', 
+    'usuarios', 
+    'transporte', 
+    'proyectos-cuadrilla', 
+    'reportes', 
+    'operadores',
+    'maquinaria',
+    'reportes-maquinaria'
+  ]
 };
 
-// Datos de navegación del sidebar organizados por categorías
+// ========================
+// DATOS DEL SIDEBAR
+// ========================
 export const sidebarData = {
   main: [
     { 
@@ -47,7 +83,7 @@ export const sidebarData = {
       name: 'Gestión de Transporte', 
       icon: Truck, 
       permission: 'transporte',
-      description: 'Administrar vehículos y maquinaria',
+      description: 'Administrar vehículos y transporte',
       category: 'management'
     },
     { 
@@ -56,6 +92,14 @@ export const sidebarData = {
       icon: HardHat, 
       permission: 'operadores',
       description: 'Administrar operadores de maquinaria y vehículos',
+      category: 'management'
+    },
+    { 
+      id: 'maquinaria', 
+      name: 'Gestión de Maquinaria', 
+      icon: Wrench, 
+      permission: 'maquinaria',
+      description: 'Administrar maquinaria del municipio',
       category: 'management'
     }
   ],
@@ -77,6 +121,14 @@ export const sidebarData = {
       permission: 'reportes',
       description: 'Generación de reportes y estadísticas',
       category: 'reports'
+    },
+    { 
+      id: 'reportes-maquinaria', 
+      name: 'Reportes de Maquinaria', 
+      icon: ClipboardList, 
+      permission: 'reportes-maquinaria',
+      description: 'Reportes creados por operadores sobre maquinaria',
+      category: 'reports'
     }
   ],
   system: [
@@ -91,7 +143,9 @@ export const sidebarData = {
   ]
 };
 
-// Etiquetas de categorías para el sidebar
+// ========================
+// LABELS DE CATEGORÍAS
+// ========================
 export const categoryLabels = {
   main: 'Panel Principal',
   management: 'Gestión',
@@ -100,18 +154,14 @@ export const categoryLabels = {
   system: 'Sistema'
 };
 
-// Función para obtener permisos de un usuario
+// ========================
+// HELPERS
+// ========================
 export const getUserPermissions = (userRole) => {
-  // Si no hay rol, devolver permisos mínimos
-  if (!userRole) {
-    return ['dashboard'];
-  }
-  
-  const permissions = rolePermissions[userRole] || ['dashboard'];
-  return permissions;
+  if (!userRole) return ['dashboard'];
+  return rolePermissions[userRole] || ['dashboard'];
 };
 
-// Función para obtener todos los elementos del sidebar en formato plano
 export const getAllSidebarItems = () => {
   return [
     ...sidebarData.main,
@@ -122,13 +172,11 @@ export const getAllSidebarItems = () => {
   ];
 };
 
-// Función para filtrar elementos según permisos del usuario
 export const getFilteredSidebarItems = (userRole) => {
   const permissions = getUserPermissions(userRole);
   return getAllSidebarItems().filter(item => permissions.includes(item.permission));
 };
 
-// Función para obtener elementos filtrados por categoría
 export const getFilteredSidebarByCategory = (userRole) => {
   const permissions = getUserPermissions(userRole);
   const filteredData = {};
