@@ -21,7 +21,11 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
     
     // Verificar cambios en el usuario cada 10 segundos si hay solicitudes pendientes
     const checkUserUpdates = setInterval(async () => {
-      if (user && !user.rol && !user.role) {
+      const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+                         user?.rol === 'invitado' || 
+                         user?.role === 'invitado' || 
+                         (!user?.rol && !user?.role);
+      if (user && isInvitado) {
         try {
           console.log('Verificando actualizaciones del usuario...');
           if (onRequestSent) {
@@ -43,9 +47,11 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
       
       // Datos mock como fallback
       const mockRoles = [
+        { id: 1, name: 'superadmin', description: 'Administrador con todos los permisos' },
         { id: 2, name: 'admin', description: 'Administrador del sistema' },
-        { id: 3, name: 'usuario', description: 'Usuario estándar' },
-        { id: 4, name: 'invitado', description: 'Usuario invitado con permisos limitados' }
+        { id: 3, name: 'ingeniero', description: 'Ingeniero con permisos de gestión' },
+        { id: 4, name: 'operario', description: 'Operario con permisos de gestión' },
+        { id: 5, name: 'invitado', description: 'Usuario invitado con permisos limitados' }
       ];
       
       // Intentar cargar datos reales del backend
@@ -56,10 +62,20 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
         ]);
 
         if (rolesResult.success && rolesResult.data.length > 0) {
-          setAvailableRoles(rolesResult.data);
+          // Filtrar el rol "invitado" de los roles disponibles ya que el usuario ya lo tiene
+          const filteredRoles = rolesResult.data.filter(role => 
+            role.name.toLowerCase() !== 'invitado' && 
+            role.name.toLowerCase() !== 'guest'
+          );
+          setAvailableRoles(filteredRoles);
         } else {
           console.log('No hay roles del backend, usando mock');
-          setAvailableRoles(mockRoles);
+          // Filtrar también de los roles mock
+          const filteredMockRoles = mockRoles.filter(role => 
+            role.name.toLowerCase() !== 'invitado' && 
+            role.name.toLowerCase() !== 'guest'
+          );
+          setAvailableRoles(filteredMockRoles);
         }
         
         if (requestsResult.success) {
@@ -191,8 +207,14 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
   console.log('user.role:', user?.role);
   console.log('user.roles:', user?.roles);
   
-  // Si el usuario tiene un rol asignado, no mostrar este componente
-  if (!user || user.rol || user.role || (user.roles && user.roles.length > 0)) {
+  // Verificar si el usuario es invitado o no tiene rol
+  const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+                    user?.rol === 'invitado' || 
+                    user?.role === 'invitado';
+  
+  // Si el usuario tiene un rol asignado y NO es invitado, no mostrar este componente
+  if (!user || (user.rol && !isInvitado) || (user.role && !isInvitado) || 
+      (user.roles && user.roles.length > 0 && !isInvitado)) {
     return null;
   }
 
@@ -203,11 +225,11 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
           <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="flex-1">
             <h3 className="text-sm font-medium text-yellow-800">
-              Cuenta sin permisos asignados
+              Usuario Invitado - Permisos Limitados
             </h3>
             <p className="text-sm text-yellow-700 mt-1">
-              Su cuenta está registrada pero aún no tiene permisos asignados. 
-              Puede solicitar un rol específico para acceder a las funcionalidades del sistema.
+              Su cuenta está registrada con rol de invitado, con acceso limitado.
+              Puede solicitar un rol con más permisos para acceder a más funcionalidades del sistema.
             </p>
             
             {availableRoles.length > 0 ? (
@@ -217,7 +239,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
                   className="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
-                  Solicitar Rol
+                  Cambiar Rol
                 </button>
               ) : (
                 <div className="mt-3 flex items-center space-x-3">
@@ -373,7 +395,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">
-                Solicitar Rol de Usuario
+                Cambiar Rol
               </h3>
               <button
                 onClick={() => setShowModal(false)}

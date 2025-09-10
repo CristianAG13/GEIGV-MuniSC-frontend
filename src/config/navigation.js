@@ -19,7 +19,6 @@ export const rolePermissions = {
     'reportes', 
     'solicitudes-rol', 
     'operadores',
-    'maquinaria',
     'reportes-maquinaria'
   ],
   superadmin: [
@@ -31,10 +30,23 @@ export const rolePermissions = {
     'configuracion', 
     'solicitudes-rol', 
     'operadores',
-    'maquinaria',
     'reportes-maquinaria'
   ],
   guest: ['dashboard'],
+  invitado: ['dashboard'], // Usuario invitado solo tiene acceso al dashboard
+  ingeniero: [
+    'dashboard', 
+    'transporte', 
+    'proyectos-cuadrilla', 
+    'reportes', 
+    'operadores',
+    'reportes-maquinaria'
+  ],
+  operario: [
+    'dashboard',
+    'reportes-maquinaria',
+    'transporte'
+  ],
   manager: [
     'dashboard', 
     'usuarios', 
@@ -42,7 +54,6 @@ export const rolePermissions = {
     'proyectos-cuadrilla', 
     'reportes', 
     'operadores',
-    'maquinaria',
     'reportes-maquinaria'
   ]
 };
@@ -92,14 +103,6 @@ export const sidebarData = {
       icon: HardHat, 
       permission: 'operadores',
       description: 'Administrar operadores de maquinaria y vehículos',
-      category: 'management'
-    },
-    { 
-      id: 'maquinaria', 
-      name: 'Gestión de Maquinaria', 
-      icon: Wrench, 
-      permission: 'maquinaria',
-      description: 'Administrar maquinaria del municipio',
       category: 'management'
     }
   ],

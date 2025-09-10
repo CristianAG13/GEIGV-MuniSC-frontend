@@ -656,8 +656,8 @@ const handleSubmit = async (e) => {
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>Crear Reporte de Maquinaria</CardTitle>
-        <CardDescription>Completa la información del reporte diario de operación de maquinaria</CardDescription>
+        <CardTitle>Crear Reporte</CardTitle>
+        <CardDescription>Completa la información del reporte diario de operación</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">

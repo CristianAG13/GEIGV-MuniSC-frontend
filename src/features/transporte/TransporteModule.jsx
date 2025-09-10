@@ -5,10 +5,20 @@ import machineryService from "@/services/machineryService";
 import CreateReportForm from "@/features/transporte/components/forms/create-report-form.jsx";
 import ReportsTable from "@/features/transporte/components/ReportsTable.jsx";
 import MachineryAdmin from "@/features/transporte/components/MachineryAdmin.jsx"; // ⬅️ nueva vista
+import ProtectedRoute from "@/components/ProtectedRoute.jsx";
+import { useAuth } from "@/context/AuthContext.jsx";
 
 export default function TransporteModule() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("maquinaria"); // "maquinaria" | "reportes" | "catalogo"
   const [reportes, setReportes] = useState([]);
+  
+  // Función para verificar si el usuario tiene un rol específico
+  const hasRole = (roles) => {
+    if (!user || !user.roles) return false;
+    const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
+    return roles.some(role => userRoles.includes(role));
+  };
 
   useEffect(() => {
     if (activeTab === "reportes") loadReports();
@@ -27,7 +37,7 @@ export default function TransporteModule() {
   return (
     <div className="bg-white shadow-lg rounded-2xl p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">
-        Gestión de Transporte y Maquinaria
+        Gestión de Transporte
       </h2>
 
       <div className="flex flex-wrap gap-2 border-b mb-6">
@@ -55,17 +65,20 @@ export default function TransporteModule() {
           Reportes
         </button>
 
-        <button
-          onClick={() => setActiveTab("catalogo")}
-          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-            activeTab === "catalogo"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-          }`}
-        >
-          <Wrench className="w-4 h-4" />
-          Catálogo
-        </button>
+        {/* Solo mostrar botón de Catálogo a roles específicos */}
+        {hasRole(["superadmin", "admin", "ingeniero"]) && (
+          <button
+            onClick={() => setActiveTab("catalogo")}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === "catalogo"
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
+            }`}
+          >
+            <Wrench className="w-4 h-4" />
+            Catálogo
+          </button>
+        )}
       </div>
 
       <div className="p-4">
@@ -75,7 +88,11 @@ export default function TransporteModule() {
 
         {activeTab === "reportes" && <ReportsTable reports={reportes} />}
 
-        {activeTab === "catalogo" && <MachineryAdmin />}
+        {activeTab === "catalogo" && (
+          <ProtectedRoute roles={["superadmin", "admin", "ingeniero"]}>
+            <MachineryAdmin />
+          </ProtectedRoute>
+        )}
       </div>
     </div>
   );
