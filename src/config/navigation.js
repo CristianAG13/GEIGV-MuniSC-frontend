@@ -11,7 +11,7 @@ import {
 export const rolePermissions = {
   user: ['dashboard'], // usuario normal solo ve su dashboard
   operator: ['dashboard', 'reportes-maquinaria'], // operadores solo reportes
-  admin: [
+  ingeniero: [
     'dashboard', 
     'usuarios', 
     'transporte', 
@@ -34,7 +34,7 @@ export const rolePermissions = {
   ],
   guest: ['dashboard'],
   invitado: ['dashboard'], // Usuario invitado solo tiene acceso al dashboard
-  ingeniero: [
+  inspector: [
     'dashboard', 
     'transporte', 
     'proyectos-cuadrilla', 

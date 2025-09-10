@@ -576,7 +576,7 @@ export default function Dashboard() {
         </div>
 
         {/* Acciones Administrativas */}
-        {(user?.rol === 'admin' || user?.rol === 'superadmin') && (
+        {(user?.rol === 'ingeniero' || user?.rol === 'superadmin') && (
           <div className="mb-6">
             <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-gray-600 pl-3">
               Administración
@@ -1323,8 +1323,8 @@ export default function Dashboard() {
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Seleccione un rol...</option>
-                <option value="admin">Admin - Administrador del sistema</option>
-                <option value="ingeniero">Ingeniero - Permisos de gestión</option>
+                <option value="ingeniero">Ingeniero - Administrador del sistema</option>
+                <option value="inspector">Inspector - Permisos de gestión</option>
                 <option value="operario">Operario - Permisos limitados</option>
               </select>
             </div>

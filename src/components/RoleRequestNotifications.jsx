@@ -9,8 +9,8 @@ const RoleRequestNotifications = ({ userRole }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ pending: 0, total: 0 });
 
-  // Solo mostrar para admin y superadmin
-  const canManageRequests = ['admin', 'superadmin'].includes(userRole);
+  // Solo mostrar para ingeniero y superadmin
+  const canManageRequests = ['ingeniero', 'superadmin'].includes(userRole);
 
   useEffect(() => {
     if (canManageRequests) {

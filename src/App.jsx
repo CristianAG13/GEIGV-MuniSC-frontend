@@ -44,7 +44,7 @@ export default function App() {
         <Route 
           path="/dashboard/*" 
           element={
-            <ProtectedRoute roles={["superadmin","admin","ingeniero","operario","invitado"]}>
+            <ProtectedRoute roles={["superadmin","ingeniero","inspector","operario","invitado"]}>
               <Dashboard />
             </ProtectedRoute>
           } 
@@ -54,7 +54,7 @@ export default function App() {
         <Route
             path="/transporte/*"
             element={
-           <ProtectedRoute roles={["superadmin", "admin", "ingeniero", "operario"]}>
+           <ProtectedRoute roles={["superadmin", "ingeniero", "inspector", "operario"]}>
             <TransporteModule />
           </ProtectedRoute>
         }
@@ -62,7 +62,7 @@ export default function App() {
          <Route
           path="/operators"
           element={
-            <ProtectedRoute roles={["superadmin", "admin"]}>
+            <ProtectedRoute roles={["superadmin", "ingeniero"]}>
               <OperatorsPage />
             </ProtectedRoute>
           }
@@ -71,7 +71,7 @@ export default function App() {
         <Route
   path="/transporte/create-machinery"
   element={
-    <ProtectedRoute roles={["superadmin", "admin", "ingeniero"]}>
+    <ProtectedRoute roles={["superadmin", "ingeniero", "inspector"]}>
       <CreateMachineryForm />
     </ProtectedRoute>
   }
@@ -80,7 +80,7 @@ export default function App() {
 <Route
   path="/transporte/create-material-report"
   element={
-    <ProtectedRoute roles={["superadmin", "admin", "ingeniero", "operario"]}>
+    <ProtectedRoute roles={["superadmin", "ingeniero", "inspector", "operario"]}>
       <CreateMaterialReportForm />
     </ProtectedRoute>
   }
@@ -89,7 +89,7 @@ export default function App() {
 <Route
   path="/transporte/create-rental-report"
   element={
-    <ProtectedRoute roles={["superadmin", "admin", "ingeniero"]}>
+    <ProtectedRoute roles={["superadmin", "ingeniero", "inspector"]}>
       <CreateRentalReportForm />
     </ProtectedRoute>
   }
@@ -98,7 +98,7 @@ export default function App() {
 <Route
   path="/transporte/create-report"
   element={
-    <ProtectedRoute roles={["superadmin", "admin", "ingeniero", "operario"]}>
+    <ProtectedRoute roles={["superadmin", "ingeniero", "inspector", "operario"]}>
       <CreateReportForm />
     </ProtectedRoute>
   }
