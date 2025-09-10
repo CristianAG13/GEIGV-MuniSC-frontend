@@ -1,125 +1,66 @@
+
+// services/operatorsService.js
 import apiClient from '../config/api';
 
 const operatorsService = {
-  /**
-   * Obtener todos los operadores
-   * @returns {Promise<Array>} Lista de operadores
-   */
+  // Obtener todos los operadores
   getAllOperators: async () => {
-    try {
-      const response = await apiClient.get('/operators');
-      return response.data;
-    } catch (error) {
-      console.error('Error al obtener operadores:', error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.get('/operators');
+    return response.data;
   },
 
-  /**
-   * Obtener un operador por su ID
-   * @param {number} id - ID del operador
-   * @returns {Promise<Object>} Datos del operador
-   */
+  // Obtener operador por ID
   getOperatorById: async (id) => {
-    try {
-      const response = await apiClient.get(`/operators/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al obtener operador con ID ${id}:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.get(`/operators/${id}`);
+    return response.data;
   },
 
-  /**
-   * Obtener un operador con detalles de usuario (incluyendo email) por su ID
-   * @param {number} id - ID del operador
-   * @returns {Promise<Object>} Datos del operador con email si está asociado a un usuario
-   */
+  // Obtener operador con detalles del usuario
   getOperatorWithUserDetails: async (id) => {
-    try {
-      const response = await apiClient.get(`/operators/${id}/with-user-details`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al obtener operador con detalles de usuario, ID ${id}:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.get(`/operators/${id}/with-user-details`);
+    return response.data;
   },
 
-  /**
-   * Crear un nuevo operador
-   * @param {Object} operatorData - Datos del operador a crear
-   * @returns {Promise<Object>} Operador creado
-   */
+  // Buscar operador por identificación
+  getOperatorByIdentification: async (identification) => {
+    const response = await apiClient.get(`/operators/by-identification/${identification}`);
+    return response.data;
+  },
+
+  // Crear operador
   createOperator: async (operatorData) => {
-    try {
-      const response = await apiClient.post('/operators', operatorData);
-      return response.data;
-    } catch (error) {
-      console.error('Error al crear operador:', error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.post('/operators', operatorData);
+    return response.data;
   },
 
-  /**
-   * Actualizar un operador existente
-   * @param {number} id - ID del operador a actualizar
-   * @param {Object} operatorData - Datos actualizados del operador
-   * @returns {Promise<Object>} Operador actualizado
-   */
+  // Actualizar operador (usar PATCH, no PUT)
   updateOperator: async (id, operatorData) => {
-    try {
-      const response = await apiClient.put(`/operators/${id}`, operatorData);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al actualizar operador con ID ${id}:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.patch(`/operators/${id}`, operatorData);
+    return response.data;
   },
 
-  /**
-   * Eliminar un operador
-   * @param {number} id - ID del operador a eliminar
-   * @returns {Promise<Object>} Resultado de la operación
-   */
+  // Eliminar operador
   deleteOperator: async (id) => {
-    try {
-      const response = await apiClient.delete(`/operators/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al eliminar operador con ID ${id}:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.delete(`/operators/${id}`);
+    return response.data;
   },
 
-  /**
-   * Asociar un operador con un usuario
-   * @param {number} operatorId - ID del operador
-   * @param {number} userId - ID del usuario
-   * @returns {Promise<Object>} Resultado de la asociación
-   */
+  // Asociar operador con usuario
   associateWithUser: async (operatorId, userId) => {
-    try {
-      const response = await apiClient.patch(`/operators/${operatorId}/associate-user/${userId}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al asociar operador ${operatorId} con usuario ${userId}:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.patch(`/operators/${operatorId}/associate-user/${userId}`);
+    return response.data;
   },
 
-  /**
-   * Desasociar un operador de su usuario
-   * @param {number} operatorId - ID del operador
-   * @returns {Promise<Object>} Resultado de la desasociación
-   */
+  // Desasociar operador de usuario
   dissociateFromUser: async (operatorId) => {
-    try {
-      const response = await apiClient.patch(`/operators/${operatorId}/dissociate-user`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error al desasociar operador ${operatorId} de su usuario:`, error);
-      throw error.response?.data || error.message;
-    }
+    const response = await apiClient.patch(`/operators/${operatorId}/remove-user-association`);
+    return response.data;
+  },
+
+  // Obtener reportes de un operador
+  getReportsByOperator: async (id) => {
+    const response = await apiClient.get(`/operators/${id}/reports`);
+    return response.data;
   }
 };
 
