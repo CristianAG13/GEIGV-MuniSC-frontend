@@ -3,6 +3,7 @@
 // context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService.js';
+import { clearNavigationCache } from '@/utils/refreshNavigation.js';
 
 const AuthContext = createContext();
 
@@ -86,6 +87,10 @@ const refreshUserFromBackend = async () => {
         roles: result.data.user?.roles?.map(r => r.name || r) || []
       };
       setUser(normalizedUser);
+      
+      // Limpiar cualquier configuración de navegación cacheada
+      clearNavigationCache();
+      
       return { success: true };
     } else {
       return { success: false, error: result.error };
@@ -101,6 +106,8 @@ const refreshUserFromBackend = async () => {
  const logout = () => {
   authService.logout();
   setUser(null);
+  // Asegurarse de limpiar cualquier configuración de navegación cacheada
+  clearNavigationCache();
   window.location.href = '/login';
 };
 
@@ -110,6 +117,8 @@ const refreshUserFromBackend = async () => {
       const result = await authService.refreshUserData();
       if (result.success) {
         setUser(result.data);
+        // Limpiar cualquier configuración de navegación cacheada para que se actualice con los nuevos roles
+        clearNavigationCache();
         return { success: true };
       } else {
         return { success: false, error: result.error };

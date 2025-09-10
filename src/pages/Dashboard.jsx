@@ -3,12 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   LogOut, User, Users, Menu, X, Plus, Edit, Trash2,
   Home, MapPin, CheckCircle, Clock, UserCheck, Loader,
-  FileText, Truck, BarChart3, Settings, UserPlus, HardHat
+  FileText, Truck, BarChart3, Settings, UserPlus, HardHat,
+  AlertCircle, Send
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
+import roleRequestService from '../services/roleRequestService';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
+import { clearNavigationCache } from '@/utils/refreshNavigation';
 import TransporteModule from '../features/transporte/TransporteModule';
 import { OperadoresModule } from '../features/operadores';
 import RequestRoleComponent from '../components/RequestRoleComponent';
@@ -34,6 +37,7 @@ export default function Dashboard() {
   const [editingUser, setEditingUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showRoleRequestModal, setShowRoleRequestModal] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
     lastname: '',
@@ -41,6 +45,9 @@ export default function Dashboard() {
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('');
+  const [justification, setJustification] = useState('');
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
   // Estados para el sidebar que se actualizarán cuando el usuario esté disponible
   const [userPermissions, setUserPermissions] = useState([]);
@@ -48,24 +55,48 @@ export default function Dashboard() {
 
   // Efecto para actualizar permisos y sidebar cuando el usuario cambie
   useEffect(() => {
-    if (user && user.rol) {
-      const permissions = getUserPermissions(user.rol);
-      const sidebarData = getFilteredSidebarByCategory(user.rol);
+    // Forzar limpieza del caché de navegación al montar el componente
+    const needsRefresh = sessionStorage.getItem('navigationUpdated');
+    if (!needsRefresh) {
+      clearNavigationCache();
+    }
+    
+    if (user) {
+      // Determinar el rol prioritario del usuario (usando .rol o el primer .roles o uno conocido)
+      let userRole = null;
       
-      setUserPermissions(permissions);
-      setFilteredSidebarData(sidebarData);
+      if (user.rol) {
+        // Si existe user.rol, usarlo como prioridad
+        userRole = user.rol;
+      } else if (user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
+        // Si hay roles en array, tomar el primero no "invitado"
+        const nonGuestRoles = user.roles.filter(r => 
+          typeof r === 'string' ? r !== 'invitado' : r.name !== 'invitado'
+        );
+        
+        if (nonGuestRoles.length > 0) {
+          // Usar el primer rol no invitado
+          userRole = typeof nonGuestRoles[0] === 'string' ? 
+            nonGuestRoles[0] : nonGuestRoles[0].name;
+        } else {
+          // Si solo hay rol invitado, usarlo
+          userRole = typeof user.roles[0] === 'string' ? 
+            user.roles[0] : user.roles[0].name;
+        }
+      }
       
       console.log('Usuario cargado:', user);
+      console.log('Rol detectado:', userRole);
+      
+      // Actualizar permisos y sidebar con el rol determinado
+      const permissions = getUserPermissions(userRole);
+      const sidebarItems = getFilteredSidebarByCategory(userRole);
+      
       console.log('Permisos:', permissions);
-      console.log('Sidebar data:', sidebarData);
-    } else if (user) {
-      // Usuario sin rol definido, asignar permisos mínimos
-      console.log('Usuario sin rol, asignando permisos mínimos');
-      const permissions = ['dashboard'];
-      const sidebarData = getFilteredSidebarByCategory(null);
+      console.log('Sidebar data:', sidebarItems);
       
       setUserPermissions(permissions);
-      setFilteredSidebarData(sidebarData);
+      setFilteredSidebarData(sidebarItems);
     } else {
       // Si no hay usuario, limpiar permisos
       setUserPermissions([]);
@@ -79,6 +110,25 @@ export default function Dashboard() {
       loadData();
     }
   }, [activeSection]);
+  
+  // Verificar si el usuario ya tiene solicitudes de rol pendientes
+  useEffect(() => {
+    if (user?.roles?.some(role => role.toLowerCase() === 'invitado')) {
+      (async () => {
+        try {
+          const result = await roleRequestService.getMyRequests();
+          if (result.success && result.data.length > 0) {
+            const pendingRequest = result.data.find(req => req.status === 'pending');
+            if (pendingRequest) {
+              setHasPendingRequest(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error al verificar solicitudes pendientes:', error);
+        }
+      })();
+    }
+  }, [user]);
 
   const loadData = async () => {
     try {
@@ -334,8 +384,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Componente para solicitar rol si no tiene rol asignado */}
-        {!user?.rol && !user?.role && (
+        {/* Componente para solicitar rol si no tiene rol asignado - Solo para usuarios sin rol, no invitados */}
+        {!user?.rol && !user?.role && !user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
           <RequestRoleComponent 
             user={user} 
             onRequestSent={async () => {
@@ -356,6 +406,77 @@ export default function Dashboard() {
               }
             }}
           />
+        )}
+        
+        {/* Mensaje para usuarios con rol "invitado" */}
+        {user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-yellow-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-yellow-800">
+                  Usuario con acceso restringido
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>
+                    Como usuario con rol de <strong>invitado</strong>, solo tiene acceso al dashboard.
+                    Si necesita acceder a más funcionalidades, puede cambiar a un rol con más permisos
+                    utilizando el botón a continuación.
+                  </p>
+                  <div className="mt-4">
+                    {hasPendingRequest ? (
+                      <div className="flex items-center space-x-2 bg-yellow-100 p-3 rounded border border-yellow-300">
+                        <Clock className="w-5 h-5 text-yellow-600" />
+                        <span className="text-yellow-800 font-medium">Ya tiene una solicitud pendiente de aprobación</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          // Verificar si el usuario ya tiene solicitudes pendientes
+                          setLoading(true);
+                          try {
+                            const result = await roleRequestService.getMyRequests();
+                            if (result.success && result.data.length > 0) {
+                              const pendingRequest = result.data.find(req => req.status === 'pending');
+                              if (pendingRequest) {
+                                setHasPendingRequest(true);
+                                showError('Solicitud en proceso', 'Ya tiene una solicitud de cambio de rol pendiente. No puede enviar otra hasta que esta sea procesada.');
+                                return;
+                              }
+                            }
+                            // No tiene solicitudes pendientes, mostrar modal
+                            setHasPendingRequest(false);
+                            setShowRoleRequestModal(true);
+                          } catch (error) {
+                            console.error('Error al verificar solicitudes:', error);
+                            showError('Error', 'No se pudieron verificar sus solicitudes. Intente nuevamente.');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Verificando...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Cambiar Rol
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Módulos Principales - Ordenados */}
@@ -606,7 +727,49 @@ export default function Dashboard() {
     </div>
   );
 
+  // Componente para usuarios invitados que intentan acceder a secciones restringidas
+  const InvitadoRestrictionMessage = () => {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 px-4 max-w-xl mx-auto">
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md mb-6 w-full">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-6 w-6 text-yellow-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-yellow-800">
+                Acceso restringido
+              </h3>
+              <div className="mt-2 text-yellow-700">
+                <p>
+                  Como usuario con rol de <strong>invitado</strong>, solo puede acceder al dashboard 
+                  principal del sistema. Para acceder a más funcionalidades, necesita solicitar un rol 
+                  con más permisos.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <button 
+          onClick={() => setActiveSection('dashboard')}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-santa-cruz-blue-500"
+        >
+          <Home className="w-4 h-4 mr-2" />
+          Volver al Dashboard
+        </button>
+      </div>
+    );
+  };
+
   const renderContent = () => {
+    // Verificar si el usuario es "invitado" y está intentando acceder a una sección que no sea dashboard
+    const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado');
+    if (isInvitado && activeSection !== 'dashboard') {
+      return <InvitadoRestrictionMessage />;
+    }
+    
+    // Para otros roles o dashboard, mostrar el contenido normal
     switch (activeSection) {
       case 'dashboard':
         return renderDashboard();
@@ -894,6 +1057,19 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      {/* Botón para refrescar el menú */}
+      <button
+        onClick={() => {
+          clearNavigationCache();
+          window.location.reload();
+        }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 mb-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all group"
+      >
+        <AlertCircle className="w-5 h-5" />
+        <span>Actualizar Menú</span>
+      </button>
+
+      {/* Botón para cerrar sesión */}
       <button
         onClick={handleLogout}
         className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all group"
@@ -1118,6 +1294,120 @@ export default function Dashboard() {
         className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
         onClick={() => setSidebarOpen(false)}
       ></div>
+    )}
+
+    {/* Modal para solicitud de cambio de rol - Solo para usuarios invitados */}
+    {showRoleRequestModal && user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">
+              Cambiar Rol
+            </h3>
+            <button
+              onClick={() => setShowRoleRequestModal(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rol solicitado
+              </label>
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Seleccione un rol...</option>
+                <option value="admin">Admin - Administrador del sistema</option>
+                <option value="ingeniero">Ingeniero - Permisos de gestión</option>
+                <option value="operario">Operario - Permisos limitados</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Justificación (mínimo 5 caracteres)
+              </label>
+              <textarea
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                rows={3}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Explique brevemente por qué necesita este rol..."
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowRoleRequestModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!selectedRole || !justification.trim() || justification.trim().length < 5) {
+                    showError('Campos requeridos', 'Por favor complete todos los campos correctamente');
+                    return;
+                  }
+                  
+                  setLoading(true);
+                  try {
+                    // Verificar nuevamente si hay solicitudes pendientes antes de enviar
+                    const pendingResult = await roleRequestService.getMyRequests();
+                    if (pendingResult.success && pendingResult.data.length > 0) {
+                      const pendingRequest = pendingResult.data.find(req => req.status === 'pending');
+                      if (pendingRequest) {
+                        setHasPendingRequest(true);
+                        showError('Solicitud en proceso', 'Ya tiene una solicitud de cambio de rol pendiente. No puede enviar otra hasta que esta sea procesada.');
+                        setShowRoleRequestModal(false);
+                        return;
+                      }
+                    }
+
+                    // No hay solicitudes pendientes, proceder a enviar
+                    const result = await roleRequestService.requestRole(selectedRole, justification);
+                    if (result.success) {
+                      showSuccess('Solicitud enviada', 'Su solicitud será revisada por un administrador.');
+                      setShowRoleRequestModal(false);
+                      setSelectedRole('');
+                      setJustification('');
+                      if (refreshUser) {
+                        await refreshUser();
+                      }
+                    } else {
+                      showError('Error', result.error || 'No se pudo enviar la solicitud');
+                    }
+                  } catch (error) {
+                    showError('Error', 'Ocurrió un error al enviar la solicitud');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading || !selectedRole || !justification.trim() || justification.trim().length < 5}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Enviar Solicitud
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     )}
   </div>
   );

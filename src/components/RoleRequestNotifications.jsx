@@ -152,14 +152,8 @@ const RoleRequestNotifications = ({ userRole }) => {
                             </p>
                           </div>
                           
-                          <p className="text-xs text-gray-500 mb-1">
+                          <p className="text-xs text-gray-500 mb-3">
                             {request.user?.email}
-                          </p>
-                          
-                          <p className="text-sm text-gray-700 mb-2">
-                            Solicita rol: <span className="font-medium text-blue-600">
-                              {request.role?.name}
-                            </span>
                           </p>
                           
                           {request.justification && (

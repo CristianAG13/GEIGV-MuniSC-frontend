@@ -17,14 +17,18 @@ const OperatorsIndex = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showAssociateBeforeCreateModal, setShowAssociateBeforeCreateModal] = useState(false);
   const [currentOperator, setCurrentOperator] = useState(null);
   const [newOperator, setNewOperator] = useState({
     name: '',
     last: '',
     identification: '',
-    phoneNumber: ''
+    phoneNumber: '',
+    associatedToUser: false,
+    userId: ''
   });
   const [users, setUsers] = useState([]);
+  const [operatorUsers, setOperatorUsers] = useState([]); // Usuarios con rol de operador
   const [selectedUserId, setSelectedUserId] = useState('');
 
   useEffect(() => {
@@ -73,29 +77,86 @@ const OperatorsIndex = () => {
       console.error('Error al cargar usuarios:', error);
     }
   };
+  
+  const loadOperatorUsers = async () => {
+    try {
+      const allUsers = await usersService.getAllUsers();
+      // Filtrar usuarios que tienen rol de operador y no están asociados a ningún operador
+      // Esto depende de cómo la API devuelve la información de roles, suponemos que tiene una propiedad roles
+      const operatorUsers = allUsers.filter(user => 
+        // Asume que los usuarios tienen una propiedad 'roles' que es un array de objetos con una propiedad 'name'
+        // Y que el rol de operador se llama "operator" o "operador"
+        user.roles?.some(role => 
+          role.name?.toLowerCase() === "operario" || 
+          role.name?.toLowerCase() === "operario"
+        ) && 
+        !operators.some(op => op.userId === user.id)
+      );
+      setOperatorUsers(operatorUsers);
+    } catch (error) {
+      showError('Error', 'No se pudieron cargar los usuarios con rol de operador');
+      console.error('Error al cargar usuarios con rol de operador:', error);
+    }
+  };
+
+  const showCreateOperatorModal = () => {
+    // Primero preguntamos si desea asociar un usuario existente
+    loadOperatorUsers(); // Cargamos los usuarios con rol de operador
+    setShowAssociateBeforeCreateModal(true);
+  };
 
   const handleCreateOperator = async () => {
     try {
       // Validaciones básicas
-      if (!newOperator.name.trim() || !newOperator.last.trim() || !newOperator.identification.trim()) {
-        showError('Campos incompletos', 'Nombre, apellido e identificación son obligatorios');
-        return;
+      if (newOperator.associatedToUser) {
+        // Si está asociado a un usuario, solo necesitamos ID y teléfono
+        if (!newOperator.userId || !newOperator.identification.trim()) {
+          showError('Campos incompletos', 'Usuario e identificación son obligatorios');
+          return;
+        }
+
+        // Obtener información del usuario seleccionado
+        const selectedUser = operatorUsers.find(user => user.id.toString() === newOperator.userId.toString());
+        
+        // Crear operador con datos mínimos
+        const createdOperator = await operatorsService.createOperator({
+          name: selectedUser.name,
+          last: selectedUser.lastname,
+          identification: newOperator.identification.trim(),
+          phoneNumber: newOperator.phoneNumber.trim()
+        });
+
+        // Asociar operador con usuario
+        await operatorsService.associateWithUser(createdOperator.id, newOperator.userId);
+        
+        showSuccess('Operador creado y asociado', 'El operador ha sido registrado y asociado al usuario correctamente');
+      } else {
+        // Creación normal con todos los campos
+        if (!newOperator.name.trim() || !newOperator.last.trim() || !newOperator.identification.trim()) {
+          showError('Campos incompletos', 'Nombre, apellido e identificación son obligatorios');
+          return;
+        }
+
+        await operatorsService.createOperator({
+          name: newOperator.name.trim(),
+          last: newOperator.last.trim(),
+          identification: newOperator.identification.trim(),
+          phoneNumber: newOperator.phoneNumber.trim()
+        });
+
+        showSuccess('Operador creado', 'El operador ha sido registrado correctamente');
       }
 
-      await operatorsService.createOperator({
-        name: newOperator.name.trim(),
-        last: newOperator.last.trim(),
-        identification: newOperator.identification.trim(),
-        phoneNumber: newOperator.phoneNumber.trim()
-      });
-
-      showSuccess('Operador creado', 'El operador ha sido registrado correctamente');
+      // Limpiar formulario y cerrar modales
       setShowCreateModal(false);
+      setShowAssociateBeforeCreateModal(false);
       setNewOperator({
         name: '',
         last: '',
         identification: '',
-        phoneNumber: ''
+        phoneNumber: '',
+        associatedToUser: false,
+        userId: ''
       });
       loadOperators();
     } catch (error) {
@@ -264,7 +325,7 @@ const OperatorsIndex = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Gestión de Operadores</h1>
         <button 
-          onClick={() => setShowCreateModal(true)}
+          onClick={showCreateOperatorModal}
           className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -409,69 +470,167 @@ const OperatorsIndex = () => {
         </div>
       )}
 
+      {/* Associate Before Create Modal */}
+      {showAssociateBeforeCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-bold mb-4">Creación de Operador</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Desea asociar este operador a un usuario existente?
+            </p>
+
+            <div className="flex justify-center gap-4 mt-6">
+              <button
+                onClick={() => {
+                  setNewOperator({...newOperator, associatedToUser: true});
+                  setShowAssociateBeforeCreateModal(false);
+                  setShowCreateModal(true);
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Sí, asociar a usuario
+              </button>
+              <button
+                onClick={() => {
+                  setNewOperator({...newOperator, associatedToUser: false});
+                  setShowAssociateBeforeCreateModal(false);
+                  setShowCreateModal(true);
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                No, crear nuevo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Operator Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-bold mb-4">Crear Nuevo Operador</h2>
+            <h2 className="text-lg font-bold mb-4">
+              {newOperator.associatedToUser ? 'Asociar Operador a Usuario' : 'Crear Nuevo Operador'}
+            </h2>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre *
-                </label>
-                <input
-                  type="text"
-                  value={newOperator.name}
-                  onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ingrese el nombre"
-                />
-              </div>
+              {newOperator.associatedToUser ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Usuario *
+                    </label>
+                    <select
+                      value={newOperator.userId}
+                      onChange={(e) => setNewOperator({ ...newOperator, userId: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Seleccione un usuario</option>
+                      {operatorUsers.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.email} - {user.name} {user.lastname}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Identificación *
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.identification}
+                      onChange={(e) => setNewOperator({ ...newOperator, identification: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Número de identificación"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Teléfono
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.phoneNumber}
+                      onChange={(e) => setNewOperator({ ...newOperator, phoneNumber: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre *
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.name}
+                      onChange={(e) => setNewOperator({ ...newOperator, name: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ingrese el nombre"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Apellido *
-                </label>
-                <input
-                  type="text"
-                  value={newOperator.last}
-                  onChange={(e) => setNewOperator({ ...newOperator, last: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ingrese el apellido"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Apellido *
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.last}
+                      onChange={(e) => setNewOperator({ ...newOperator, last: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ingrese el apellido"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Identificación *
-                </label>
-                <input
-                  type="text"
-                  value={newOperator.identification}
-                  onChange={(e) => setNewOperator({ ...newOperator, identification: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Número de identificación"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Identificación *
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.identification}
+                      onChange={(e) => setNewOperator({ ...newOperator, identification: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Número de identificación"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Teléfono
-                </label>
-                <input
-                  type="text"
-                  value={newOperator.phoneNumber}
-                  onChange={(e) => setNewOperator({ ...newOperator, phoneNumber: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Número de teléfono"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Teléfono
+                    </label>
+                    <input
+                      type="text"
+                      value={newOperator.phoneNumber}
+                      onChange={(e) => setNewOperator({ ...newOperator, phoneNumber: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewOperator({
+                    name: '',
+                    last: '',
+                    identification: '',
+                    phoneNumber: '',
+                    associatedToUser: false,
+                    userId: ''
+                  });
+                }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Cancelar
@@ -480,7 +639,7 @@ const OperatorsIndex = () => {
                 onClick={handleCreateOperator}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Crear Operador
+                {newOperator.associatedToUser ? 'Crear y Asociar Operador' : 'Crear Operador'}
               </button>
             </div>
           </div>
