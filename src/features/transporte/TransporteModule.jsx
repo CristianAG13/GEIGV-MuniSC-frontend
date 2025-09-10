@@ -66,7 +66,7 @@ export default function TransporteModule() {
         </button>
 
         {/* Solo mostrar botón de Catálogo a roles específicos */}
-        {hasRole(["superadmin", "admin", "ingeniero"]) && (
+        {hasRole(["superadmin", "ingeniero", "inspector"]) && (
           <button
             onClick={() => setActiveTab("catalogo")}
             className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
@@ -89,7 +89,7 @@ export default function TransporteModule() {
         {activeTab === "reportes" && <ReportsTable reports={reportes} />}
 
         {activeTab === "catalogo" && (
-          <ProtectedRoute roles={["superadmin", "admin", "ingeniero"]}>
+          <ProtectedRoute roles={["superadmin", "ingeniero", "inspector"]}>
             <MachineryAdmin />
           </ProtectedRoute>
         )}

@@ -12,8 +12,8 @@ Este documento contiene los scripts SQL necesarios para actualizar los roles en 
 -- Insertar los nuevos roles
 INSERT INTO roles (name, description) VALUES
 ('superadmin', 'Administrador con todos los permisos'),
-('admin', 'Administrador del sistema'),
-('ingeniero', 'Ingeniero con permisos de gestión'),
+('ingeniero', 'Ingeniero con permisos de administración'),
+('inspector', 'Inspector con permisos de gestión'),
 ('operario', 'Operario con permisos de gestión'),
 ('invitado', 'Usuario invitado con permisos limitados');
 ```
@@ -30,8 +30,8 @@ Este cambio de roles requiere actualizar tanto el backend como el frontend:
 | Rol | Descripción | Permisos |
 |-----|-------------|----------|
 | superadmin | Administrador con todos los permisos | Acceso total al sistema |
-| admin | Administrador del sistema | Gestión de usuarios, reportes y maquinaria |
-| ingeniero | Ingeniero con permisos de gestión | Gestión de maquinaria y reportes |
+| ingeniero | Ingeniero con permisos de administración | Gestión de usuarios, reportes y maquinaria |
+| inspector | Inspector con permisos de gestión | Gestión de maquinaria y reportes |
 | operario | Operario con permisos de gestión | Creación de reportes y uso de materiales |
 | invitado | Usuario invitado con permisos limitados | Solo visualización de datos |
 
@@ -41,6 +41,8 @@ Si en el sistema existían roles como "user", "operator", o "manager", se recomi
 
 - "user" → "invitado"
 - "operator" → "operario"
-- "manager" → "ingeniero"
+- "manager" → "inspector"
+- "admin" → "ingeniero"
+- "ingeniero" → "inspector"
 
 Esto asegurará que los usuarios existentes mantengan permisos similares después de la actualización.

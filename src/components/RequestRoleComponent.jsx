@@ -48,8 +48,8 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
       // Datos mock como fallback
       const mockRoles = [
         { id: 1, name: 'superadmin', description: 'Administrador con todos los permisos' },
-        { id: 2, name: 'admin', description: 'Administrador del sistema' },
-        { id: 3, name: 'ingeniero', description: 'Ingeniero con permisos de gestión' },
+        { id: 2, name: 'ingeniero', description: 'Ingeniero con permisos de administración' },
+        { id: 3, name: 'inspector', description: 'Inspector con permisos de gestión' },
         { id: 4, name: 'operario', description: 'Operario con permisos de gestión' },
         { id: 5, name: 'invitado', description: 'Usuario invitado con permisos limitados' }
       ];
