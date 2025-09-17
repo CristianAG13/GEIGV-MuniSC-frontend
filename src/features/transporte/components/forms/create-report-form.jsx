@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -12,15 +11,9 @@ import { machineryFields } from "@/utils/machinery-fields";
 import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions } from "@/utils/districts";
 import { useToast } from "@/hooks/use-toast";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
-import {
-   confirmAction,
-   showSuccess,
-   showError,
-   showLoading,
-   closeLoading,
- } from "@/utils/sweetAlert";
+import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 
-export function CreateReportForm({ onGoToCatalog }) {
+export default function CreateReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
 
   // ====== ESTADO ======
@@ -29,10 +22,14 @@ export function CreateReportForm({ onGoToCatalog }) {
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
   const [totalHours, setTotalHours] = useState("");
- 
+  const normKey = (s = "") =>
+  String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-  const TODAY = new Date().toISOString().split("T")[0];
-  
+  const [lastCounters, setLastCounters] = useState({
+    horimetro: null,
+    estacionHasta: null,
+  });
+
   const INITIAL_FORM = {
     operadorId: 0,
     maquinariaId: 0,
@@ -42,11 +39,12 @@ export function CreateReportForm({ onGoToCatalog }) {
     diesel: "",
     actividades: "",
     tipoMaquinaria: "",
+    variant: "",
     placa: "",
     distrito: "",
     codigoCamino: "",
     kilometraje: "",
-    horimetro: 0,
+    horimetro: "",
     viaticos: "",
     tipoMaterial: "",
     cantidadMaterial: "",
@@ -56,21 +54,19 @@ export function CreateReportForm({ onGoToCatalog }) {
     placaCarreta: "",
     destino: "",
     tipoCarga: "",
-    estacion: "",
+    estacionDesde: "",
+    estacionHasta: "",
     tipoActividad: "",
     horaInicio: "",
     horaFin: "",
+    // NUEVO:
+    placaMaquinariaLlevada: "",
   };
-
-const [formData, setFormData] = useState(INITIAL_FORM);
+  const [formData, setFormData] = useState(INITIAL_FORM);
 
   // ====== HELPERS ======
   const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
-  const toNumberOrEmpty = (v) => {
-    if (v === "" || v === null || v === undefined) return "";
-    const n = parseFloat(String(v).replace(",", "."));
-    return Number.isFinite(n) ? n : "";
-  };
+  const onlyDigitsMax = (v, max) => String(v || "").replace(/\D/g, "").slice(0, max);
 
   const rolesOf = (m) => {
     if (Array.isArray(m?.roles)) return m.roles.map((r) => String(r).toLowerCase());
@@ -78,7 +74,6 @@ const [formData, setFormData] = useState(INITIAL_FORM);
     return legacy ? [String(legacy).toLowerCase()] : [];
   };
 
-  // ====== CONSTANTES ======
   const TRAILER_PLATES = {
     vagoneta: { carreta: ["SM 5765"] },
     cabezal: {
@@ -88,13 +83,22 @@ const [formData, setFormData] = useState(INITIAL_FORM);
     },
   };
 
-const norm = (v) => (typeof v === "string" ? v.trim() : v);
+   const requiresField = (name) =>
+   getDynamicFields().some((f) => normKey(f) === normKey(name));
 
-const orNull = (v) => {
-  if (v === undefined || v === null) return null;
-  if (typeof v === "string" && v.trim() === "") return null;
-  return v;
-};
+  // Mostrar campo Boleta en vagoneta/material y cabezal/material
+  const showBoletaField = useCallback(() => {
+    const t = (selectedMachineryType || "").toLowerCase();
+    const v = (selectedVariant || "").toLowerCase();
+    return (t === "vagoneta" && v === "material") || (t === "cabezal" && v === "material");
+  }, [selectedMachineryType, selectedVariant]);
+
+  // Requerir boleta solo para vagoneta/material con diésel > 0
+  const mustRequireBoleta = useCallback(() => {
+    const t = (selectedMachineryType || "").toLowerCase();
+    const v = (selectedVariant || "").toLowerCase();
+    return t === "vagoneta" && v === "material" && Number(formData.combustible) > 0;
+  }, [selectedMachineryType, selectedVariant, formData.combustible]);
 
   // ====== DERIVADOS / CALLBACKS ======
   const getPlacaById = useCallback(
@@ -177,16 +181,11 @@ const orNull = (v) => {
     }
   }, [getFuenteOptions, formData.fuente]);
 
-  // Mantener/limpiar "placaCarreta" según tipo/variante
   useEffect(() => {
     const opts = getTrailerOptions();
     setFormData((p) => {
-      if (!opts.length) {
-        return p.placaCarreta ? { ...p, placaCarreta: "" } : p;
-      }
-      if (!p.placaCarreta || !opts.includes(p.placaCarreta)) {
-        return { ...p, placaCarreta: opts[0] };
-      }
+      if (!opts.length) return p.placaCarreta ? { ...p, placaCarreta: "" } : p;
+      if (!p.placaCarreta || !opts.includes(p.placaCarreta)) return { ...p, placaCarreta: opts[0] };
       return p;
     });
   }, [getTrailerOptions]);
@@ -209,57 +208,53 @@ const orNull = (v) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === "codigoCamino") {
-      const only = value.replace(/\D/g, "").slice(0, 3);
-      setFormData((p) => ({ ...p, codigoCamino: only }));
-      return;
-    }
+    if (name === "codigoCamino") return setFormData((p) => ({ ...p, codigoCamino: onlyDigitsMax(value, 3) }));
+    if (name === "kilometraje") return setFormData((p) => ({ ...p, kilometraje: onlyDigitsMax(value, 6) }));
+    if (name === "viaticos") return setFormData((p) => ({ ...p, viaticos: onlyDigitsMax(value, 5) }));
+    if (name === "cantidadMaterial") return setFormData((p) => ({ ...p, cantidadMaterial: onlyDigitsMax(value, 2) }));
+    if (name === "combustible") return setFormData((p) => ({ ...p, combustible: onlyDigitsMax(value, 2) }));
+    if (name === "boleta") return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
+    if (name === "horimetro") return setFormData((p) => ({ ...p, horimetro: onlyDigitsMax(value, 5) }));
+    if (name === "estacionDesde" || name === "estacionHasta")
+      return setFormData((p) => ({ ...p, [name]: onlyDigitsMax(value, 6) }));
+    if (name === "cantidadLiquido")
+      return setFormData((p) => ({ ...p, cantidadLiquido: onlyDigitsMax(value, 4) }));
 
-    if (name === "kilometraje") {
-      const only = value.replace(/\D/g, "").slice(0, 6);
-      setFormData((p) => ({ ...p, kilometraje: only }));
-      return;
-    }
-
-    if (name === "combustible") {
-      const only = value.replace(/\D/g, "");
-      setFormData((p) => ({ ...p, combustible: only }));
-      return;
-    }
-
-    if (name === "viaticos") {
-      const only = value.replace(/\D/g, "").slice(0, 5);
-      setFormData((p) => ({ ...p, viaticos: only }));
-      return;
-    }
-
-    if (name === "cantidadMaterial") {
-      const norm = value.replace(",", ".");
-      const valid = norm.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
-      setFormData((p) => ({ ...p, cantidadMaterial: valid }));
-      return;
-    }
-
-    const localNumericKeys = new Set(["horasOrd", "horasExt", "horimetro", "cantidadLiquido"]);
-    setFormData((p) => ({
-      ...p,
-      [name]: localNumericKeys.has(name) ? toNumberOrEmpty(value) : value,
-    }));
+    setFormData((p) => ({ ...p, [name]: value }));
   };
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = async (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    const clearVariantSpecific = (p = {}) => ({
+      ...p,
+      tipoMaterial: "",
+      cantidadMaterial: "",
+      fuente: "",
+      boleta: "",
+      cantidadLiquido: "",
+      placaCarreta: "",
+      tipoCarga: "",
+      destino: "",
+      estacionDesde: "",
+      estacionHasta: "",
+      placaMaquinariaLlevada: "",
+    });
 
     if (name === "tipoMaquinaria") {
       setSelectedMachineryType(value);
       setSelectedVariant("");
-      setFormData((prev) => ({ ...prev, placa: "", maquinariaId: 0 }));
+      //setFormData((prev) => clearVariantSpecific({ ...prev, placa: "", maquinariaId: 0 }));
+      setFormData((prev) => clearVariantSpecific({ ...prev, placa: "", maquinariaId: 0, tipoActividad: "" }));
+      setLastCounters({ horimetro: null, estacionHasta: null });
       return;
     }
 
     if (name === "variant") {
       setSelectedVariant(value);
-      setFormData((prev) => ({ ...prev, placa: "", maquinariaId: 0 }));
+      //setFormData((prev) => clearVariantSpecific({ ...prev, variant: value, placa: "", maquinariaId: 0 }));
+      setFormData((prev) => clearVariantSpecific({ ...prev, variant: value, placa: "", maquinariaId: 0, tipoActividad: "" }));
+      setLastCounters({ horimetro: null, estacionHasta: null });
       return;
     }
 
@@ -269,53 +264,67 @@ const orNull = (v) => {
         maquinariaId: Number(value),
         placa: getPlacaById(value),
       }));
-      return;
+
+      try {
+        const counters = await machineryService.getLastCounters(Number(value));
+        const h = counters?.horimetro ?? null;
+        const est = counters?.estacionHasta ?? null;
+
+        setLastCounters({ horimetro: h, estacionHasta: est });
+
+        setFormData((p) => ({
+          ...p,
+          estacionDesde: requiresField("Estacion") && est != null ? String(est) : p.estacionDesde ?? "",
+          horimetro: p.horimetro ?? "",
+        }));
+      } catch {
+        setLastCounters({ horimetro: null, estacionHasta: null });
+      }
     }
   };
 
   const getDynamicFields = () => {
-  if (!selectedMachineryType) return [];
-  const mach = machineryFields[selectedMachineryType];
-  if (!mach) return [];
+    if (!selectedMachineryType) return [];
+    const mach = machineryFields[selectedMachineryType];
+    if (!mach) return [];
 
-  // copia defensiva
-  let fields = [];
-  if (mach.variantes && selectedVariant) {
-    fields = [...(mach.variantes[selectedVariant] || [])];
-  } else {
-    fields = [...(mach.campos || [])];
-  }
-
-  // ¿esta combinación usa carreta?
-  const t = (selectedMachineryType || "").toLowerCase();
-  const v = (selectedVariant || "").toLowerCase();
-  const needsTrailer = !!(TRAILER_PLATES[t]?.[v]);
-
-  if (needsTrailer) {
-    const hasPlaca =
-      fields.some(f => f?.toLowerCase().trim() === "placa carreta");
-    if (!hasPlaca) {
-      // si no existe, la agregamos (quedará una sola)
-      fields.push("Placa carreta");
+    let fields = [];
+    if (mach.variantes && selectedVariant) {
+      fields = [...(mach.variantes[selectedVariant] || [])];
+    } else {
+      fields = [...(mach.campos || [])];
     }
-  }
 
-  // dedupe final por si llegó duplicada desde múltiples fuentes
-  const seen = new Set();
-  fields = fields.filter(f => {
-    const k = String(f).toLowerCase().trim();
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
+    const t = (selectedMachineryType || "").toLowerCase();
+    const v = (selectedVariant || "").toLowerCase();
+    const needsTrailer = !!TRAILER_PLATES[t]?.[v];
 
-  return fields;
-};
+    if (needsTrailer) {
+      const hasPlaca = fields.some((f) => f?.toLowerCase().trim() === "placa carreta");
+      if (!hasPlaca) fields.push("Placa carreta");
+    }
 
-  const renderDynamicField = (fieldName) => {
-    const key = fieldName.toLowerCase().replace(/\s+/g, "");
-    switch (fieldName) {
-      case "Distrito":
+    // Para carreta, agregamos “Placa maquinaria llevada” si no está
+    if (v === "carreta") {
+      const hasCarry = fields.some((f) => f?.toLowerCase().includes("placa maquinaria llevada"));
+      if (!hasCarry) fields.push("Placa maquinaria llevada");
+    }
+
+    const seen = new Set();
+    fields = fields.filter((f) => {
+      const k = normKey(f);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    return fields;
+  };
+
+   const renderDynamicField = (fieldName) => {
+   const key = normKey(fieldName);
+   switch (key) {
+      case "distrito":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Distrito</Label>
@@ -334,7 +343,139 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Placa carreta": {
+      case "destino":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="destino">Destino</Label>
+            <Input
+              id="destino"
+              name="destino"
+              placeholder="Punto de descarga / obra"
+              value={formData.destino || ""}
+              onChange={handleInputChange}
+            />
+          </div>
+        );
+
+      case "cantidad liquido":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="cantidadLiquido">Cantidad (L)</Label>
+            <div className="flex gap-2 items-center">
+              <Input
+                id="cantidadLiquido"
+                name="cantidadLiquido"
+                inputMode="numeric"
+                pattern="\d*"
+                placeholder="0000"
+                maxLength={4}
+                value={formData.cantidadLiquido ?? ""}
+                onChange={handleInputChange}
+              />
+              <span className="text-sm text-muted-foreground">L</span>
+            </div>
+          </div>
+        );
+
+      case "litros diesel":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="combustible">Litros diésel</Label>
+            <Input
+              id="combustible"
+              name="combustible"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={2}
+              placeholder="00"
+              value={formData.combustible ?? ""}
+              onChange={handleInputChange}
+            />
+            <p className="text-xs text-muted-foreground">Máximo 2 dígitos (0–99)</p>
+          </div>
+        );
+
+      case "boleta":
+        if (!showBoletaField()) return null;
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="boleta">Boleta (6 dígitos)</Label>
+            <Input
+              id="boleta"
+              name="boleta"
+              inputMode="numeric"
+              pattern="\d{6}"
+              maxLength={6}
+              placeholder="000000"
+              value={formData.boleta ?? ""}
+              onChange={handleInputChange}
+            />
+          </div>
+        );
+
+      case "horimetro":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="horimetro">
+              Horímetro{" "}
+              {lastCounters.horimetro !== null && (
+                <span className="text-xs text-muted-foreground">(último: {lastCounters.horimetro})</span>
+              )}
+            </Label>
+            <Input
+              id="horimetro"
+              name="horimetro"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={5}
+              placeholder="00000"
+              value={formData.horimetro ?? ""}
+              onChange={handleInputChange}
+            />
+            <p className="text-xs text-muted-foreground">Máximo 5 dígitos, no menor al último valor.</p>
+          </div>
+        );
+
+      case "estacion":                // 👈 ahora matchea “Estación” y “Estacion”
+      return (
+        <div className="space-y-2" key={fieldName}>
+          <Label>Estación</Label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Input
+              name="estacionDesde"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={6}
+              placeholder="Desde (m)"
+              value={formData.estacionDesde}
+              onChange={handleInputChange}
+            />
+            <Input
+              name="estacionHasta"
+              inputMode="numeric"
+              pattern="\d*"
+              maxLength={6}
+              placeholder="Hasta (m)"
+              value={formData.estacionHasta}
+              onChange={handleInputChange}
+            />
+            <div className="flex items-center text-sm text-muted-foreground">
+              Avance:&nbsp;
+              {formData.estacionDesde && formData.estacionHasta
+                ? Math.max(0, Number(formData.estacionHasta) - Number(formData.estacionDesde))
+                : 0}{" "}
+              m
+            </div>
+          </div>
+          {lastCounters.estacionHasta !== null && (
+            <p className="text-xs text-muted-foreground">
+              Continuidad: el “desde” de hoy debe ser ≥ {lastCounters.estacionHasta}
+            </p>
+          )}
+        </div>
+      );
+
+      case "placa carreta": {
         const opciones = getTrailerOptions();
         if (!opciones.length) return null;
         return (
@@ -359,7 +500,22 @@ const orNull = (v) => {
         );
       }
 
-      case "Cantidad material":
+      // NUEVO: placa de la maquinaria que va sobre la carreta
+      case "placa maquinaria llevada":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="placaMaquinariaLlevada">Placa maquinaria llevada</Label>
+            <Input
+              id="placaMaquinariaLlevada"
+              name="placaMaquinariaLlevada"
+              placeholder="SM 0000"
+              value={formData.placaMaquinariaLlevada || ""}
+              onChange={handleInputChange}
+            />
+          </div>
+        );
+
+      case "cantidad material":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="cantidadMaterial">Cantidad (m³)</Label>
@@ -367,9 +523,10 @@ const orNull = (v) => {
               <Input
                 id="cantidadMaterial"
                 name="cantidadMaterial"
-                type="text"
-                inputMode="decimal"
-                placeholder="0.0"
+                inputMode="numeric"
+                pattern="\d*"
+                placeholder="00"
+                maxLength={2}
                 value={formData.cantidadMaterial ?? ""}
                 onChange={handleInputChange}
               />
@@ -378,7 +535,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Tipo material":
+      case "tipo material":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Material</Label>
@@ -397,7 +554,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Tipo actividad":
+      case "tipo actividad":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Actividad</Label>
@@ -420,7 +577,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Tipo carga":
+      case "tipo carga":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Carga</Label>
@@ -439,14 +596,13 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Viaticos":
+      case "viaticos":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="viaticos">Viáticos</Label>
             <Input
               id="viaticos"
               name="viaticos"
-              type="text"
               inputMode="numeric"
               pattern="\d*"
               maxLength={5}
@@ -457,7 +613,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Hora inicio":
+      case "hora inicio":
         return (
           <div className="space-y-2" key={fieldName}>
             <HourAmPmPickerDialog
@@ -468,7 +624,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Hora fin":
+      case "hora fin":
         return (
           <div className="space-y-2" key={fieldName}>
             <HourAmPmPickerDialog
@@ -479,7 +635,7 @@ const orNull = (v) => {
           </div>
         );
 
-      case "Fuente": {
+      case "fuente": {
         const opciones = getFuenteOptions();
         if (!opciones.length) return null;
         return (
@@ -501,14 +657,13 @@ const orNull = (v) => {
         );
       }
 
-      case "Codigo camino":
+      case "codigo camino":
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Código Camino (3 dígitos)</Label>
             <Input
               id="codigoCamino"
               name="codigoCamino"
-              type="text"
               value={formData.codigoCamino}
               onChange={handleInputChange}
               placeholder="000"
@@ -517,148 +672,88 @@ const orNull = (v) => {
           </div>
         );
 
-      default: {
-        const numericFieldNames = ["Cantidad material", "Cantidad liquido", "Kilometraje", "Litros diesel", "Horimetro", "Viaticos"];
-        if (numericFieldNames.includes(fieldName)) {
-          const fieldKey = fieldName.toLowerCase().replace(/\s+/g, "").replace("litrosdiesel", "combustible");
-          return (
-            <div className="space-y-2" key={fieldName}>
-              <Label htmlFor={fieldKey}>{fieldName}</Label>
-              <Input
-                id={fieldKey}
-                name={fieldKey}
-                type="number"
-                step="1"
-                min="0"
-                value={formData[fieldKey] ?? ""}
-                onChange={handleInputChange}
-              />
-            </div>
-          );
-        }
+      default:
         return (
           <div className="space-y-2" key={fieldName}>
-            <Label htmlFor={key}>{fieldName}</Label>
-            <Input id={key} name={key} type="text" value={formData[key] ?? ""} onChange={handleInputChange} />
+            <Label>{fieldName}</Label>
+            
+            <Input onChange={handleInputChange} name={normKey(fieldName).replace(/\s+/g, "")} />
           </div>
         );
-      }
     }
   };
 
-//   const handleSubmit = async (e) => {
-//   e.preventDefault();
-//   if (loading) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
 
-//   // Confirmación con SweetAlert
-//   const ok = await confirmAction({
-//     title: "¿Crear reporte?",
-//     html: `Operador: <b>${formData.operadorId || "—"}</b><br>
-//            Tipo: <b>${selectedMachineryType || "—"}</b><br>
-//            Placa: <b>${formData.placa || "—"}</b>`,
-//     icon: "question",
-//     confirmButtonText: "Guardar",
-//     cancelButtonText: "Cancelar",
-//   });
-//   if (!ok) return;
-
-//   setLoading(true);
-//   try {
-//     const { operadorId, maquinariaId } = formData;
-//     if (!operadorId || !maquinariaId) {
-//       await errorAlert("Faltan datos", "Debes indicar Operador y seleccionar una Placa válida.");
-//       return;
-//     }
-
-//     // ← payload “bueno” que ya te funcionaba
-//     const payload = {
-//       ...formData,
-//       kilometraje: formData.kilometraje === "" ? null : Number(formData.kilometraje),
-//       combustible: formData.combustible === "" ? null : Number(formData.combustible),
-//       viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
-//       cantidadMaterial:
-//         formData.cantidadMaterial === ""
-//           ? null
-//           : Number(String(formData.cantidadMaterial).replace(",", ".")),
-//     };
-
-//     await machineryService.createReport(payload);
-//     await swalSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
-
-//     // reset UI
-//     setFormData({ ...INITIAL_FORM, fecha: new Date().toISOString().split("T")[0] });
-//     setSelectedMachineryType("");
-//     setSelectedVariant("");
-//     setTotalHours("");
-//   } catch (err) {
-//     console.error("createReport error", err?.response?.data || err);
-//     const msg = err?.response?.data?.message || err?.message || "Hubo un problema al enviar el reporte.";
-//     await errorAlert("Error al crear reporte", String(msg));
-//   } finally {
-//     setLoading(false);
-//   }
-// };
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (loading) return;
-
-  // CONFIRMAR (usa title, text y luego options para HTML si quieres)
-  const res = await confirmAction(
-    "¿Crear reporte?",
-    "",
-    {
+    const res = await confirmAction("¿Crear reporte?", "", {
       html: `
         <div style="text-align:left">
           <div><b>Operador:</b> ${formData.operadorId || "—"}</div>
-          <div><b>Tipo:</b> ${selectedMachineryType || "—"}</div>
+          <div><b>Tipo:</b> ${selectedMachineryType || formData.tipoMaquinaria || "—"}</div>
           <div><b>Placa:</b> ${formData.placa || "—"}</div>
         </div>
       `,
       confirmButtonText: "Guardar",
       cancelButtonText: "Revisar",
+    });
+    if (!res.isConfirmed) return;
+
+    setLoading(true);
+    showLoading("Guardando...", "Por favor, espere");
+
+    try {
+      if (requiresField("Cantidad material")) {
+        if (formData.cantidadMaterial !== "" && !/^\d{1,2}$/.test(String(formData.cantidadMaterial))) {
+          closeLoading(); await showError("Cantidad de m³ inválida", "Solo enteros de 1 o 2 dígitos."); setLoading(false); return;
+        }
+      }
+      if (requiresField("Litros diesel")) {
+        if (formData.combustible !== "" && !/^\d{1,2}$/.test(String(formData.combustible))) {
+          closeLoading(); await showError("Litros de diésel inválidos", "Solo enteros de 1 o 2 dígitos."); setLoading(false); return;
+        }
+      }
+
+      if (mustRequireBoleta()) {
+        if (!/^\d{6}$/.test(String(formData.boleta))) {
+          closeLoading(); await showError("Boleta requerida", "Ingrese exactamente 6 dígitos."); setLoading(false); return;
+        }
+      } else if (!showBoletaField() && formData.boleta) {
+        setFormData((p) => ({ ...p, boleta: "" }));
+      }
+
+      await machineryService.createReport({
+        ...formData,
+        tipoMaquinaria: selectedMachineryType || formData.tipoMaquinaria,
+        variant: selectedVariant || formData.variant,
+      });
+
+      closeLoading();
+      await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
+
+      setFormData({ ...INITIAL_FORM, fecha: new Date().toISOString().split("T")[0] });
+      setSelectedMachineryType("");
+      setSelectedVariant("");
+      setTotalHours("");
+      setLastCounters({ horimetro: null, estacionHasta: null });
+    } catch (err) {
+      console.error("createReport error", err?.response?.data || err);
+      closeLoading();
+      await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el reporte.");
+    } finally {
+      setLoading(false);
     }
-  );
-  if (!res.isConfirmed) return;
-
-  setLoading(true);
-  showLoading("Guardando...", "Por favor, espere");
-
-  try {
-    const payload = {
-      ...formData,
-      kilometraje: formData.kilometraje === "" ? null : Number(formData.kilometraje),
-      combustible: formData.combustible === "" ? null : Number(formData.combustible),
-      viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
-      cantidadMaterial:
-        formData.cantidadMaterial === ""
-          ? null
-          : Number(String(formData.cantidadMaterial).replace(",", ".")),
-      // (si quieres normalizar textos vacíos a null, hazlo aquí)
-    };
-
-    await machineryService.createReport(payload);
-
-    closeLoading();
-    await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
-    // … aquí tu reset del formulario …
-  } catch (err) {
-    console.error("createReport error", err?.response?.data || err);
-    closeLoading();
-    await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el reporte.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   // ====== RENDER ======
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>Crear Reporte</CardTitle>
+        <CardTitle>Boleta Municipal</CardTitle>
         <CardDescription>Completa la información del reporte diario de operación</CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Operador / Fecha */}
@@ -784,5 +879,3 @@ const handleSubmit = async (e) => {
     </Card>
   );
 }
-
-export default CreateReportForm;

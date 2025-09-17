@@ -1,23 +1,22 @@
-
 import React, { useEffect, useState } from "react";
-import { Cog, FileText, Wrench } from "lucide-react";
+ import { FileText, Receipt, Wrench, ClipboardList } from "lucide-react";
 import machineryService from "@/services/machineryService";
 import CreateReportForm from "@/features/transporte/components/forms/create-report-form.jsx";
+import CreateRentalReportForm from "./components/forms/create-rental-report-form";
 import ReportsTable from "@/features/transporte/components/ReportsTable.jsx";
 import MachineryAdmin from "@/features/transporte/components/MachineryAdmin.jsx"; // ⬅️ nueva vista
 import ProtectedRoute from "@/components/ProtectedRoute.jsx";
 import { useAuth } from "@/context/AuthContext.jsx";
 
-export default function TransporteModule() {
+export function TransporteModule() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("maquinaria"); // "maquinaria" | "reportes" | "catalogo"
+  const [activeTab, setActiveTab] = useState("maquinaria");
   const [reportes, setReportes] = useState([]);
-  
-  // Función para verificar si el usuario tiene un rol específico
+
   const hasRole = (roles) => {
     if (!user || !user.roles) return false;
     const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
-    return roles.some(role => userRoles.includes(role));
+    return roles.some((r) => userRoles.includes(r));
   };
 
   useEffect(() => {
@@ -27,7 +26,6 @@ export default function TransporteModule() {
   const loadReports = async () => {
     try {
       const res = await machineryService.getAllReports({ page: 1, limit: 20 });
-      // adapta al shape de tu backend:
       setReportes(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
     } catch (e) {
       console.error("Error cargando reportes:", e?.response?.data || e);
@@ -49,8 +47,20 @@ export default function TransporteModule() {
               : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
           }`}
         >
-          <Cog className="w-4 h-4" />
-          Crear reporte
+          <FileText className="w-4 h-4" />
+          Boleta Municipal
+        </button>
+
+        <button
+          onClick={() => setActiveTab("alquiler")}
+          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            activeTab === "alquiler"
+              ? "bg-blue-600 text-white shadow-md"
+              : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
+          }`}
+        >
+          <Receipt className="w-4 h-4" /> {/* 👈 usa FileText para evitar crashes */}
+          Boleta Alquiler
         </button>
 
         <button
@@ -61,11 +71,10 @@ export default function TransporteModule() {
               : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
           }`}
         >
-          <FileText className="w-4 h-4" />
+          <ClipboardList className="w-4 h-4" />
           Reportes
         </button>
 
-        {/* Solo mostrar botón de Catálogo a roles específicos */}
         {hasRole(["superadmin", "ingeniero", "inspector"]) && (
           <button
             onClick={() => setActiveTab("catalogo")}
@@ -86,6 +95,8 @@ export default function TransporteModule() {
           <CreateReportForm onGoToCatalog={() => setActiveTab("catalogo")} />
         )}
 
+        {activeTab === "alquiler" && <CreateRentalReportForm />}
+
         {activeTab === "reportes" && <ReportsTable reports={reportes} />}
 
         {activeTab === "catalogo" && (
@@ -97,3 +108,5 @@ export default function TransporteModule() {
     </div>
   );
 }
+
+export default TransporteModule; 

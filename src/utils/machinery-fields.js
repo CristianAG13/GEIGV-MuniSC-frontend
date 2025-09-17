@@ -1,3 +1,212 @@
+// // src/features/machinery/machineryFields.js
+
+// export const machineryFields = {
+//   vagoneta: {
+//     variantes: {
+//       material: [
+//         "Tipo actividad",
+//         "Tipo material",
+//         "Cantidad material",
+//         "Fuente",
+//         "Boleta",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//       ],
+//       cisterna: [
+//         "Tipo actividad",
+//         "Cantidad liquido",
+//         "Fuente",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//       ],
+//       carreta: [
+//         "Tipo actividad",
+//         "Placa carreta",
+//         "Destino",
+//         "Tipo carga",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//       ],
+//     },
+//     placas: [
+//       { codigo: "SM 3186", roles: ["material", "carreta"] },
+//       { codigo: "SM 3187", roles: ["material", "carreta"] },
+//       { codigo: "SM 6009", roles: ["material", "carreta"] },
+//       { codigo: "SM 8424", roles: ["material", "carreta"] },
+//       { codigo: "SM 8466", roles: ["material", "carreta"] },
+//       { codigo: "SM 8467", roles: ["material", "carreta"] },
+//       { codigo: "SM 8474", roles: ["material", "carreta"] },
+//       { codigo: "SM 8492", roles: ["material", "carreta"] },
+//       { codigo: "SM 8513", roles: ["material", "carreta"] },
+//       { codigo: "SM 8488", roles: ["material", "carreta"] },
+//       { codigo: "SM 5711", roles: ["material", "carreta", "cisterna"] }, // especial
+//     ],
+//   },
+
+//   cisterna: {
+//     campos: [
+//       "Tipo actividad",
+//       "Cantidad liquido",
+//       "Fuente",
+//       "Codigo camino",
+//       "Distrito",
+//       "Kilometraje",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 7842", "SM 8553"],
+//   },
+
+//   cabezal: {
+//     variantes: {
+//       material: [
+//         "Tipo actividad",
+//         "Tipo material",
+//         "Cantidad material",
+//         "Fuente",
+//         "Boleta",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//         "Placa carreta",
+//       ],
+//       cisterna: [
+//         "Tipo actividad",
+//         "Cantidad liquido",
+//         "Fuente",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//         "Placa carreta",
+//       ],
+//       carreta: [
+//         "Tipo actividad",
+//         "Placa carreta",
+//         "Destino",
+//         "Tipo carga",
+//         "Estación",
+//         "Codigo camino",
+//         "Distrito",
+//         "Kilometraje",
+//         "Litros diesel",
+//         "Hora inicio",
+//         "Hora fin",
+//         "Viaticos",
+//       ],
+//     },
+//     placas: ["SM 7843", "SM 8772"],
+//   },
+
+//   excavadora: {
+//     campos: [
+//       "Tipo actividad",
+//       "Estación",
+//       "Codigo camino",
+//       "Distrito",
+//       "Horimetro",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 8423"],
+//   },
+
+//   niveladora: {
+//     campos: [
+//       "Tipo actividad",
+//       "Estación",
+//       "Codigo camino",
+//       "Distrito",
+//       "Horimetro",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 8462", "SM 8684"],
+//   },
+
+//   compactadora: {
+//     campos: [
+//       "Tipo actividad",
+//       "Estación",
+//       "Codigo camino",
+//       "Distrito",
+//       "Horimetro",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 5256", "SM 8434"],
+//   },
+
+//   backhoe: {
+//     campos: [
+//       "Tipo actividad",
+//       "Estación",
+//       "Codigo camino",
+//       "Distrito",
+//       "Horimetro",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 4509", "SM 7724", "SM 8425"],
+//   },
+
+//   cargador: {
+//     campos: [
+//       "Tipo actividad",
+//       "Tipo carga",
+//       "Estación",
+//       "Codigo camino",
+//       "Distrito",
+//       "Horimetro",
+//       "Litros diesel",
+//       "Hora inicio",
+//       "Hora fin",
+//       "Viaticos",
+//     ],
+//     placas: ["SM 2954"],
+//   },
+// }
+
+//este es el original
+
+
+
+
+
+
+
 // src/features/machinery/machineryFields.js
 
 export const machineryFields = {
@@ -34,6 +243,7 @@ export const machineryFields = {
         "Placa carreta",
         "Destino",
         "Tipo carga",
+        "Placa maquinaria llevada",   // <-- NUEVO
         "Codigo camino",
         "Distrito",
         "Kilometraje",
@@ -109,6 +319,7 @@ export const machineryFields = {
         "Placa carreta",
         "Destino",
         "Tipo carga",
+        "Placa maquinaria llevada",   // <-- NUEVO
         "Estación",
         "Codigo camino",
         "Distrito",
@@ -117,7 +328,6 @@ export const machineryFields = {
         "Hora inicio",
         "Hora fin",
         "Viaticos",
-        "Placa carreta",
       ],
     },
     placas: ["SM 7843", "SM 8772"],
@@ -198,4 +408,4 @@ export const machineryFields = {
     ],
     placas: ["SM 2954"],
   },
-}
+};

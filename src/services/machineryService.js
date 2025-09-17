@@ -1,173 +1,382 @@
 
-// // services/machineryService.js
 // import apiClient from "../config/api";
 
+
+// // Limpia "100 + 350", " 100+350  ", "100+350m", etc. y lo normaliza a "100+350"
+// function normalizeEstacion(raw) {
+//   if (raw == null || raw === "") return null;
+//   let s = String(raw).trim();
+//   // quita cualquier letra o símbolo sobrante excepto dígitos y '+'
+//   s = s.replace(/[^\d+]/g, "");
+//   // intenta match "dígitos + dígitos"
+//   const m = s.match(/^(\d+)\+(\d+)$/);
+//   if (m) return `${Number(m[1])}+${Number(m[2])}`;
+//   return null; // si no cumple el formato, que vaya null (para que el DTO/regex del backend te avise)
+// }
+
+// // Si todavía usás los dos campos, combina "desde" y "hasta" a un string
+// function coalesceEstacionFromPairs(fd) {
+//   const desde = fd?.estacionDesde ?? fd?.estacionDesdeStr ?? fd?.detalles?.estacionDesde;
+//   const hasta = fd?.estacionHasta ?? fd?.estacionHastaStr ?? fd?.detalles?.estacionHasta;
+//   if (desde != null && desde !== "" && hasta != null && hasta !== "") {
+//     return normalizeEstacion(`${desde}+${hasta}`);
+//   }
+//   return null;
+// }
+
 // class MachineryService {
-//   // ——— Reports (municipales) ———
-//   buildReportPayload(formData) {
-//     return {
-//       fecha: formData.fecha ?? null,
+//   static log(tag, data) {
+//     // eslint-disable-next-line no-console
+//     console.log(`[machineryService] ${tag}:`, data);
+//   }
+
+
+//   // Convierte el form plano a lo que espera el backend
+//   buildReportPayload(formData = {}) {
+//     const toNumOrNull = (v) => (v === "" || v == null ? null : Number(v));
+    
+//   const normalizeEstacion = (v) => {
+//   if (v === "" || v == null) return null;
+//   const s = String(v).trim();
+//   const m = s.match(/^\s*(\d+)\s*\+\s*(\d+)\s*$/);
+//   if (!m) return s.replace(/\s+/g, ""); // deja lo escrito, sin espacios
+//   return `${Number(m[1])}+${Number(m[2])}`;
+// };
+
+
+//     const detalles = {
+//       observaciones: formData.observaciones ?? "",
+//       // variante y metadatos de clasificación van DENTRO de detalles
+//       variante: formData.variant ?? formData.variante ?? null,
+//       tipoMaquinaria: formData.tipoMaquinaria ?? null,
+//       placa: formData.placa ?? null,
+
+//       // campos por variante
+//       tipoMaterial: formData.tipoMaterial ?? null,
+//       cantidadMaterial: toNumOrNull(formData.cantidadMaterial),
+//       fuente: formData.fuente ?? null,
+//       boleta: formData.boleta ?? null,
+
+//       cantidadLiquido: toNumOrNull(formData.cantidadLiquido),
+
+//       placaCarreta: formData.placaCarreta ?? null,
+//       destino: formData.destino ?? null,
+//       tipoCarga: formData.tipoCarga ?? null,
+
+//       placaMaquinariaLlevada: formData.placaMaquinariaLlevada ?? null,
+//       // horario (si lo usas)
 //       horaInicio: formData.horaInicio ?? null,
 //       horaFin: formData.horaFin ?? null,
-//       actividad: formData.actividades ?? formData.tipoActividad ?? null,
-//       estacion: formData.estacion ?? null,
+//     };
+
+//     return {
+//       // ROOT (solo lo que tu backend acepta)
+//       fecha: formData.fecha ?? null,
+//       //actividad: formData.actividades ?? formData.actividad ?? null,
+//       actividad: formData.tipoActividad ?? formData.actividad ?? null,
 //       codigoCamino: formData.codigoCamino ?? null,
 //       distrito: formData.distrito ?? null,
-//       horimetro: Number(formData.horimetro) || 0,
-//       kilometraje: Number(formData.kilometraje) || 0,
-//       diesel: Number(formData.combustible) || 0,
-//       horasOrd: Number(formData.horasOrd) || 0,
-//       horasExt: Number(formData.horasExt) || 0,
-//       viaticos: Number(formData.viaticos) || 0,
-//       detalles: {
-//         observaciones: formData.observaciones ?? "",
-//         tipoMaterial: formData.tipoMaterial ?? "",
-//         cantidadMaterial: Number(formData.cantidadMaterial) || 0,
-//         fuente: formData.fuente ?? "",
-//         boleta: formData.boleta ?? "",
-//         cantidadLiquido: Number(formData.cantidadLiquido) || 0,
-//         placaCarreta: formData.placaCarreta ?? "",
-//         destino: formData.destino ?? "",
-//         tipoCarga: formData.tipoCarga ?? "",
-//         tipoMaquinaria: formData.tipoMaquinaria ?? "",
-//         placa: formData.placa ?? "",
-//       },
-//       operadorId: Number(formData.operadorId) || null,
-//       maquinariaId: Number(formData.maquinariaId) || null,
+
+//       horimetro: toNumOrNull(formData.horimetro),
+//       kilometraje: toNumOrNull(formData.kilometraje),
+//       diesel: toNumOrNull(formData.combustible ?? formData.diesel),
+//       horasOrd: toNumOrNull(formData.horasOrd),
+//       horasExt: toNumOrNull(formData.horasExt),
+//       viaticos: toNumOrNull(formData.viaticos),
+
+//        // ⬇️⬇️ AQUI EL CAMBIO IMPORTANTE
+//      estacion:
+//     normalizeEstacion(formData.estacion ?? formData.estacionStr)
+//     ?? coalesceEstacionFromPairs(formData),
+      
+
+//       operadorId: toNumOrNull(formData.operadorId),
+//       maquinariaId: toNumOrNull(formData.maquinariaId),
+
+//       // el resto va encapsulado
+//       detalles,
 //     };
 //   }
 
 //   async createReport(formData) {
-//     const data = this.buildReportPayload(formData);
+//     // SIEMPRE normalizamos para no mandar campos prohibidos en el root
+//     const data = this.buildReportPayload(formData || {});
 //     if (!data.operadorId || !data.maquinariaId) {
 //       throw new Error("Debes especificar operadorId y maquinariaId.");
 //     }
-//     const res = await apiClient.post("/machinery/report", data); // ← singular
-//     return res.data;
+//     try {
+
+//       const data = this.buildReportPayload(formData || {});
+//      console.log("[machineryService] estacion (raw):", formData.estacion, formData.estacionStr);
+//      console.log("[machineryService] estacion (payload):", data.estacion);
+//      console.log("[machineryService] POST /machinery/report payload", data);
+
+//       console.log("[machineryService] POST /machinery/report payload:", data);
+//       MachineryService.log("POST /machinery/report payload", data); // <- agrega esto
+//       const res = await apiClient.post("/machinery/report", data);
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("createReport -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
 //   async getAllReports() {
-//     const res = await apiClient.get("/machinery/report"); // ← singular, sin page/limit
-//     return res.data;
+//     try {
+//       const res = await apiClient.get("/machinery/report");
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("getAllReports -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
 //   async getReportsByOperatorAndDate({ operadorId, start, end }) {
-//     const params = {
-//       operadorId: String(operadorId), // si usas class-validator con @IsNumberString
-//       start,
-//       end,
-//     };
-//     const res = await apiClient.get("/machinery/report/by-operator", { params });
-//     return res.data;
+//     try {
+//       const params = { operadorId: String(operadorId), start, end };
+//       const res = await apiClient.get("/machinery/report/by-operator", { params });
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("getReportsByOperatorAndDate -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
 //   async getReportsByType(tipo) {
-//     const res = await apiClient.get("/machinery/report/by-type", { params: { tipo } });
-//     return res.data;
+//     try {
+//       const res = await apiClient.get("/machinery/report/by-type", { params: { tipo } });
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("getReportsByType -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
 //   async getCisternaReports() {
-//     const res = await apiClient.get("/machinery/report/cisterna");
-//     return res.data;
+//     try {
+//       const res = await apiClient.get("/machinery/report/cisterna");
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("getCisternaReports -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
-//   // ——— Rental & Material ———
-//   async createRentalReport(dto) {
-//     const res = await apiClient.post("/machinery/rental-report", dto);
-//     return res.data;
-//   }
-//   async getAllRentalReports() {
-//     const res = await apiClient.get("/machinery/rental-report");
-//     return res.data;
-//   }
-//   async createMaterialReport(dto) {
-//     const res = await apiClient.post("/machinery/material-report", dto);
-//     return res.data;
-//   }
-//   async getAllMaterialReports() {
-//     const res = await apiClient.get("/machinery/material-report");
-//     return res.data;
+//   // ========= Maquinaria =========
+//   async getAllMachinery(filter = {}) {
+//     try {
+//       const params = {};
+//       if (filter.tipo) params.tipo = filter.tipo;
+//       if (filter.rol) params.rol = filter.rol;
+
+//       const res = await apiClient.get("/machinery", { params });
+//       const raw = Array.isArray(res.data) ? res.data : [];
+
+//       const norm = raw.map((m) => {
+//         const id = m.id ?? m.machineryId ?? m._id ?? null;
+//         const tipo = m.tipo ?? m.type ?? "";
+//         const placa = m.placa ?? m.plate ?? "";
+//         const esPropietaria = Boolean(m.esPropietaria);
+
+//         let roles = [];
+//         if (Array.isArray(m.roles)) {
+//           roles = m.roles
+//             .map((r) => (typeof r === "string" ? r : (r?.rol ?? r?.role)))
+//             .filter(Boolean);
+//         } else if (m.rol) {
+//           roles = [m.rol];
+//         }
+//         roles = Array.from(new Set(roles.map((r) => String(r).toLowerCase())));
+//         return { id, tipo, placa, esPropietaria, roles };
+//       });
+
+//       return norm;
+//     } catch (err) {
+//       MachineryService.log("getAllMachinery -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
-//   // ——— Maquinaria ———
-//   async getAllMachinery() {
-//     const res = await apiClient.get("/machinery");
-//     return res.data;
-//   }
 //   async createMachinery(dto) {
-//     const res = await apiClient.post("/machinery", dto);
-//     return res.data;
+//     try {
+//       const res = await apiClient.post("/machinery", dto);
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("createMachinery -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
+
 //   async getMachineryById(id) {
-//     const res = await apiClient.get(`/machinery/${id}`);
-//     return res.data;
+//     try {
+//       const res = await apiClient.get(`/machinery/${id}`);
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("getMachineryById -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
+
 //   async updateMachinery(id, dto) {
-//     const res = await apiClient.patch(`/machinery/${id}`, dto);
-//     return res.data;
+//     try {
+//       const res = await apiClient.patch(`/machinery/${id}`, dto);
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("updateMachinery -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
+
 //   async deleteMachinery(id) {
-//     const res = await apiClient.delete(`/machinery/${id}`);
-//     return res.data;
+//     try {
+//       const res = await apiClient.delete(`/machinery/${id}`);
+//       return res.data;
+//     } catch (err) {
+//       MachineryService.log("deleteMachinery -> error", err?.response?.data || err);
+//       throw err;
+//     }
 //   }
 
+//   async getLastCounters(maquinariaId) {
+//     if (!maquinariaId) throw new Error("maquinariaId es requerido");
+//     try {
+//       const res = await apiClient.get(`/machinery/${maquinariaId}/last-counters`);
+//       return res.data || {};
+//     } catch (err) {
+//       MachineryService.log("getLastCounters -> error", err?.response?.data || err);
+//       throw err;
+//     }
+//   }
 // }
-
 
 // const machineryService = new MachineryService();
 // export default machineryService;
 
-// services/machineryService.js
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import apiClient from "../config/api";
 
+// --- Helpers de estación (solo aquí arriba, no los dupliques) ---
+function normalizeEstacion(raw) {
+  if (raw == null || raw === "") return null;
+  let s = String(raw).trim();
+  // deja solo dígitos y '+'
+  s = s.replace(/[^\d+]/g, "");
+  const m = s.match(/^(\d+)\+(\d+)$/);
+  if (m) return `${Number(m[1])}+${Number(m[2])}`;
+  return null; // si no cumple el formato, que el backend lo valide y rechace
+}
+
+function coalesceEstacionFromPairs(fd) {
+  const desde = fd?.estacionDesde ?? fd?.estacionDesdeStr ?? fd?.detalles?.estacionDesde;
+  const hasta = fd?.estacionHasta ?? fd?.estacionHastaStr ?? fd?.detalles?.estacionHasta;
+  if (desde != null && desde !== "" && hasta != null && hasta !== "") {
+    return normalizeEstacion(`${desde}+${hasta}`);
+  }
+  return null;
+}
+
 class MachineryService {
-  // Utilidad simple de log
   static log(tag, data) {
     // eslint-disable-next-line no-console
     console.log(`[machineryService] ${tag}:`, data);
   }
 
-  // ========= REPORTES (municipales) =========
-  buildReportPayload(formData) {
-    return {
-      fecha: formData.fecha ?? null,
+  // Convierte el form plano a lo que espera el backend
+  buildReportPayload(formData = {}) {
+    const toNumOrNull = (v) => (v === "" || v == null ? null : Number(v));
+
+    const detalles = {
+      observaciones: formData.observaciones ?? "",
+      variante: formData.variant ?? formData.variante ?? null,
+      tipoMaquinaria: formData.tipoMaquinaria ?? null,
+      placa: formData.placa ?? null,
+
+      // por variante
+      tipoMaterial: formData.tipoMaterial ?? null,
+      cantidadMaterial: toNumOrNull(formData.cantidadMaterial),
+      fuente: formData.fuente ?? null,
+      boleta: formData.boleta ?? null,
+
+      cantidadLiquido: toNumOrNull(formData.cantidadLiquido),
+
+      placaCarreta: formData.placaCarreta ?? null,
+      destino: formData.destino ?? null,
+      tipoCarga: formData.tipoCarga ?? null,
+
+      placaMaquinariaLlevada: formData.placaMaquinariaLlevada ?? null,
       horaInicio: formData.horaInicio ?? null,
       horaFin: formData.horaFin ?? null,
-      actividad: formData.actividades ?? formData.tipoActividad ?? null,
-      estacion: formData.estacion ?? null,
+    };
+
+    return {
+      // ROOT (solo lo que el backend acepta)
+      fecha: formData.fecha ?? null,
+      actividad: formData.tipoActividad ?? formData.actividad ?? null,
       codigoCamino: formData.codigoCamino ?? null,
       distrito: formData.distrito ?? null,
-      horimetro: Number(formData.horimetro) || 0,
-      kilometraje: Number(formData.kilometraje) || 0,
-      diesel: Number(formData.combustible) || 0,
-      horasOrd: Number(formData.horasOrd) || 0,
-      horasExt: Number(formData.horasExt) || 0,
-      viaticos: Number(formData.viaticos) || 0,
-      detalles: {
-        observaciones: formData.observaciones ?? "",
-        tipoMaterial: formData.tipoMaterial ?? "",
-        cantidadMaterial: Number(formData.cantidadMaterial) || 0,
-        fuente: formData.fuente ?? "",
-        boleta: formData.boleta ?? "",
-        cantidadLiquido: Number(formData.cantidadLiquido) || 0,
-        placaCarreta: formData.placaCarreta ?? "",
-        destino: formData.destino ?? "",
-        tipoCarga: formData.tipoCarga ?? "",
-        tipoMaquinaria: formData.tipoMaquinaria ?? "",
-        placa: formData.placa ?? "",
-      },
-      operadorId: Number(formData.operadorId) || null,
-      maquinariaId: Number(formData.maquinariaId) || null,
+
+      horimetro: toNumOrNull(formData.horimetro),
+      kilometraje: toNumOrNull(formData.kilometraje),
+      diesel: toNumOrNull(formData.combustible ?? formData.diesel),
+      horasOrd: toNumOrNull(formData.horasOrd),
+      horasExt: toNumOrNull(formData.horasExt),
+      viaticos: toNumOrNull(formData.viaticos),
+
+      // ⬇️ aquí tomamos estacion (único campo) o combinamos los 2 viejos
+      estacion:
+        normalizeEstacion(formData.estacion ?? formData.estacionStr) ??
+        coalesceEstacionFromPairs(formData),
+
+      operadorId: toNumOrNull(formData.operadorId),
+      maquinariaId: toNumOrNull(formData.maquinariaId),
+
+      // el resto va encapsulado
+      detalles,
     };
   }
 
   async createReport(formData) {
-    const data = this.buildReportPayload(formData);
+    // normaliza siempre
+    const data = this.buildReportPayload(formData || {});
     if (!data.operadorId || !data.maquinariaId) {
       throw new Error("Debes especificar operadorId y maquinariaId.");
     }
     try {
-      const res = await apiClient.post("/machinery/report", data); // singular
+      // logs útiles para depurar
+      MachineryService.log("estacion (raw)", {
+        estacion: formData?.estacion,
+        estacionStr: formData?.estacionStr,
+        estacionDesde: formData?.estacionDesde,
+        estacionHasta: formData?.estacionHasta,
+      });
+      MachineryService.log("estacion (payload)", data.estacion);
+      MachineryService.log("POST /machinery/report payload", data);
+
+      const res = await apiClient.post("/machinery/report", data);
       return res.data;
     } catch (err) {
       MachineryService.log("createReport -> error", err?.response?.data || err);
@@ -177,7 +386,7 @@ class MachineryService {
 
   async getAllReports() {
     try {
-      const res = await apiClient.get("/machinery/report"); // singular, sin paginación
+      const res = await apiClient.get("/machinery/report");
       return res.data;
     } catch (err) {
       MachineryService.log("getAllReports -> error", err?.response?.data || err);
@@ -187,11 +396,7 @@ class MachineryService {
 
   async getReportsByOperatorAndDate({ operadorId, start, end }) {
     try {
-      const params = {
-        operadorId: String(operadorId), // evita el 400 "numeric string is expected"
-        start,
-        end,
-      };
+      const params = { operadorId: String(operadorId), start, end };
       const res = await apiClient.get("/machinery/report/by-operator", { params });
       return res.data;
     } catch (err) {
@@ -220,54 +425,7 @@ class MachineryService {
     }
   }
 
-  // ========= REPORTES (rental / material) =========
-  async createRentalReport(dto) {
-    try {
-      const res = await apiClient.post("/machinery/rental-report", dto);
-      return res.data;
-    } catch (err) {
-      MachineryService.log("createRentalReport -> error", err?.response?.data || err);
-      throw err;
-    }
-  }
-
-  async getAllRentalReports() {
-    try {
-      const res = await apiClient.get("/machinery/rental-report");
-      return res.data;
-    } catch (err) {
-      MachineryService.log("getAllRentalReports -> error", err?.response?.data || err);
-      throw err;
-    }
-  }
-
-  async createMaterialReport(dto) {
-    try {
-      const res = await apiClient.post("/machinery/material-report", dto);
-      return res.data;
-    } catch (err) {
-      MachineryService.log("createMaterialReport -> error", err?.response?.data || err);
-      throw err;
-    }
-  }
-
-  async getAllMaterialReports() {
-    try {
-      const res = await apiClient.get("/machinery/material-report");
-      return res.data;
-    } catch (err) {
-      MachineryService.log("getAllMaterialReports -> error", err?.response?.data || err);
-      throw err;
-    }
-  }
-
-  // ========= MAQUINARIA =========
-  /**
-   * Devuelve lista normalizada:
-   * { id, tipo, placa, esPropietaria, roles: string[] }
-   * Acepta filtros opcionales (server-side si los implementaste):
-   *   getAllMachinery({ tipo: 'vagoneta', rol: 'carreta' })
-   */
+  // ========= Maquinaria =========
   async getAllMachinery(filter = {}) {
     try {
       const params = {};
@@ -277,32 +435,21 @@ class MachineryService {
       const res = await apiClient.get("/machinery", { params });
       const raw = Array.isArray(res.data) ? res.data : [];
 
-      // normaliza roles en todos los casos
       const norm = raw.map((m) => {
-        const id =
-          m.id ?? m.machineryId ?? m._id ?? null;
-
-        const tipo =
-          m.tipo ?? m.type ?? "";
-
-        const placa =
-          m.placa ?? m.plate ?? "";
-
+        const id = m.id ?? m.machineryId ?? m._id ?? null;
+        const tipo = m.tipo ?? m.type ?? "";
+        const placa = m.placa ?? m.plate ?? "";
         const esPropietaria = Boolean(m.esPropietaria);
 
         let roles = [];
         if (Array.isArray(m.roles)) {
-          // puede venir como ['material','carreta'] o [{rol:'material'}, {rol:'carreta'}]
           roles = m.roles
             .map((r) => (typeof r === "string" ? r : (r?.rol ?? r?.role)))
             .filter(Boolean);
         } else if (m.rol) {
           roles = [m.rol];
         }
-
-        // únicos, en minúscula (opcional)
         roles = Array.from(new Set(roles.map((r) => String(r).toLowerCase())));
-
         return { id, tipo, placa, esPropietaria, roles };
       });
 
@@ -315,7 +462,6 @@ class MachineryService {
 
   async createMachinery(dto) {
     try {
-      // dto esperado: { tipo, placa, esPropietaria?, rol? }
       const res = await apiClient.post("/machinery", dto);
       return res.data;
     } catch (err) {
@@ -336,7 +482,6 @@ class MachineryService {
 
   async updateMachinery(id, dto) {
     try {
-      // dto: { tipo?, placa?, esPropietaria?, rol? }
       const res = await apiClient.patch(`/machinery/${id}`, dto);
       return res.data;
     } catch (err) {
@@ -354,8 +499,18 @@ class MachineryService {
       throw err;
     }
   }
+
+  async getLastCounters(maquinariaId) {
+    if (!maquinariaId) throw new Error("maquinariaId es requerido");
+    try {
+      const res = await apiClient.get(`/machinery/${maquinariaId}/last-counters`);
+      return res.data || {};
+    } catch (err) {
+      MachineryService.log("getLastCounters -> error", err?.response?.data || err);
+      throw err;
+    }
+  }
 }
 
 const machineryService = new MachineryService();
 export default machineryService;
-
