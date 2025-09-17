@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,33 +9,34 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import machineryService from "@/services/machineryService";
 import { machineryFields } from "@/utils/machinery-fields";
- import {
-   confirmDelete,
-   confirmAction,
-   showSuccess,
-   showError,
- } from "@/utils/sweetAlert";
+import MultiSelect from "@/features/transporte/components/MultiSelect";
+import { confirmDelete, confirmAction, showSuccess, showError } from "@/utils/sweetAlert";
+import { Edit, Trash2, Check, X } from "lucide-react";
 
 export default function MachineryAdmin() {
   const ALL_ROLES = "__ALL_ROLES__";
   const { toast } = useToast();
 
-  // -------- Lista ----------
+  // catálogo
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
 
-  // -------- Crear (independiente) ----------
+  // crear
   const [tipo, setTipo] = useState("");
-  const [rol, setRol] = useState("");
+  const [rolesSel, setRolesSel] = useState([]);
   const [placa, setPlaca] = useState("");
   const [esPropietaria, setEsPropietaria] = useState(false);
 
-  // -------- Filtros (independientes del crear) ----------
-  const [viewTipo, setViewTipo] = useState(""); // ya NO existe "Todos"
-  const [viewRol, setViewRol] = useState("");   // "" = todas
+  // filtros
+  const [viewTipo, setViewTipo] = useState("");
+  const [viewRol, setViewRol] = useState("");
   const [searchPlaca, setSearchPlaca] = useState("");
 
-  // Opciones maestras desde machineryFields
+  // edición
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ tipo: "", roles: [], placa: "", esPropietaria: false });
+
+  // opciones maestras
   const TIPOS = useMemo(() => Object.keys(machineryFields), []);
   const VARIANTES = useMemo(() => {
     const map = {};
@@ -46,77 +46,34 @@ export default function MachineryAdmin() {
     return map;
   }, []);
 
-  // edición inline
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ tipo: "", rol: "", placa: "", esPropietaria: false });
-
-  const hasVariantCreate = useMemo(
-    () => Boolean(machineryFields[tipo]?.variantes),
-    [tipo]
-  );
-
-  const hasVariantEdit = useMemo(
-    () => Boolean(machineryFields[editForm.tipo]?.variantes),
-    [editForm.tipo]
-  );
+  const hasVariantCreate = useMemo(() => Boolean(machineryFields[tipo]?.variantes), [tipo]);
+  const hasVariantEdit = useMemo(() => Boolean(machineryFields[editForm.tipo]?.variantes), [editForm.tipo]);
 
   const rolOptionsEdit = useMemo(
-    () =>
-      machineryFields[editForm.tipo]?.variantes
-        ? Object.keys(machineryFields[editForm.tipo].variantes)
-        : [],
+    () => (machineryFields[editForm.tipo]?.variantes ? Object.keys(machineryFields[editForm.tipo].variantes) : []),
     [editForm.tipo]
   );
 
-  // opciones de rol para el filtro, dependen del tipo elegido
   const rolOptionsFilter = useMemo(
-    () =>
-      viewTipo && machineryFields[viewTipo]?.variantes
-        ? Object.keys(machineryFields[viewTipo].variantes)
-        : [],
+    () => (viewTipo && machineryFields[viewTipo]?.variantes ? Object.keys(machineryFields[viewTipo].variantes) : []),
     [viewTipo]
   );
 
-  // lista filtrada + ordenada
-  const filtered = useMemo(() => {
-    let data = Array.isArray(list) ? [...list] : [];
+  // helpers normalización
+  const toStringRoles = (roles) =>
+    Array.isArray(roles)
+      ? roles.map((x) => (typeof x === "string" ? x : x?.rol)).filter(Boolean)
+      : [];
 
-    if (viewTipo) {
-      data = data.filter((r) => (r.tipo || "").toLowerCase() === viewTipo.toLowerCase());
-    }
-    if (viewRol) {
-      const wanted = viewRol.toLowerCase();
-      data = data.filter((r) => {
-        const arr = Array.isArray(r.roles) ? r.roles.map((x) => String(x).toLowerCase()) : [];
-        const legacy = (r.rol || r.role || "").toLowerCase();
-        return arr.includes(wanted) || legacy === wanted;
-      });
-    }
-    if (searchPlaca.trim()) {
-      const q = searchPlaca.trim().toLowerCase();
-      data = data.filter((r) => String(r.placa || r.plate || "").toLowerCase().includes(q));
-    }
+  const normalizeRow = (row) => ({ ...row, roles: toStringRoles(row?.roles) });
 
-    // ordenar por tipo y luego placa
-    data.sort(
-      (a, b) =>
-        (a.tipo || "").localeCompare(b.tipo || "") ||
-        String(a.placa || a.plate || "").localeCompare(String(b.placa || b.plate || ""))
-    );
-    return data;
-  }, [list, viewTipo, viewRol, searchPlaca]);
-
-  // Mostrar columna "Rol" solo cuando aplica
-  const showRoleCol = useMemo(() => {
-    if (viewTipo && machineryFields[viewTipo]?.variantes) return true; // p.ej. vagoneta, cabezal
-    return filtered.some((m) => Array.isArray(m.roles) && m.roles.length > 0);
-  }, [viewTipo, filtered]);
-
+  // cargar catálogo
   const load = async () => {
     try {
       setLoading(true);
       const data = await machineryService.getAllMachinery();
-      setList(Array.isArray(data) ? data : []);
+      const normalized = Array.isArray(data) ? data.map(normalizeRow) : [];
+      setList(normalized);
     } catch (e) {
       console.error("[MachineryAdmin] getAllMachinery error:", e?.response?.data || e);
       toast({
@@ -133,146 +90,170 @@ export default function MachineryAdmin() {
     load();
   }, []);
 
-  // Al montar (o si cambia TIPOS) elegir el primer tipo por defecto
   useEffect(() => {
-    if (!viewTipo && TIPOS.length) {
-      setViewTipo(TIPOS[0]);
-    }
+    if (!viewTipo && TIPOS.length) setViewTipo(TIPOS[0]);
   }, [TIPOS, viewTipo]);
 
-  // ------- helpers reset -------
   const resetCreateForm = () => {
     setTipo("");
-    setRol("");
+    setRolesSel([]);
     setPlaca("");
     setEsPropietaria(false);
   };
 
-  // Ya no cambiamos el tipo; solo limpiamos rol/búsqueda
   const resetFilters = () => {
     setViewRol("");
     setSearchPlaca("");
   };
 
-  // ---------- Crear ----------
+  // crear
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      if (!tipo || !placa) {
-        toast({
-          title: "Campos requeridos",
-          description: "Tipo y placa son obligatorios.",
-          variant: "destructive",
-        });
+      if (!tipo || !placa.trim()) {
+        toast({ title: "Campos requeridos", description: "Tipo y placa son obligatorios.", variant: "destructive" });
         return;
       }
-      // Mantener compatibilidad: `rol` string (no array)
+
       const payload = {
         tipo,
-        placa,
-        ...(machineryFields[tipo]?.variantes ? { rol: rol || null } : {}),
-        esPropietaria: Boolean(esPropietaria),
+        placa: placa.trim().toUpperCase(),
+        esPropietaria: !!esPropietaria,
       };
+      if (machineryFields[tipo]?.variantes && rolesSel.length) payload.roles = rolesSel;
 
+      setLoading(true);
       const created = await machineryService.createMachinery(payload);
-      setList((prev) => [created, ...prev]);
-      toast({ title: "Maquinaria agregada", description: "Se creó correctamente." });
+      const createdNormalized = normalizeRow(created);
 
-      // después de agregar: resetear crear + filtros
+      setList((prev) => [createdNormalized, ...prev]);
+      setViewTipo(tipo);
+      toast({ title: "Maquinaria agregada", description: "Se creó correctamente." });
       resetCreateForm();
       resetFilters();
     } catch (e) {
       console.error("[MachineryAdmin] createMachinery error:", e?.response?.data || e);
       const msg = e?.response?.data?.message || e?.response?.data?.error || "No se pudo crear la maquinaria.";
-      toast({ title: "Error", description: String(msg), variant: "destructive" });
+      toast({ title: "Error", description: Array.isArray(msg) ? msg.join(", ") : String(msg), variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ---------- Cancelar creación ----------
-  // const handleCancelCreate = () => {
-  //   resetCreateForm();
-  //   resetFilters();
-  // };
-
   const handleCancelCreate = async () => {
-  const res = await confirmAction(
-    "¿Cancelar?",
-    "Se perderán los cambios no guardados.",
-    { icon: "warning", confirmButtonText: "Sí, cancelar" }
-  );
-  if (!res.isConfirmed) return;
-  resetCreateForm();
-  resetFilters();
-};
+    const res = await confirmAction("¿Cancelar?", "Se perderán los cambios no guardados.", {
+      icon: "warning",
+      confirmButtonText: "Sí, cancelar",
+    });
+    if (!res.isConfirmed) return;
+    resetCreateForm();
+    resetFilters();
+  };
 
-
-  // ---------- Editar ----------
+  // editar
   const startEdit = (row) => {
     setEditingId(row.id);
     setEditForm({
       tipo: row.tipo ?? "",
-      rol: row.rol ?? row.role ?? "",
+      roles: toStringRoles(row.roles),
       placa: row.placa ?? row.plate ?? "",
-      esPropietaria: Boolean(row.esPropietaria),
+      esPropietaria: !!row.esPropietaria,
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ tipo: "", rol: "", placa: "", esPropietaria: false });
+    setEditForm({ tipo: "", roles: [], placa: "", esPropietaria: false });
   };
 
   const saveEdit = async () => {
-  const res = await confirmAction("¿Guardar cambios?", "", { confirmButtonText: "Guardar" });
-  if (!res.isConfirmed) return;
+    const res = await confirmAction("¿Guardar cambios?", "", { confirmButtonText: "Guardar" });
+    if (!res.isConfirmed) return;
 
-  try {
-    // … tu payload/llamada existente …
-    await showSuccess("Actualizado", "Cambios guardados correctamente.");
-    cancelEdit();
-  } catch (e) {
-    console.error("[MachineryAdmin] updateMachinery error:", e?.response?.data || e);
-    await showError("Error al actualizar", e?.response?.data?.message || "No se pudo actualizar.");
-  }
-};
+    try {
+      setLoading(true);
+      const payload = {
+        tipo: editForm.tipo,
+        placa: editForm.placa.trim().toUpperCase(),
+        esPropietaria: !!editForm.esPropietaria,
+        roles: machineryFields[editForm.tipo]?.variantes ? editForm.roles || [] : [],
+      };
+      const updated = await machineryService.updateMachinery(editingId, payload);
+      const normalized = normalizeRow(updated);
+      setList((prev) => prev.map((r) => (r.id === editingId ? normalized : r)));
+      await showSuccess("Actualizado", "Cambios guardados correctamente.");
+      cancelEdit();
+    } catch (e) {
+      console.error("[MachineryAdmin] updateMachinery error:", e?.response?.data || e);
+      await showError("Error al actualizar", e?.response?.data?.message || "No se pudo actualizar.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // eliminar
   const handleDelete = async (id) => {
-  const res = await confirmDelete("la maquinaria seleccionada");
-  if (!res.isConfirmed) return;
+    const res = await confirmDelete("la maquinaria seleccionada");
+    if (!res.isConfirmed) return;
+    try {
+      await machineryService.deleteMachinery(id);
+      setList((prev) => prev.filter((it) => it.id !== id));
+      await showSuccess("Eliminada", "La maquinaria fue eliminada.");
+    } catch (e) {
+      console.error("[MachineryAdmin] deleteMachinery error:", e?.response?.data || e);
+      await showError("Error al eliminar", e?.response?.data?.message || "No se pudo eliminar.");
+    }
+  };
 
-  try {
-    await machineryService.deleteMachinery(id);
-    setList((prev) => prev.filter((it) => it.id !== id));
-    await showSuccess("Eliminada", "La maquinaria fue eliminada.");
-  } catch (e) {
-    console.error("[MachineryAdmin] deleteMachinery error:", e?.response?.data || e);
-    await showError("Error al eliminar", e?.response?.data?.message || "No se pudo eliminar.");
-  }
-};
-
-
+  // render roles en celda
   const roleCellContent = (row, isEditing) => {
     if (isEditing) {
       return hasVariantEdit ? (
-        <Select value={editForm.rol} onValueChange={(v) => setEditForm((p) => ({ ...p, rol: v }))}>
-          <SelectTrigger className="h-8">
-            <SelectValue placeholder="Rol/variante" />
-          </SelectTrigger>
-          <SelectContent>
-            {rolOptionsEdit.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelect
+          placeholder="Seleccionar variantes"
+          options={rolOptionsEdit}
+          value={editForm.roles || []}
+          onChange={(v) => setEditForm((p) => ({ ...p, roles: v }))}
+        />
       ) : (
         <span className="text-gray-400">—</span>
       );
     }
-    if (Array.isArray(row.roles) && row.roles.length) return row.roles.join(", ");
+    if (Array.isArray(row.roles) && row.roles.length) {
+      const arr = row.roles.map((x) => (typeof x === "string" ? x : x?.rol)).filter(Boolean);
+      return arr.length ? arr.join(", ") : <span className="text-gray-400">—</span>;
+    }
     return row.rol ? row.rol : <span className="text-gray-400">—</span>;
   };
+
+  // lista filtrada + ordenada
+  const filtered = useMemo(() => {
+    let data = Array.isArray(list) ? [...list] : [];
+    if (viewTipo) data = data.filter((r) => (r.tipo || "").toLowerCase() === viewTipo.toLowerCase());
+    if (viewRol) {
+      const wanted = viewRol.toLowerCase();
+      data = data.filter((r) => {
+        const arr = Array.isArray(r.roles) ? r.roles.map((x) => String(x).toLowerCase()) : [];
+        const legacy = (r.rol || r.role || "").toLowerCase();
+        return arr.includes(wanted) || legacy === wanted;
+      });
+    }
+    if (searchPlaca.trim()) {
+      const q = searchPlaca.trim().toLowerCase();
+      data = data.filter((r) => String(r.placa || r.plate || "").toLowerCase().includes(q));
+    }
+    data.sort(
+      (a, b) =>
+        (a.tipo || "").localeCompare(b.tipo || "") ||
+        String(a.placa || a.plate || "").localeCompare(String(b.placa || b.plate || ""))
+    );
+    return data;
+  }, [list, viewTipo, viewRol, searchPlaca]);
+
+  const showRoleCol = useMemo(() => {
+    if (viewTipo && machineryFields[viewTipo]?.variantes) return true;
+    return filtered.some((m) => Array.isArray(m.roles) && m.roles.length > 0);
+  }, [viewTipo, filtered]);
 
   const colSpan = showRoleCol ? 6 : 5;
 
@@ -283,87 +264,89 @@ export default function MachineryAdmin() {
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* ----------- CREAR (independiente) ----------- */}
-        <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <Label>Tipo</Label>
-            <Select
-              value={tipo}
-              onValueChange={(v) => {
-                setTipo(v);
-                setRol("");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIPOS.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* ---------- CREAR (1 sola fila, botones siempre a la derecha) ---------- */}
+<form
+  onSubmit={handleCreate}
+  className="flex flex-col gap-3 md:flex-row md:items-end md:gap-4 md:flex-nowrap"
+>
+  {/* Tipo (ancho mínimo fijo) */}
+  <div className="md:min-w-[14rem]">
+    <Label>Tipo</Label>
+    <Select
+      value={tipo}
+      onValueChange={(v) => {
+        setTipo(v);
+        setRolesSel([]); // limpiar variantes al cambiar tipo
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Seleccionar tipo" />
+      </SelectTrigger>
+      <SelectContent>
+        {TIPOS.map((t) => (
+          <SelectItem key={t} value={t}>
+            {t}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
 
-          {hasVariantCreate && (
-            <div>
-              <Label>Variante</Label>
-              <Select value={rol} onValueChange={setRol}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar variante" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VARIANTES[tipo].map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+  {/* Variantes (flex-1). Si el tipo no tiene variantes, no se renderiza */}
+  {hasVariantCreate && (
+    <div className="flex-1 min-w-[18rem]">
+      <Label>Variantes (puedes elegir varias)</Label>
+      <div className="mt-1">
+        <MultiSelect
+          placeholder="Seleccionar variantes"
+          options={VARIANTES[tipo] || []}
+          value={rolesSel}
+          onChange={setRolesSel}
+        />
+      </div>
+    </div>
+  )}
 
-          <div>
-            <Label>Placa</Label>
-            <Input value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="SM 8772" required />
-          </div>
+  {/* Placa (si no hay variantes, este bloque ocupa más) */}
+  <div className={`${hasVariantCreate ? "md:min-w-[12rem]" : "md:flex-1 md:min-w-[16rem]"}`}>
+    <Label>Placa</Label>
+    <Input
+      value={placa}
+      onChange={(e) => setPlaca(e.target.value)}
+      placeholder="SM 8772"
+      required
+    />
+  </div>
 
-
-          <div className="flex gap-2 items-center md:justify-end">
-  <label className="flex items-center gap-2 text-sm">
+  {/* Checkbox (no se encoge, queda alineado) */}
+  <label className="flex items-center gap-2 md:ml-2 md:mb-[2px] shrink-0">
     <input
       type="checkbox"
+      className="h-4 w-4"
       checked={esPropietaria}
       onChange={(e) => setEsPropietaria(e.target.checked)}
     />
-    Es propietaria
+    <span className="text-sm whitespace-nowrap">Es propietaria</span>
   </label>
 
-  {/* Cancelar gris */}
-  <Button
-    type="button"
-    onClick={handleCancelCreate}
-    variant="secondary"
-    className="bg-gray-200 text-gray-900 hover:bg-gray-300"
-  >
-    Cancelar
-  </Button>
+  {/* Acciones a la derecha (no se encogen) */}
+  <div className="ml-auto flex items-center gap-2 shrink-0">
+    <Button
+      type="button"
+      onClick={handleCancelCreate}
+      variant="secondary"
+      className="bg-gray-200 text-gray-900 hover:bg-gray-300"
+    >
+      Cancelar
+    </Button>
+    <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
+      {loading ? "Guardando..." : "Agregar"}
+    </Button>
+  </div>
+</form>
 
-  {/* Agregar azul */}
-  <Button
-    type="submit"
-    disabled={loading}
-    className="bg-blue-600 hover:bg-blue-700 text-white"
-  >
-    {loading ? "Guardando..." : "Agregar"}
-  </Button>
-</div>
 
-        </form>
-
-        {/* ----------- FILTROS (independientes) ----------- */}
+        {/* Filtros */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-40">
             <Label>Tipo (vista)</Label>
@@ -388,26 +371,23 @@ export default function MachineryAdmin() {
           </div>
 
           {viewTipo && rolOptionsFilter.length > 0 && (
-  <div className="w-40">
-    <Label>Variante</Label>
-    <Select
-      value={viewRol ? viewRol : ALL_ROLES}
-      onValueChange={(v) => setViewRol(v === ALL_ROLES ? "" : v)}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Todas" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_ROLES}>Todas</SelectItem>
-        {rolOptionsFilter.map((r) => (
-          <SelectItem key={r} value={r}>
-            {r}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
-)}
+            <div className="w-40">
+              <Label>Variante</Label>
+              <Select value={viewRol ? viewRol : ALL_ROLES} onValueChange={(v) => setViewRol(v === ALL_ROLES ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_ROLES}>Todas</SelectItem>
+                  {rolOptionsFilter.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="w-48">
             <Label>Buscar placa</Label>
@@ -419,7 +399,7 @@ export default function MachineryAdmin() {
           </Button>
         </div>
 
-        {/* ----------- TABLA ----------- */}
+        {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -429,6 +409,7 @@ export default function MachineryAdmin() {
                 {showRoleCol && <th className="py-2 pr-4">Rol</th>}
                 <th className="py-2 pr-4">Placa</th>
                 <th className="py-2 pr-4">Propietaria</th>
+                <th className="py-2 pr-4 tex-righ w-20">Acciones</th>
                 <th className="py-2 pr-4" />
               </tr>
             </thead>
@@ -439,7 +420,6 @@ export default function MachineryAdmin() {
                   <tr key={row.id} className="border-b">
                     <td className="py-2 pr-4">{row.id}</td>
 
-                    {/* tipo */}
                     <td className="py-2 pr-4">
                       {isEditing ? (
                         <Select
@@ -448,7 +428,7 @@ export default function MachineryAdmin() {
                             setEditForm((p) => ({
                               ...p,
                               tipo: v,
-                              rol: machineryFields[v]?.variantes ? p.rol : "",
+                              roles: machineryFields[v]?.variantes ? p.roles : [], // limpia si no tiene variantes
                             }))
                           }
                         >
@@ -468,32 +448,23 @@ export default function MachineryAdmin() {
                       )}
                     </td>
 
-                    {/* rol (solo si aplica) */}
                     {showRoleCol && <td className="py-2 pr-4">{roleCellContent(row, isEditing)}</td>}
 
-                    {/* placa */}
                     <td className="py-2 pr-4">
                       {isEditing ? (
-                        <Input
-                          className="h-8"
-                          value={editForm.placa}
-                          onChange={(e) => setEditForm((p) => ({ ...p, placa: e.target.value }))}
-                        />
+                        <Input className="h-8" value={editForm.placa} onChange={(e) => setEditForm((p) => ({ ...p, placa: e.target.value }))} />
                       ) : (
                         row.placa ?? row.plate
                       )}
                     </td>
 
-                    {/* propietaria */}
                     <td className="py-2 pr-4">
                       {isEditing ? (
                         <label className="flex items-center gap-2">
                           <input
                             type="checkbox"
-                            checked={Boolean(editForm.esPropietaria)}
-                            onChange={(e) =>
-                              setEditForm((p) => ({ ...p, esPropietaria: e.target.checked }))
-                            }
+                            checked={!!editForm.esPropietaria}
+                            onChange={(e) => setEditForm((p) => ({ ...p, esPropietaria: e.target.checked }))}
                           />
                           <span className="text-xs">Es propietaria</span>
                         </label>
@@ -504,41 +475,54 @@ export default function MachineryAdmin() {
                       )}
                     </td>
 
-                    {/* acciones */}
                     <td className="py-2 pr-4 text-right">
-                      {isEditing ? (
-                        <div className="flex gap-2 justify-end">
-  {/* Guardar azul */}
-  <Button
-    size="sm"
-    onClick={saveEdit}
-    className="bg-blue-600 hover:bg-blue-700 text-white"
-  >
-    Guardar
-  </Button>
+  {isEditing ? (
+    <div className="flex gap-2 justify-end">
+      {/* Guardar */}
+      <button
+        type="button"
+        onClick={saveEdit}
+        aria-label="Guardar"
+        className="h-9 w-9 rounded-xl border border-green-100 bg-green-50 text-green-700 hover:bg-green-100 flex items-center justify-center"
+      >
+        <Check className="h-4 w-4" />
+      </button>
 
-  {/* Cancelar gris */}
-  <Button
-    size="sm"
-    onClick={cancelEdit}
-    variant="secondary"
-    className="bg-gray-200 text-gray-900 hover:bg-gray-300"
-  >
-    Cancelar
-  </Button>
-</div>
+      {/* Cancelar */}
+      <button
+        type="button"
+        onClick={cancelEdit}
+        aria-label="Cancelar"
+        className="h-9 w-9 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 flex items-center justify-center"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  ) : (
+    <div className="flex gap-3 justify-end">
+      {/* Editar (azul suave, como en la imagen) */}
+      <button
+        type="button"
+        onClick={() => startEdit(row)}
+        aria-label="Editar"
+        className="h-9 w-9 rounded-xl   text-blue-700 hover:bg-blue-100 flex items-center justify-center"
+      >
+        <Edit className="h-4 w-4" />
+      </button>
 
-                      ) : (
-                        <div className="flex gap-2 justify-end">
-                          <Button size="sm" variant="secondary" onClick={() => startEdit(row)}>
-                            Editar
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(row.id)}>
-                            Eliminar
-                          </Button>
-                        </div>
-                      )}
-                    </td>
+      {/* Eliminar (solo icono rojo, sin fondo; con hover sutil) */}
+      <button
+        type="button"
+        onClick={() => handleDelete(row.id)}
+        aria-label="Eliminar"
+        className="h-9 w-9 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center justify-center"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  )}
+</td>
+
                   </tr>
                 );
               })}

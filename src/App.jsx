@@ -6,7 +6,6 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
-import Maquinaria from "./pages/Maquinaria.jsx";
 import Dashboard from "./pages/Dashboard.jsx"; 
 import TokenExpirationWarning from "./components/TokenExpirationWarning.jsx";
 

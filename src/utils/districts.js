@@ -132,7 +132,7 @@ export const activityTypes = [
   "Limpieza",
 ];
 
-export const cargoTypes = ["Backhoe", "Cargador", "Compactadora"];
+export const cargoTypes = ["Backhoe", "Cargador", "Compactadora", "Cisterna", "Vagoneta", "Cabezal", "Excavadora", "Niveladora", "Recolector", "Alcantarillas"];
 
 export const liquidSources = [
   "Río Diriá",
