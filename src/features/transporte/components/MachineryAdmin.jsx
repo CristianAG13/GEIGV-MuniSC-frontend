@@ -11,6 +11,7 @@ import machineryService from "@/services/machineryService";
 import { machineryFields } from "@/utils/machinery-fields";
 import MultiSelect from "@/features/transporte/components/MultiSelect";
 import { confirmDelete, confirmAction, showSuccess, showError } from "@/utils/sweetAlert";
+import { Edit, Trash2, Check, X } from "lucide-react";
 
 export default function MachineryAdmin() {
   const ALL_ROLES = "__ALL_ROLES__";
@@ -408,7 +409,7 @@ export default function MachineryAdmin() {
                 {showRoleCol && <th className="py-2 pr-4">Rol</th>}
                 <th className="py-2 pr-4">Placa</th>
                 <th className="py-2 pr-4">Propietaria</th>
-                <th className="py-2 pr-4">Acciones</th>
+                <th className="py-2 pr-4 tex-righ w-20">Acciones</th>
                 <th className="py-2 pr-4" />
               </tr>
             </thead>
@@ -475,26 +476,53 @@ export default function MachineryAdmin() {
                     </td>
 
                     <td className="py-2 pr-4 text-right">
-                      {isEditing ? (
-                        <div className="flex gap-2 justify-end">
-                          <Button size="sm" onClick={saveEdit} className="bg-blue-600 hover:bg-blue-700 text-white">
-                            Guardar
-                          </Button>
-                          <Button size="sm" onClick={cancelEdit} variant="secondary" className="bg-gray-200 text-gray-900 hover:bg-gray-300">
-                            Cancelar
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2 justify-end">
-                          <Button size="sm" variant="secondary" onClick={() => startEdit(row)} className="bg-yellow-500 hover:bg-yellow-400">
-                            Editar
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(row.id)}>
-                            Eliminar
-                          </Button>
-                        </div>
-                      )}
-                    </td>
+  {isEditing ? (
+    <div className="flex gap-2 justify-end">
+      {/* Guardar */}
+      <button
+        type="button"
+        onClick={saveEdit}
+        aria-label="Guardar"
+        className="h-9 w-9 rounded-xl border border-green-100 bg-green-50 text-green-700 hover:bg-green-100 flex items-center justify-center"
+      >
+        <Check className="h-4 w-4" />
+      </button>
+
+      {/* Cancelar */}
+      <button
+        type="button"
+        onClick={cancelEdit}
+        aria-label="Cancelar"
+        className="h-9 w-9 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 flex items-center justify-center"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  ) : (
+    <div className="flex gap-3 justify-end">
+      {/* Editar (azul suave, como en la imagen) */}
+      <button
+        type="button"
+        onClick={() => startEdit(row)}
+        aria-label="Editar"
+        className="h-9 w-9 rounded-xl   text-blue-700 hover:bg-blue-100 flex items-center justify-center"
+      >
+        <Edit className="h-4 w-4" />
+      </button>
+
+      {/* Eliminar (solo icono rojo, sin fondo; con hover sutil) */}
+      <button
+        type="button"
+        onClick={() => handleDelete(row.id)}
+        aria-label="Eliminar"
+        className="h-9 w-9 rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center justify-center"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  )}
+</td>
+
                   </tr>
                 );
               })}
