@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import machineryService from "@/services/machineryService";
+import operatorsService from "@/services/operatorsService";
 import { machineryFields } from "@/utils/machinery-fields";
 import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions } from "@/utils/districts";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
   // ====== ESTADO ======
   const [loading, setLoading] = useState(false);
   const [machineryList, setMachineryList] = useState([]);
+  const [operatorsList, setOperatorsList] = useState([]);
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
   const [totalHours, setTotalHours] = useState("");
@@ -31,7 +33,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
   });
 
   const INITIAL_FORM = {
-    operadorId: 0,
+    operadorId: "",
     maquinariaId: 0,
     fecha: new Date().toISOString().split("T")[0],
     horasOrd: "",
@@ -167,6 +169,22 @@ export default function CreateReportForm({ onGoToCatalog }) {
         console.error("[CreateReportForm] getAllMachinery error:", e);
         toast({
           title: "No se pudieron cargar las maquinarias",
+          description: "Verifica tu conexión o el inicio de sesión.",
+          variant: "destructive",
+        });
+      }
+    })();
+  }, [toast]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const operators = await operatorsService.getAllOperators();
+        setOperatorsList(Array.isArray(operators) ? operators : []);
+      } catch (e) {
+        console.error("[CreateReportForm] getAllOperators error:", e);
+        toast({
+          title: "No se pudieron cargar los operadores",
           description: "Verifica tu conexión o el inicio de sesión.",
           variant: "destructive",
         });
@@ -687,10 +705,14 @@ export default function CreateReportForm({ onGoToCatalog }) {
     e.preventDefault();
     if (loading) return;
 
+    // Buscar el nombre del operador para mostrarlo en la confirmación
+    const selectedOperator = operatorsList.find(op => op.id === Number(formData.operadorId));
+    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
+
     const res = await confirmAction("¿Crear reporte?", "", {
       html: `
         <div style="text-align:left">
-          <div><b>Operador:</b> ${formData.operadorId || "—"}</div>
+          <div><b>Operador:</b> ${operatorName || "—"}</div>
           <div><b>Tipo:</b> ${selectedMachineryType || formData.tipoMaquinaria || "—"}</div>
           <div><b>Placa:</b> ${formData.placa || "—"}</div>
         </div>
@@ -704,6 +726,11 @@ export default function CreateReportForm({ onGoToCatalog }) {
     showLoading("Guardando...", "Por favor, espere");
 
     try {
+      // Validar operador seleccionado
+      if (!formData.operadorId) {
+        closeLoading(); await showError("Operador requerido", "Debe seleccionar un operador."); setLoading(false); return;
+      }
+
       if (requiresField("Cantidad material")) {
         if (formData.cantidadMaterial !== "" && !/^\d{1,2}$/.test(String(formData.cantidadMaterial))) {
           closeLoading(); await showError("Cantidad de m³ inválida", "Solo enteros de 1 o 2 dígitos."); setLoading(false); return;
@@ -759,8 +786,22 @@ export default function CreateReportForm({ onGoToCatalog }) {
           {/* Operador / Fecha */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="operadorId">ID del Operador</Label>
-              <Input id="operadorId" name="operadorId" type="number" value={formData.operadorId} onChange={handleInputChange} required min="1" />
+              <Label>Operador</Label>
+              <Select 
+                value={formData.operadorId ? String(formData.operadorId) : ""} 
+                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar operador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {operatorsList.map((operator) => (
+                    <SelectItem key={operator.id} value={String(operator.id)}>
+                      {operator.name} {operator.last} (ID: {operator.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Fecha</Label>

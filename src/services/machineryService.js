@@ -510,6 +510,31 @@ class MachineryService {
       throw err;
     }
   }
+
+  // ========= Rental Reports =========
+  async createRentalReport(formData) {
+    try {
+      const payload = {
+        fecha: formData.fecha,
+        tipoMaquinaria: formData.tipoMaquinaria,
+        placa: formData.placa || null,
+        actividad: formData.actividad,
+        cantidad: formData.cantidad || null,
+        horas: Number(formData.horas),
+        estacion: formData.estacion || null,
+        boleta: formData.boleta || null,
+        fuente: formData.fuente || null,
+        esAlquiler: true, // Flag to indicate this is a rental report
+      };
+
+      MachineryService.log("POST /machinery/rental-report payload", payload);
+      const res = await apiClient.post("/machinery/rental-report", payload);
+      return res.data;
+    } catch (err) {
+      MachineryService.log("createRentalReport -> error", err?.response?.data || err);
+      throw err;
+    }
+  }
 }
 
 const machineryService = new MachineryService();

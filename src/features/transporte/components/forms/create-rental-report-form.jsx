@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import machineryService from "@/services/machineryService";
+import operatorsService from "@/services/operatorsService";
+import { rentalSourceOptions } from "@/utils/districts";
 
 /* ---- catálogos ---- */
 const TIPOS_MAQUINARIA = [
@@ -25,6 +27,7 @@ const TIPOS_MAQUINARIA = [
 // dónde mostrar cada campo
 const TIPOS_CON_CANTIDAD = new Set(["vagoneta", "cisterna", "cabezal"]);
 const TIPOS_CON_ESTACION = new Set(["excavadora", "niveladora", "compactadora", "backhoe", "cargador"]);
+const TIPOS_CON_FUENTE = new Set(["vagoneta", "cisterna", "cabezal"]);
 
 const ACTIVIDADES_POR_TIPO = {
   vagoneta: ["Acarreo de material", "Riego de agua"],
@@ -65,9 +68,11 @@ const sanitizeCantidad = (raw) =>
 export default function CreateRentalReportForm() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [operatorsList, setOperatorsList] = useState([]);
 
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split("T")[0],
+    operadorId: "",
     tipoMaquinaria: "",
     placa: "",
     actividad: "",
@@ -75,6 +80,7 @@ export default function CreateRentalReportForm() {
     horas: "", // <- string para controlar 0–18
     estacion: "", // <- visible solo para excavadora/niveladora/compactadora/backhoe/cargador
     boleta: "",
+    fuente: "", // <- visible para vagoneta/cisterna/cabezal
   });
 
   const actividadOptions = useMemo(
@@ -82,9 +88,61 @@ export default function CreateRentalReportForm() {
     [formData.tipoMaquinaria]
   );
 
+  // Determine fuente options based on machinery type
+  const fuenteOptions = useMemo(() => {
+    const tipoMaquinaria = formData.tipoMaquinaria?.toLowerCase();
+    
+    if (!tipoMaquinaria || !TIPOS_CON_FUENTE.has(tipoMaquinaria)) {
+      return [];
+    }
+
+    // For rental reports, use rentalSourceOptions
+    const typeOptions = rentalSourceOptions[tipoMaquinaria];
+    
+    if (typeOptions) {
+      // For vagoneta and cabezal, check if activity suggests material transport
+      if ((tipoMaquinaria === "vagoneta" || tipoMaquinaria === "cabezal") && 
+          formData.actividad?.toLowerCase().includes("material")) {
+        return typeOptions.material || [];
+      }
+      // For cisterna activities
+      if (tipoMaquinaria === "cisterna" || 
+          formData.actividad?.toLowerCase().includes("agua") || 
+          formData.actividad?.toLowerCase().includes("riego")) {
+        return typeOptions.cisterna || [];
+      }
+      // Default for the type
+      if (typeOptions.material) {
+        return typeOptions.material;
+      }
+    }
+
+    return rentalSourceOptions.default || [];
+  }, [formData.tipoMaquinaria, formData.actividad]);
+
   // flags de visibilidad
   const showCantidad = TIPOS_CON_CANTIDAD.has(formData.tipoMaquinaria);
   const showEstacion = TIPOS_CON_ESTACION.has(formData.tipoMaquinaria);
+  const showFuente = TIPOS_CON_FUENTE.has(formData.tipoMaquinaria) && fuenteOptions.length > 0;
+
+  // Cargar operadores al montar el componente
+  useEffect(() => {
+    const loadOperators = async () => {
+      try {
+        const operators = await operatorsService.getAllOperators();
+        setOperatorsList(Array.isArray(operators) ? operators : []);
+      } catch (error) {
+        console.error("Error loading operators:", error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los operadores.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadOperators();
+  }, [toast]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -114,6 +172,7 @@ export default function CreateRentalReportForm() {
       // si el campo se va a ocultar, limpiamos su valor
       if (!TIPOS_CON_CANTIDAD.has(tipo)) next.cantidad = "";
       if (!TIPOS_CON_ESTACION.has(tipo)) next.estacion = "";
+      if (!TIPOS_CON_FUENTE.has(tipo)) next.fuente = "";
       return next;
     });
   };
@@ -123,6 +182,10 @@ export default function CreateRentalReportForm() {
     if (loading) return;
 
     // Validaciones mínimas
+    if (!formData.operadorId) {
+      toast({ title: "Operador requerido", description: "Selecciona un operador.", variant: "destructive" });
+      return;
+    }
     if (!formData.tipoMaquinaria) {
       toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
       return;
@@ -142,6 +205,7 @@ export default function CreateRentalReportForm() {
 
     const payload = {
       fecha: formData.fecha,
+      operadorId: Number(formData.operadorId),
       tipoMaquinaria: formData.tipoMaquinaria,
       placa: formData.placa || null,
       actividad: formData.actividad,
@@ -153,6 +217,7 @@ export default function CreateRentalReportForm() {
       horas: Number(formData.horas),
       estacion: showEstacion ? formData.estacion || null : null,
       boleta: formData.boleta || null,
+      fuente: showFuente ? formData.fuente || null : null,
     };
 
     try {
@@ -162,6 +227,7 @@ export default function CreateRentalReportForm() {
 
       setFormData({
         fecha: new Date().toISOString().split("T")[0],
+        operadorId: "",
         tipoMaquinaria: "",
         placa: "",
         actividad: "",
@@ -169,6 +235,7 @@ export default function CreateRentalReportForm() {
         horas: "",
         estacion: "",
         boleta: "",
+        fuente: "",
       });
     } catch (err) {
       console.error(err);
@@ -191,11 +258,30 @@ export default function CreateRentalReportForm() {
 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Fila 1: Fecha / Tipo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Fila 1: Fecha / Operador / Tipo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha">Fecha</Label>
               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} required />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Operador</Label>
+              <Select 
+                value={formData.operadorId} 
+                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar operador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {operatorsList.map((operator) => (
+                    <SelectItem key={operator.id} value={String(operator.id)}>
+                      {operator.name} {operator.last} (ID: {operator.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -271,6 +357,28 @@ export default function CreateRentalReportForm() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Fuente (condicional para ciertos tipos de maquinaria) */}
+          {showFuente && (
+            <div className="space-y-2">
+              <Label>Fuente</Label>
+              <Select
+                value={formData.fuente}
+                onValueChange={(v) => setFormData((p) => ({ ...p, fuente: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar fuente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fuenteOptions.map((fuente) => (
+                    <SelectItem key={fuente} value={fuente}>
+                      {fuente}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Fila 3: Estación (condicional) / Boleta */}
           <div className={`grid grid-cols-1 ${showEstacion ? "md:grid-cols-2" : "md:grid-cols-1"} gap-4`}>
