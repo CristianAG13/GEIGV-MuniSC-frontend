@@ -48,7 +48,7 @@ export const liquidSources = [
 
 export const materialSources = ["Palo de Arco"];
 
-export const rentalSources = ["Palo de Arco", "KYLCSA"];
+export const rentalSources = ["Palo de Arco"];
 
 // --- Derivados (PUEDEN usar lo anterior) ---
 export const sourceOptions = {
