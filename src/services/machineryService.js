@@ -237,6 +237,7 @@ class MachineryService {
     try {
       const payload = {
         fecha: formData.fecha,
+        operadorId: formData.operadorId,
         tipoMaquinaria: formData.tipoMaquinaria,
         placa: formData.placa || null,
         actividad: formData.actividad,
@@ -245,7 +246,6 @@ class MachineryService {
         estacion: formData.estacion || null,
         boleta: formData.boleta || null,
         fuente: formData.fuente || null,
-        esAlquiler: true, // Flag to indicate this is a rental report
       };
 
       MachineryService.log("POST /machinery/rental-report payload", payload);
@@ -257,6 +257,30 @@ class MachineryService {
     }
   }
 
+
+  async getAllRentalReports() {
+    try {
+      const res = await apiClient.get("/machinery/rental-report");
+      return res.data;
+    } catch (err) {
+      MachineryService.log("getAllRentalReports -> error", err?.response?.data || err);
+      throw err;
+    }
+  }
+
+  async getRentalReportsFiltered({ tipo, start, end } = {}) {
+    try {
+      const params = {};
+      if (tipo) params.tipo = tipo;
+      if (start) params.start = start; // 'YYYY-MM-DD'
+      if (end) params.end = end;       // 'YYYY-MM-DD'
+      const res = await apiClient.get('/machinery/rental-report/search', { params });
+      return res.data;
+    } catch (err) {
+      MachineryService.log('getRentalReportsFiltered -> error', err?.response?.data || err);
+      throw err;
+    }
+  }
 
   async getReportsFiltered({ tipo, start, end } = {}) {
   try {

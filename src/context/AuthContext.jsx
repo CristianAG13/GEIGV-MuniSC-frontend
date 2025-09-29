@@ -30,18 +30,6 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-//   const refreshUserFromBackend = async () => {
-//   try {
-//     const result = await authService.refreshUserData();
-//     if (result.success) {
-//       // Asegúrate de que incluya los roles
-//       setUser(result.data);
-//       console.log('Usuario actualizado:', result.data); // Para debug
-//     }
-//   } catch (error) {
-//     console.error('Error refreshing user data:', error);
-//   }
-// };
 
 const refreshUserFromBackend = async () => {
   try {
@@ -58,23 +46,7 @@ const refreshUserFromBackend = async () => {
     console.error('Error refreshing user data:', error);
   }
 };
-  // const login = async (email, password) => {
-  //   setLoading(true);
-  //   try {
-  //     const result = await authService.login(email, password);
-      
-  //     if (result.success) {
-  //       setUser(result.data.user);
-  //       return { success: true };
-  //     } else {
-  //       return { success: false, error: result.error };
-  //     }
-  //   } catch (error) {
-  //     return { success: false, error: 'Error inesperado al iniciar sesión' };
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  
 
   const login = async (email, password) => {
   setLoading(true);
