@@ -1024,7 +1024,7 @@ export default function ReportsTable({
       </style>`;
     const rowsHtml = filtered.map((r) => {
       const operadorTxt = r?.operador
-        ? `${r.operador?.nombre ?? ""}${r.operador?.identificacion ? ` (${r.operador.identificacion})` : ""}`
+        ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
         : r?.operadorId ?? "—";
       const maquinariaTxt = r?.maquinaria
         ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
@@ -1155,7 +1155,7 @@ export default function ReportsTable({
               ];
               const rows = filtered.map((r) => {
                 const operadorTxt = r?.operador
-                  ? `${r.operador?.nombre ?? ""}${r.operador?.identificacion ? ` (${r.operador.identificacion})` : ""}`
+                  ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
                   : r?.operadorId ?? "";
                 const maquinariaTxt = r?.maquinaria
                   ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
@@ -1252,7 +1252,7 @@ export default function ReportsTable({
           <tbody>
             {pageRows.map((r) => {
               const operadorTxt = r?.operador
-                ? `${r.operador?.nombre ?? ""}${r.operador?.identificacion ? ` (${r.operador.identificacion})` : ""}`
+                ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
                 : r?.operadorId ?? "—";
               const maquinariaTxt = r?.maquinaria
                 ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
@@ -1355,7 +1355,7 @@ export default function ReportsTable({
                   label="Operador"
                   value={
                     selectedRow?.operador
-                      ? `${selectedRow.operador?.nombre ?? ""}${selectedRow.operador?.identificacion ? ` (${selectedRow.operador.identificacion})` : ""}`
+                      ? `${selectedRow.operador?.name ?? ""} ${selectedRow.operador?.last ?? ""}${selectedRow.operador?.identification ? ` (${selectedRow.operador.identification})` : ""}`
                       : selectedRow?.operadorId ?? "—"
                   }
                 />
