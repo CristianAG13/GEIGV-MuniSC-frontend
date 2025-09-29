@@ -11,7 +11,8 @@ import { useAuth } from "@/context/AuthContext.jsx";
 export function TransporteModule() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("maquinaria");
-  const [reportes, setReportes] = useState([]);
+  const [reportesMunicipales, setReportesMunicipales] = useState([]);
+  const [reportesAlquiler, setReportesAlquiler] = useState([]);
 
   const hasRole = (roles) => {
     if (!user || !user.roles) return false;
@@ -25,8 +26,32 @@ export function TransporteModule() {
 
   const loadReports = async () => {
     try {
-      const res = await machineryService.getAllReports({ page: 1, limit: 20 });
-      setReportes(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
+      // Cargar reportes municipales y de alquiler por separado
+      const [municipalesRes, alquilerRes] = await Promise.all([
+        machineryService.getAllReports(),
+        machineryService.getAllRentalReports()
+      ]);
+
+      // Procesar reportes municipales
+      const municipales = Array.isArray(municipalesRes?.data) 
+        ? municipalesRes.data 
+        : Array.isArray(municipalesRes) 
+          ? municipalesRes 
+          : [];
+
+      // Procesar reportes de alquiler
+      const alquiler = Array.isArray(alquilerRes?.data) 
+        ? alquilerRes.data 
+        : Array.isArray(alquilerRes) 
+          ? alquilerRes 
+          : [];
+
+      // Agregar tipo de reporte para distinguirlos
+      const municipalesConTipo = municipales.map(r => ({ ...r, tipoReporte: 'municipal' }));
+      const alquilerConTipo = alquiler.map(r => ({ ...r, tipoReporte: 'alquiler' }));
+
+      setReportesMunicipales(municipalesConTipo);
+      setReportesAlquiler(alquilerConTipo);
     } catch (e) {
       console.error("Error cargando reportes:", e?.response?.data || e);
     }
@@ -97,7 +122,12 @@ export function TransporteModule() {
 
         {activeTab === "alquiler" && <CreateRentalReportForm />}
 
-        {activeTab === "reportes" && <ReportsTable reports={reportes} />}
+        {activeTab === "reportes" && (
+          <ReportsTable 
+            municipalReports={reportesMunicipales}
+            rentalReports={reportesAlquiler}
+          />
+        )}
 
         {activeTab === "catalogo" && (
           <ProtectedRoute roles={["superadmin", "ingeniero", "inspector"]}>
