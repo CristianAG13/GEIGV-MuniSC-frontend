@@ -2,70 +2,264 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
-import { Eye, Pencil, Trash2 } from "lucide-react";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
+import { Eye, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-/* ====================== helpers ====================== */
-const fmtDate = (d) => {
-  try { return d ? new Date(d).toLocaleDateString() : "—"; } catch { return "—"; }
+import machineryService from "@/services/machineryService";
+
+/* ---------- variantes disponibles por tipo (para filtros) ---------- */
+const VARIANT_OPTIONS_BY_TYPE = {
+  vagoneta: ["material", "carreta", "cisterna"],
+  cabezal: ["material", "carreta", "cisterna"],
 };
-const showText = (v) => (v === null || v === undefined || (typeof v === "string" && v.trim() === "") ? "—" : String(v));
+
+/* ---------------- helpers genéricos ---------------- */
+const fmtDate = (d) => {
+  try {
+    return d ? new Date(d).toLocaleDateString() : "—";
+  } catch {
+    return "—";
+  }
+};
+const showText = (v) =>
+  v === null || v === undefined || (typeof v === "string" && v.trim() === "")
+    ? "—"
+    : String(v);
 const showNum = (v) => {
   if (v === 0) return 0;
   const n = typeof v === "string" ? Number(v) : v;
   return Number.isFinite(n) ? n : "—";
 };
-const get = (obj, path) => path.split(".").reduce((acc, k) => (acc && acc[k] !== undefined ? acc[k] : undefined), obj);
+
+const get = (obj, path) =>
+  String(path)
+    .split(".")
+    .reduce((acc, k) => (acc && acc[k] !== undefined ? acc[k] : undefined), obj);
 const pick = (...vals) => vals.find((v) => v !== undefined && v !== null);
 
-/* ====================== helpers específicos por tipo de reporte ====================== */
-const getMunicipalRowData = (r, showEstacion, isKmType) => {
+/* ---------------- detectores de tipo/variante ---------------- */
+const getType = (r) => {
+  if (!r) return "";
+  const t1 =
+    r.tipoMaquinaria && typeof r.tipoMaquinaria === "string"
+      ? r.tipoMaquinaria
+      : pick(get(r, "maquinaria.tipo"), r.tipo, "");
+  return String(t1 || "").toLowerCase();
+};
+
+const getVar = (r) => {
+  if (!r) return "";
+  const raw = pick(
+    get(r, "variant"),
+    get(r, "variante"),
+    get(r, "detalles.variante"),
+    get(r, "maquinaria.variant")
+  );
+  if (raw) return String(raw).toLowerCase();
+
+  const hasCarreta =
+    get(r, "placaCarreta") != null ||
+    get(r, "detalles.placaCarreta") != null ||
+    get(r, "tipoCarga") != null ||
+    get(r, "detalles.tipoCarga") != null ||
+    get(r, "destino") != null ||
+    get(r, "detalles.destino") != null;
+  if (hasCarreta) return "carreta";
+
+  const hasCisterna =
+    get(r, "cantidadLiquido") != null || get(r, "detalles.cantidadLiquido") != null;
+  if (hasCisterna) return "cisterna";
+
+  const hasBoletas =
+    Array.isArray(get(r, "boletas")) || Array.isArray(get(r, "detalles.boletas"));
+  const hasTotalM3 =
+    get(r, "totalCantidadMaterial") != null ||
+    get(r, "detalles.totalCantidadMaterial") != null;
+  if (hasBoletas || hasTotalM3) return "material";
+
+  const hasMaterial =
+    get(r, "tipoMaterial") != null ||
+    get(r, "detalles.tipoMaterial") != null ||
+    get(r, "cantidadMaterial") != null ||
+    get(r, "detalles.cantidadMaterial") != null ||
+    get(r, "boleta") != null ||
+    get(r, "detalles.boleta") != null;
+  if (hasMaterial) return "material";
+
+  return "";
+};
+
+/* --- helpers de boletas y totales (para el modal) --- */
+function getBoletasArr(r) {
+  const paths = [
+    "detalles.boletas",
+    "boletas",
+    "detalles.material.boletas",
+    "material.boletas",
+    "detalles.boletasDia",
+    "boletasDia",
+  ];
+  for (const p of paths) {
+    const v = get(r, p);
+    if (Array.isArray(v)) return v;
+  }
+  return [];
+}
+
+function getTotalM3(r) {
+  const paths = [
+    "detalles.totalCantidadMaterial",
+    "totalCantidadMaterial",
+    "detalles.totalM3",
+    "totalM3",
+    "detalles.total_m3",
+    "total_m3",
+  ];
+  for (const p of paths) {
+    const v = get(r, p);
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+}
+
+// Texto de estación "desde+hasta" o "—"
+const toEstacionTxt = (r) => {
+  const d = r?.estacionDesde ?? r?.detalles?.estacionDesde;
+  const h = r?.estacionHasta ?? r?.detalles?.estacionHasta;
+  if (d != null || h != null) {
+    const L = showNum(d);
+    const R = showNum(h);
+    if (L !== "—" || R !== "—") return `${L}+${R}`;
+  }
+  return "—";
+};
+
+
+// Tipos que NO usan estación
+const KM_TYPES = ["vagoneta", "cabezal", "cisterna"];
+
+// ¿Esta fila usa columna Estación?
+const usesStation = (r) => !KM_TYPES.includes(getType(r));
+
+// Formatea "estación" (desde+hasta)
+const estacionText = (r) => {
+  const d = r?.estacionDesde ?? get(r, "detalles.estacionDesde");
+  const h = r?.estacionHasta ?? get(r, "detalles.estacionHasta");
+  if (d != null || h != null) {
+    const L = showNum(d);
+    const R = showNum(h);
+    if (L !== "—" || R !== "—") return `${L}+${R}`;
+  }
+  return "—";
+};
+
+
+// Construye una fila completa MUNICIPAL (por fila decide si es km o hr)
+// Construye una fila completa MUNICIPAL (por fila decide si es km o hr)
+// Construye una fila completa MUNICIPAL. Si withStation=false no mete la columna.
+function buildMunicipalExportRow(r, withStation) {
+  const t = getType(r);
+  const isKm = KM_TYPES.includes(t);
+
   const operadorTxt = r?.operador
-    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
+    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+        r.operador?.identification ? ` (${r.operador.identification})` : ""
+      }`
     : r?.operadorId ?? "—";
+
   const maquinariaTxt = r?.maquinaria
-    ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
+    ? `${r.maquinaria?.tipo ?? ""}${
+        r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""
+      }`
     : r?.maquinariaId ?? "—";
-  const horas = `${showNum(pick(r?.horasOrd, r?.horas_or))} / ${showNum(pick(r?.horasExt, r?.horas_ext))}`;
-  const metricValue = isKmType
+
+  const horasTxt = `${showNum(pick(r?.horasOrd, r?.horas_or))} / ${showNum(
+    pick(r?.horasExt, r?.horas_ext)
+  )}`;
+
+  const metricVal = isKm
     ? showNum(pick(r?.kilometraje, get(r, "detalles.kilometraje")))
     : showNum(pick(r?.horimetro, get(r, "detalles.horimetro")));
-  const estacionTxt = toEstacionTxt(r);
+
   const tipoActividad = showText(pick(r.tipoActividad, r.actividad));
+
   const hi = pick(r.horaInicio, get(r, "detalles.horaInicio"));
   const hf = pick(r.horaFin, get(r, "detalles.horaFin"));
-  const horario = (hi || hf) ? `${showText(hi)} – ${showText(hf)}` : "—";
+  const horario = hi || hf ? `${showText(hi)} – ${showText(hf)}` : "—";
 
-  return [
+  const row = [
+    "Municipal",
     r.id,
     operadorTxt,
     maquinariaTxt,
-    metricValue,
-    showNum(pick(r?.diesel, r?.combustible)),
-    horas,
-    ...(showEstacion ? [estacionTxt] : []),
+    metricVal,                                // Medidor (km u hr)
+    showNum(pick(r?.diesel, r?.combustible)), // Diésel
+    horasTxt,                                 // Horas (Ord/Ext)
+  ];
+
+  // Solo inserta la columna Estación si se decidió incluirla en el export
+  if (withStation) row.push(usesStation(r) ? estacionText(r) : "—");
+
+  row.push(
     tipoActividad,
     horario,
     showText(r?.distrito),
     showText(r?.codigoCamino),
     showNum(r?.viaticos),
-    fmtDate(r?.fecha)
-  ];
-};
+    fmtDate(r?.fecha),
+  );
 
-const getRentalRowData = (r) => {
+  return row;
+}
+
+
+// ===== Exportación COMPLETA (todas las columnas importantes) =====
+
+// Headers completos (independientes de lo que se ve en pantalla)
+const EXPORT_HEADERS_MUNICIPAL = [
+  "Tipo",          // Municipal
+  "ID",
+  "Operador",
+  "Maquinaria",
+  "Kilometraje",       // (Kilometraje u Horímetro según el tipo de esa fila)
+  "Diésel",
+  "Horas (Ord/Ext)",
+  "Estación",
+  "Tipo actividad",
+  "Horario",
+  "Distrito",
+  "Código Camino",
+  "Viáticos",
+  "Fecha",
+];
+
+const EXPORT_HEADERS_RENTAL = [
+  "Tipo",              // Alquiler
+  "ID",
+  "Operador",
+  "Tipo Maquinaria",
+  "Placa",
+  "Actividad",
+  "Cantidad",
+  "Horas",
+  "Estación",
+  "Boleta",
+  "Fuente",
+  "Fecha",
+];
+
+
+// Construye una fila completa ALQUILER
+function buildRentalExportRow(r) {
   const operadorTxt = r?.operador
     ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
     : r?.operadorId ?? "—";
 
   return [
+    "Alquiler",
     r.id,
     operadorTxt,
     showText(r?.tipoMaquinaria),
@@ -76,138 +270,92 @@ const getRentalRowData = (r) => {
     showText(r?.estacion),
     showText(r?.boleta),
     showText(r?.fuente),
-    fmtDate(r?.fecha)
+    fmtDate(r?.fecha),
   ];
-};
-
-/* variantes permitidas por tipo */
-const VARIANT_OPTIONS_BY_TYPE = {
-  vagoneta: ["material", "carreta", "cisterna"],
-  cabezal: ["material", "carreta", "cisterna"],
-};
-
-const toEstacionTxt = (r) => {
-  if (r?.estacion) return String(r.estacion);
-  const estDesde = r?.estacionDesde ?? r?.detalles?.estacionDesde;
-  const estHasta = r?.estacionHasta ?? r?.detalles?.estacionHasta;
-  if (estDesde != null || estHasta != null) {
-    const left = showNum(estDesde);
-    const right = showNum(estHasta);
-    if (left !== "—" || right !== "—") return `${left}+${right}`;
-  }
-  return "—";
-};
-
-// inferir tipo/variante - adaptado para ambos tipos de reportes
-const getType = (r) => {
-  // Para reportes de alquiler, el tipo está directamente en tipoMaquinaria
-  if (r?.tipoMaquinaria && typeof r.tipoMaquinaria === 'string') {
-    return r.tipoMaquinaria.toLowerCase();
-  }
-  // Para reportes municipales, buscar en maquinaria.tipo
-  return String(pick(get(r, "maquinaria.tipo"), r.tipo) || "").toLowerCase();
-};
-const getVar = (r) => {
-  const raw = pick(get(r, "variant"), get(r, "variante"), get(r, "detalles.variante"), get(r, "maquinaria.variant"));
-  if (raw) return String(raw).toLowerCase();
-
-  const hasCarreta =
-    get(r, "placaCarreta") != null || get(r, "detalles.placaCarreta") != null ||
-    get(r, "tipoCarga") != null     || get(r, "detalles.tipoCarga") != null     ||
-    get(r, "destino") != null       || get(r, "detalles.destino") != null;
-  if (hasCarreta) return "carreta";
-
-  const hasCisterna = get(r, "cantidadLiquido") != null || get(r, "detalles.cantidadLiquido") != null;
-  if (hasCisterna) return "cisterna";
-
-  const hasMaterial =
-    get(r, "tipoMaterial") != null || get(r, "detalles.tipoMaterial") != null ||
-    get(r, "cantidadMaterial") != null || get(r, "detalles.cantidadMaterial") != null ||
-    get(r, "boleta") != null || get(r, "detalles.boleta") != null;
-  if (hasMaterial) return "material";
-
-  return "";
-};
-
-/* ================ mini componente para el modal ================ */
-function Field({ label, value }) {
-  return (
-    <div className="bg-white border rounded-lg p-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="font-medium break-words">{value ?? "—"}</div>
-    </div>
-  );
 }
 
-/* ====================== componente ====================== */
-export default function ReportsTable({
-  municipalReports = [],         // reportes municipales
-  rentalReports = [],           // reportes de alquiler
-  districts: districtsProp,      // opcional
-  onEdit,                        // opcional
-  onDelete,                      // opcional
-}) {
-  /* --------- pestañas para tipos de reportes --------- */
-  const [activeReportTab, setActiveReportTab] = useState("municipal");
 
-  /* --------- filtros de ÁMBITO --------- */
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const [startDate, setStartDate] = useState(""); // YYYY-MM-DD
+/* ==================== componente principal ==================== */
+export default function ReportsTable({
+  municipalReports = [],
+  rentalReports = [],
+  districts: districtsProp,
+}) {
+  /* estado base */
+  const [rowsMunicipal, setRowsMunicipal] = useState(municipalReports);
+  const [rowsRental, setRowsRental] = useState(rentalReports);
+
+  useEffect(() => {
+    setRowsMunicipal(municipalReports);
+  }, [municipalReports]);
+  useEffect(() => {
+    setRowsRental(rentalReports);
+  }, [rentalReports]);
+
+  /* eliminar */
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  /* ver */
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState(null);
+
+  /* eliminados */
+  const [deletedOpen, setDeletedOpen] = useState(false);
+  const [deletedRows, setDeletedRows] = useState([]);
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
+
+  /* pestañas / filtros */
+  const [activeReportTab, setActiveReportTab] = useState("municipal");
+  const isMunicipal = activeReportTab === "municipal";
+  const isRental = activeReportTab === "alquiler";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [codigoFilter, setCodigoFilter] = useState("");
   const [distritoFilter, setDistritoFilter] = useState("");
 
-  /* --------- filtros de selección --------- */
   const [typeFilter, setTypeFilter] = useState("");
   const [variantFilter, setVariantFilter] = useState("");
-  
-  /* --------- filtros específicos para alquiler --------- */
   const [actividadFilter, setActividadFilter] = useState("");
 
-  /* --------- paginación --------- */
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 10;
 
-  /* --------- variables derivadas del tipo de reporte --------- */
-  const isMunicipal = activeReportTab === "municipal";
-  const isRental = activeReportTab === "alquiler";
+  /* ámbito */
+  const activeReports = useMemo(
+    () => (isMunicipal ? rowsMunicipal : rowsRental),
+    [isMunicipal, rowsMunicipal, rowsRental]
+  );
 
-  /* --------- reportes activos según la pestaña --------- */
-  const activeReports = useMemo(() => {
-    return activeReportTab === "municipal" ? municipalReports : rentalReports;
-  }, [activeReportTab, municipalReports, rentalReports]);
-
-  /* --------- distritos --------- */
   const districts = useMemo(() => {
     if (Array.isArray(districtsProp) && districtsProp.length) return districtsProp;
     const set = new Set();
-    const allReports = [...municipalReports, ...rentalReports];
-    allReports.forEach((r) => {
+    [...rowsMunicipal, ...rowsRental].forEach((r) => {
       const d = (r?.distrito || "").trim();
       if (d) set.add(d);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [municipalReports, rentalReports, districtsProp]);
+  }, [rowsMunicipal, rowsRental, districtsProp]);
 
-  /* --------- ÁMBITO: fecha + campos específicos por tipo --------- */
   const rowsScope = useMemo(() => {
-    let rows = Array.isArray(activeReports) ? [...activeReports] : [];
-    const takeDate = (r) => (r?.fecha ? new Date(r.fecha).toISOString().slice(0, 10) : "");
-
-    // Filtros de fecha (aplican a ambos tipos)
-    if (startDate) rows = rows.filter((r) => { const d = takeDate(r); return d && d >= startDate; });
-    if (endDate)   rows = rows.filter((r) => { const d = takeDate(r); return d && d <= endDate; });
-
-    // Filtros específicos solo para reportes municipales
+    let rows = Array.isArray(activeReports) ? activeReports.slice() : [];
+    const takeDate = (r) =>
+      r?.fecha ? new Date(r.fecha).toISOString().slice(0, 10) : "";
+    if (startDate) rows = rows.filter((r) => takeDate(r) && takeDate(r) >= startDate);
+    if (endDate) rows = rows.filter((r) => takeDate(r) && takeDate(r) <= endDate);
     if (isMunicipal) {
-      if (distritoFilter) rows = rows.filter((r) => (r?.distrito || "").trim() === distritoFilter);
-      if (codigoFilter)   rows = rows.filter((r) => String(r?.codigoCamino ?? "").trim() === String(codigoFilter).trim());
+      if (distritoFilter)
+        rows = rows.filter((r) => (r?.distrito || "").trim() === distritoFilter);
+      if (codigoFilter)
+        rows = rows.filter(
+          (r) => String(r?.codigoCamino ?? "").trim() === String(codigoFilter).trim()
+        );
     }
-
     return rows;
   }, [activeReports, startDate, endDate, distritoFilter, codigoFilter, isMunicipal]);
 
-  /* --------- Tipos disponibles dentro del ámbito --------- */
   const tiposDisponibles = useMemo(() => {
     const set = new Set();
     rowsScope.forEach((r) => {
@@ -217,7 +365,6 @@ export default function ReportsTable({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rowsScope]);
 
-  /* --------- reset selecciones si el ámbito las invalida --------- */
   useEffect(() => {
     if (typeFilter && !tiposDisponibles.includes(typeFilter)) {
       setTypeFilter("");
@@ -226,159 +373,201 @@ export default function ReportsTable({
     }
   }, [tiposDisponibles, typeFilter]);
 
-  /* --------- variantes disponibles según tipo elegido (solo municipales) --------- */
   const variantesDisponibles = useMemo(() => {
     if (!isMunicipal) return [];
     const t = (typeFilter || "").toLowerCase();
     return VARIANT_OPTIONS_BY_TYPE[t] ?? [];
   }, [typeFilter, isMunicipal]);
 
-  /* --------- actividades disponibles para reportes de alquiler --------- */
   const actividadesDisponibles = useMemo(() => {
     if (isMunicipal) return [];
     const set = new Set();
     rowsScope.forEach((r) => {
-      if (r?.actividad && typeof r.actividad === 'string') {
-        set.add(r.actividad);
-      }
+      if (r?.actividad && typeof r.actividad === "string") set.add(r.actividad);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rowsScope, isMunicipal]);
 
-  /* --------- filas visibles = ÁMBITO + filtros específicos por tipo --------- */
   const filtered = useMemo(() => {
     let rows = rowsScope;
-    
     if (typeFilter) {
       const t = typeFilter.toLowerCase();
       rows = rows.filter((r) => getType(r) === t);
-      
-      // Solo aplicar filtro de variantes para reportes municipales
-      if (isMunicipal && VARIANT_OPTIONS_BY_TYPE[t] && variantFilter) {
+      if (isMunicipal && VARIANT_OPTIONS_BY_TYPE[t] && variantFilter)
         rows = rows.filter((r) => getVar(r) === variantFilter);
-      }
     }
-
-    // Filtro de actividad solo para reportes de alquiler
-    if (isRental && actividadFilter) {
+    if (isRental && actividadFilter)
       rows = rows.filter((r) => r?.actividad === actividadFilter);
-    }
-
     return rows;
   }, [rowsScope, typeFilter, variantFilter, actividadFilter, isMunicipal, isRental]);
 
-  /* --------- columnas dinámicas por tipo de reporte --------- */
-  // Para reportes municipales: lógica original
-  const tLower = (typeFilter || "").toLowerCase();
-  const isKmType = ["vagoneta", "cabezal", "cisterna"].includes(tLower);
-  const showEstacion = isMunicipal && !isKmType;
-  const metricHeader = isMunicipal 
-    ? (isKmType ? "Kilometraje" : "Horímetro")
-    : null; // Los reportes de alquiler no tienen métrica específica
+  /* columnas compactas */
+  const COLUMNS_MUNICIPAL = [
+    "ID",
+    "Operador",
+    "Maquinaria",
+    "Variante",
+    "Distrito",
+    "Código Camino",
+    "Fecha",
+  ];
+  const COLUMNS_RENTAL = [
+    "ID",
+    "Operador",
+    "Tipo Maquinaria",
+    "Placa",
+    "Actividad",
+    "Fecha",
+  ];
+  const columns = isMunicipal ? COLUMNS_MUNICIPAL : COLUMNS_RENTAL;
 
-  const isMaterial = variantFilter === "material" && (VARIANT_OPTIONS_BY_TYPE[tLower] || []).length > 0;
-  const isCarreta  = variantFilter === "carreta"  && (VARIANT_OPTIONS_BY_TYPE[tLower] || []).length > 0;
-  const isCisterna = variantFilter === "cisterna" && (VARIANT_OPTIONS_BY_TYPE[tLower] || []).length > 0;
+  /* celdas según columna */
+  function cellValueMunicipal(r, col) {
+    switch (col) {
+      case "ID":
+        return r.id;
+      case "Operador":
+        return r?.operador
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+              r.operador?.identification ? ` (${r.operador.identification})` : ""
+            }`
+          : r?.operadorId ?? "—";
+      case "Maquinaria":
+        if (r?.maquinaria) {
+          const tipo = r.maquinaria?.tipo ?? "";
+          const placa = r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : "";
+          return `${tipo}${placa}`;
+        }
+        return r?.maquinariaId ?? "—";
+      case "Variante":
+        return getVar(r) || "—";
+      case "Distrito":
+        return showText(r?.distrito);
+      case "Código Camino":
+        return showText(r?.codigoCamino);
+      case "Fecha":
+        return fmtDate(r?.fecha);
+      default:
+        return "—";
+    }
+  }
+  function cellValueRental(r, col) {
+    switch (col) {
+      case "ID":
+        return r.id;
+      case "Operador":
+        return r?.operador
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+              r.operador?.identification ? ` (${r.operador.identification})` : ""
+            }`
+          : r?.operadorId ?? "—";
+      case "Tipo Maquinaria":
+        return showText(r?.tipoMaquinaria);
+      case "Placa":
+        return showText(r?.placa);
+      case "Actividad":
+        return showText(r?.actividad);
+      case "Fecha":
+        return fmtDate(r?.fecha);
+      default:
+        return "—";
+    }
+  }
 
-  // Determinar qué columnas mostrar según el tipo de reporte
-  const getColumns = () => {
-    const baseColumns = ["Tipo", "ID", "Operador"];
-    
-    if (isMunicipal) {
-      return [
-        ...baseColumns,
-        "Maquinaria",
-        metricHeader,
-        "Diésel",
-        "Horas (Ord/Ext)",
-        ...(showEstacion ? ["Estación"] : []),
-        "Tipo actividad",
-        "Horario",
-        "Distrito",
-        "Código Camino",
-        "Viáticos",
-        "Fecha"
-      ];
-    } else {
-      // Reportes de alquiler: estructura más simple
-      return [
-        ...baseColumns,
-        "Tipo Maquinaria",
-        "Placa",
-        "Actividad",
-        "Cantidad",
-        "Horas",
-        "Estación",
-        "Boleta",
-        "Fuente",
-        "Fecha"
-      ];
+  /* paginación */
+  const totalPages = Math.max(1, Math.ceil(filtered.length / 10));
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
+  const pageRows = useMemo(
+    () => filtered.slice((page - 1) * 10, (page - 1) * 10 + 10),
+    [filtered, page]
+  );
+
+  /* -------- Ver (trae full antes de abrir) -------- */
+  const openView = async (row) => {
+    try {
+      const full = isMunicipal
+        ? await machineryService.getReportById(row.id)
+        : await machineryService.getRentalReportById(row.id);
+      setSelectedRow(full);
+      setDetailsOpen(true);
+    } catch (e) {
+      console.error("GET detalle ->", e?.response || e);
     }
   };
 
-  const columns = getColumns();
-
-  /* --------- paginado --------- */
-  const totalPages = Math.max(1, Math.ceil(filtered.length / 10));
-  useEffect(() => { if (page > totalPages) setPage(1); }, [totalPages, page]);
-  const pageRows = useMemo(() => filtered.slice((page - 1) * 10, (page - 1) * 10 + 10), [filtered, page]);
-
-  /* --------- modal "ver" y acciones --------- */
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
-
-  const openView = (row) => { setSelectedRow(row); setDetailsOpen(true); };
-  const handleEditClick = (row) => alert(`Editar ID ${row?.id}`);
-  const handleDeleteClick = (row) => {
-  const ok = window.confirm(`¿Eliminar reporte #${row?.id}?`);
-  if (ok) alert(`Eliminado ID ${row?.id}`);
-};
-
-
-  /* --------- export PDF (tal como lo tenías) --------- */
-  const exportPDF = () => {
-    const win = window.open("", "_blank");
-    const head = `
-      <style>
-        body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial; padding:16px;}
-        table { width:100%; border-collapse:collapse; font-size:12px; }
-        thead th { text-align:left; background:#f6f7f9; padding:8px; border-bottom:1px solid #e5e7eb;}
-        tbody td { padding:8px; border-bottom:1px solid #f1f5f9;}
-        h1 { font-size:18px; margin-bottom:12px; }
-      </style>`;
-    const rowsHtml = filtered.map((r) => {
-      const tipoReporte = activeReportTab === "municipal" ? "Municipal" : "Alquiler";
-      const rowData = isMunicipal 
-        ? getMunicipalRowData(r, showEstacion, isKmType)
-        : getRentalRowData(r);
-      
-      const cellsHtml = rowData.map(value => `<td>${value}</td>`).join("");
-      
-      return `<tr>
-        <td>${tipoReporte}</td>
-        ${cellsHtml}
-      </tr>`;
-    }).join("");
-
-    const baseThead = columns.map(col => `<th>${col}</th>`).join("");
-
-    win.document.write(`
-      <html><head><title>Reportes</title>${head}</head>
-      <body>
-        <h1>Reportes</h1>
-        <table>
-          <thead><tr>${baseThead}</tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </body></html>
-    `);
-    win.document.close(); win.focus(); win.print();
+  /* -------- eliminar -------- */
+  const askDelete = (row) => {
+    setConfirmDeleteId(row.id);
+    setDeleteOpen(true);
+  };
+  const confirmDelete = async () => {
+    const id = confirmDeleteId;
+    if (!id) return;
+    try {
+      if (isMunicipal) {
+        await machineryService.deleteReport(id, deleteReason.trim());
+        setRowsMunicipal((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        await machineryService.deleteRentalReport(id, deleteReason.trim());
+        setRowsRental((prev) => prev.filter((r) => r.id !== id));
+      }
+      setDeleteOpen(false);
+    } catch (err) {
+      console.error("DELETE report ->", err?.response || err);
+      alert("No se pudo eliminar el reporte");
+    } finally {
+      setConfirmDeleteId(null);
+      setDeleteReason("");
+    }
   };
 
-  /* ====================== RENDER ====================== */
+  /* -------- eliminados -------- */
+  const openDeleted = async () => {
+    try {
+      setLoadingDeleted(true);
+      const rows = isMunicipal
+        ? await machineryService.getDeletedMunicipal()
+        : await machineryService.getDeletedRental();
+      setDeletedRows(rows);
+      setDeletedOpen(true);
+    } catch (err) {
+      console.error("GET deleted ->", err?.response || err);
+    } finally {
+      setLoadingDeleted(false);
+    }
+  };
+
+  /* -------- export -------- */
+  const exportPDF = () => {
+    const win = window.open("", "_blank");
+    const head = `<style>body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;padding:16px}table{width:100%;border-collapse:collapse;font-size:12px}thead th{text-align:left;background:#f6f7f9;padding:8px;border-bottom:1px solid #e5e7eb}tbody td{padding:8px;border-bottom:1px solid #f1f5f9}h1{font-size:18px;margin-bottom:12px}</style>`;
+    const headers = ["Tipo", ...columns, "Acciones"];
+    const rowsHtml = filtered
+      .map((r) => {
+        const cells = columns
+          .map((c) =>
+            isMunicipal ? cellValueMunicipal(r, c) : cellValueRental(r, c)
+          )
+          .map((v) => `<td>${v}</td>`)
+          .join("");
+        return `<tr><td>${isMunicipal ? "Municipal" : "Alquiler"}</td>${cells}<td></td></tr>`;
+      })
+      .join("");
+    const thead = headers.map((h) => `<th>${h}</th>`).join("");
+    win.document.write(
+      `<html><head><title>Reportes</title>${head}</head><body><h1>Reportes</h1><table><thead><tr>${thead}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`
+    );
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  /* ---------------- render ---------------- */
   return (
     <div className="space-y-4">
-      {/* Pestañas para tipos de reportes */}
+      {/* Pestañas */}
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => {
@@ -389,7 +578,7 @@ export default function ReportsTable({
             setPage(1);
           }}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeReportTab === "municipal"
+            isMunicipal
               ? "border-blue-500 text-blue-600 bg-blue-50"
               : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
           }`}
@@ -397,11 +586,10 @@ export default function ReportsTable({
           <span className="flex items-center gap-2">
             🏛️ Reportes Municipales
             <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-              {municipalReports.length}
+              {rowsMunicipal.length}
             </span>
           </span>
         </button>
-        
         <button
           onClick={() => {
             setActiveReportTab("alquiler");
@@ -411,7 +599,7 @@ export default function ReportsTable({
             setPage(1);
           }}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeReportTab === "alquiler"
+            isRental
               ? "border-green-500 text-green-600 bg-green-50"
               : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
           }`}
@@ -419,15 +607,14 @@ export default function ReportsTable({
           <span className="flex items-center gap-2">
             🚛 Reportes de Alquiler
             <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-              {rentalReports.length}
+              {rowsRental.length}
             </span>
           </span>
         </button>
       </div>
 
-      {/* Fila 1: ÁMBITO */}
+      {/* Ámbito / filtros rápidos */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Fecha inicio */}
         <div className="w-40">
           <Input
             type="date"
@@ -436,132 +623,248 @@ export default function ReportsTable({
             onChange={(e) => {
               const v = e.target.value;
               setStartDate(v);
-              if (endDate && v && endDate < v) setEndDate(v); // forzar coherencia
+              if (endDate && v && endDate < v) setEndDate(v);
               setPage(1);
             }}
           />
         </div>
         <span className="text-gray-400">→</span>
-        {/* Fecha fin */}
         <div className="w-40">
           <Input
             type="date"
             value={endDate}
             min={startDate || undefined}
             max={today}
-            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
 
-        {/* Código camino - Solo para reportes municipales */}
         {isMunicipal && (
-          <div className="w-28">
-            <Input
-              placeholder="Cód."
-              value={codigoFilter}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
-                setCodigoFilter(digits);
-                setPage(1);
-              }}
-            />
-          </div>
-        )}
-
-        {/* Distrito - Solo para reportes municipales */}
-        {isMunicipal && (
-          <div className="w-56">
-            <Select
-              value={distritoFilter}
-              onValueChange={(v) => { setDistritoFilter(v); setPage(1); }}
-            >
-              <SelectTrigger><SelectValue placeholder="Distrito" /></SelectTrigger>
-              <SelectContent>
-                {districts.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
+          <>
+            <div className="w-28">
+              <Input
+                placeholder="Cód."
+                value={codigoFilter}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
+                  setCodigoFilter(digits);
+                  setPage(1);
+                }}
+              />
+            </div>
+            <div className="w-56">
+              <Select
+                value={distritoFilter}
+                onValueChange={(v) => {
+                  setDistritoFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Distrito" />
+                </SelectTrigger>
+                <SelectContent>
+                  {districts.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         )}
 
         <Button
           variant="ghost"
           onClick={() => {
-            setStartDate(""); setEndDate(""); setCodigoFilter(""); setDistritoFilter("");
-            setTypeFilter(""); setVariantFilter(""); setActividadFilter(""); setPage(1);
+            setStartDate("");
+            setEndDate("");
+            setCodigoFilter("");
+            setDistritoFilter("");
+            setTypeFilter("");
+            setVariantFilter("");
+            setActividadFilter("");
+            setPage(1);
           }}
         >
           Limpiar
         </Button>
 
         <div className="ml-auto flex gap-2">
-          <Button className="bg-green-500 hover:bg-green-600 text-white"
-            onClick={() => {
-              // Excel simple (sin estilos extra) — deja tu versión con estilos si ya la tienes funcionando
-              const headers = columns;
-              const rows = filtered.map((r) => {
-                const tipoReporte = activeReportTab === "municipal" ? "Municipal" : "Alquiler";
-                const rowData = isMunicipal 
-                  ? getMunicipalRowData(r, showEstacion, isKmType)
-                  : getRentalRowData(r);
-                
-                return [tipoReporte, ...rowData];
-              });
-              const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-              const wb = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(wb, ws, "Reportes");
-              const tipoArchivo = activeReportTab === "municipal" ? "municipales" : "alquiler";
-              XLSX.writeFile(wb, `reportes_${tipoArchivo}_${new Date().toISOString().slice(0,10)}.xlsx`);
-            }}>
-            Exportar a Excel
-          </Button>
-          <Button className="bg-red-500 hover:bg-red-600 text-white" onClick={exportPDF}>
-            Exportar a PDF
+          {/* Exportar a Excel (TODO completo, no solo visibles) */}
+<Button
+  className="bg-green-500 hover:bg-green-600 text-white"
+  onClick={() => {
+    // ¿Hay alguna fila que use Estación?
+    const withStation = filtered.some(usesStation);
+
+    const headersBase = [
+      "Tipo","ID","Operador","Maquinaria","Medidor","Diésel","Horas (Ord/Ext)"
+    ];
+    const headersTail = [
+      "Tipo actividad","Horario","Distrito","Código Camino","Viáticos","Fecha"
+    ];
+    const headers = withStation
+      ? [...headersBase, "Estación", ...headersTail]
+      : [...headersBase, ...headersTail];
+
+    const rows = filtered.map((r) => buildMunicipalExportRow(r, withStation));
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reportes");
+    XLSX.writeFile(
+      wb,
+      `reportes_${isMunicipal ? "municipales" : "alquiler"}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`
+    );
+  }}
+>
+  Exportar a Excel
+</Button>
+
+
+{/* Exportar a PDF (TODO completo, no solo visibles) */}
+<Button
+  className="bg-red-500 hover:bg-red-600 text-white"
+  onClick={() => {
+    const withStation = filtered.some(usesStation);
+
+    const headersBase = [
+      "Tipo","ID","Operador","Maquinaria","Medidor","Diésel","Horas (Ord/Ext)"
+    ];
+    const headersTail = [
+      "Tipo actividad","Horario","Distrito","Código Camino","Viáticos","Fecha"
+    ];
+    const headers = withStation
+      ? [...headersBase, "Estación", ...headersTail]
+      : [...headersBase, ...headersTail];
+
+    const rows = filtered.map((r) => buildMunicipalExportRow(r, withStation));
+
+    const win = window.open("", "_blank");
+    const head = `
+      <style>
+        body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;padding:16px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        thead th{text-align:left;background:#f6f7f9;padding:8px;border-bottom:1px solid #e5e7eb}
+        tbody td{padding:8px;border-bottom:1px solid #f1f5f9}
+        h1{font-size:18px;margin-bottom:12px}
+      </style>
+    `;
+    const thead = `<tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>`;
+    const tbody = rows
+      .map(row => `<tr>${row.map(v => `<td>${v ?? ""}</td>`).join("")}</tr>`)
+      .join("");
+
+    win.document.write(`
+      <html>
+        <head><title>Reportes</title>${head}</head>
+        <body>
+          <h1>Reportes</h1>
+          <table>
+            <thead>${thead}</thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  }}
+>
+  Exportar a PDF
+</Button>
+
+
+          <Button variant="secondary" onClick={openDeleted}>
+            Ver reportes eliminados
           </Button>
         </div>
       </div>
 
-      {/* Fila 2: Selección (Tipo / Variante) */}
+      {/* Selectores adicionales */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-64">
           <Select
             value={typeFilter}
-            onValueChange={(v) => { setTypeFilter(v); setVariantFilter(""); setActividadFilter(""); setPage(1); }}
+            onValueChange={(v) => {
+              setTypeFilter(v);
+              setVariantFilter("");
+              setActividadFilter("");
+              setPage(1);
+            }}
             disabled={tiposDisponibles.length === 0}
           >
             <SelectTrigger>
-              <SelectValue placeholder={tiposDisponibles.length ? "Seleccionar tipo" : "No hay tipos en el ámbito"} />
+              <SelectValue
+                placeholder={
+                  tiposDisponibles.length ? "Seleccionar tipo" : "No hay tipos en el ámbito"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
-              {tiposDisponibles.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+              {tiposDisponibles.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Variante - Solo para reportes municipales */}
-        {isMunicipal && typeFilter && variantesDisponibles.length > 0 && (
-          <div className="w-52">
-            <Select
-              value={variantFilter}
-              onValueChange={(v) => { setVariantFilter(v); setPage(1); }}
-            >
-              <SelectTrigger><SelectValue placeholder="Variante" /></SelectTrigger>
-              <SelectContent>
-                {variantesDisponibles.map((v) => (<SelectItem key={v} value={v}>{v}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        {isMunicipal &&
+          typeFilter &&
+          (VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] || []).length >
+            0 && (
+            <div className="w-52">
+              <Select
+                value={variantFilter}
+                onValueChange={(v) => {
+                  setVariantFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Variante" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] || []).map(
+                    (v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-        {/* Actividad - Solo para reportes de alquiler */}
-        {isRental && actividadesDisponibles.length > 0 && (
+        {isRental && (
           <div className="w-64">
             <Select
               value={actividadFilter}
-              onValueChange={(v) => { setActividadFilter(v); setPage(1); }}
+              onValueChange={(v) => {
+                setActividadFilter(v);
+                setPage(1);
+              }}
             >
-              <SelectTrigger><SelectValue placeholder="Filtrar por actividad" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por actividad" />
+              </SelectTrigger>
               <SelectContent>
-                {actividadesDisponibles.map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
+                {actividadesDisponibles.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -574,12 +877,39 @@ export default function ReportsTable({
 
       {/* Tabla */}
       <div className="rounded-2xl border bg-white overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
+          {/* anchos fijos */}
+          <colgroup>
+            <col className="w-28" /> {/* badge Tipo */}
+            {isMunicipal ? (
+              <>
+                <col className="w-16" /> {/* ID */}
+                <col className="w-64" /> {/* Operador */}
+                <col className="w-56" /> {/* Maquinaria */}
+                <col className="w-24" /> {/* Variante */}
+                <col className="w-40" /> {/* Distrito */}
+                <col className="w-32" /> {/* Código Camino */}
+                <col className="w-28" /> {/* Fecha */}
+              </>
+            ) : (
+              <>
+                <col className="w-16" /> {/* ID */}
+                <col className="w-64" /> {/* Operador */}
+                <col className="w-40" /> {/* Tipo Maquinaria */}
+                <col className="w-40" /> {/* Placa */}
+                <col className="w-40" /> {/* Actividad */}
+                <col className="w-28" /> {/* Fecha */}
+              </>
+            )}
+            <col className="w-28" /> {/* Acciones */}
+          </colgroup>
+
           <thead className="bg-gray-50 text-gray-700">
             <tr>
-              {columns.map((column) => (
-                <th key={column} className="px-4 py-3 text-left font-medium">
-                  {column}
+              <th className="px-4 py-3 text-left font-medium">Tipo</th>
+              {columns.map((c) => (
+                <th key={c} className="px-4 py-3 text-left font-medium">
+                  {c}
                 </th>
               ))}
               <th className="px-4 py-3 text-right font-medium">Acciones</th>
@@ -587,66 +917,70 @@ export default function ReportsTable({
           </thead>
 
           <tbody>
-            {pageRows.map((r) => {
-              const rowData = isMunicipal 
-                ? getMunicipalRowData(r, showEstacion, isKmType)
-                : getRentalRowData(r);
-
-              return (
-                <tr key={r.id} className="border-t hover:bg-gray-50">
-                  {/* Badge de tipo */}
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      activeReportTab === "municipal" 
-                        ? "bg-blue-100 text-blue-800" 
+            {pageRows.map((r) => (
+              <tr key={r.id} className="border-t hover:bg-gray-50">
+                {/* badge */}
+                <td className="px-4 py-3">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      isMunicipal
+                        ? "bg-blue-100 text-blue-800"
                         : "bg-green-100 text-green-800"
-                    }`}>
-                      {activeReportTab === "municipal" ? "🏛️ Municipal" : "🚛 Alquiler"}
-                    </span>
-                  </td>
-                  
-                  {/* Datos dinámicos */}
-                  {rowData.map((value, index) => (
-                    <td key={index} className="px-4 py-3">{value}</td>
-                  ))}
+                    }`}
+                  >
+                    {isMunicipal ? "🏛️ Municipal" : "🚛 Alquiler"}
+                  </span>
+                </td>
 
-                  {/* Acciones */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openView(r)}
-                        className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
-                        title="Ver" aria-label="Ver"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEditClick(r)}
-                        className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
-                        title="Editar" aria-label="Editar"
-                      >
-                        <Pencil size={18} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteClick(r)}
-                        className="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                        title="Eliminar" aria-label="Eliminar"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                {/* celdas compactas */}
+                {columns.map((c) => (
+                  <td
+                    key={c}
+                    className="px-4 py-3 whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={
+                      isMunicipal
+                        ? String(cellValueMunicipal(r, c))
+                        : String(cellValueRental(r, c))
+                    }
+                  >
+                    {isMunicipal ? cellValueMunicipal(r, c) : cellValueRental(r, c)}
                   </td>
-                </tr>
-              );
-            })}
+                ))}
+
+                {/* acciones */}
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openView(r)}
+                      className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
+                      title="Ver"
+                      aria-label="Ver"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => askDelete(r)}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50"
+                      title="Eliminar"
+                      aria-label="Eliminar"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
 
             {filtered.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={columns.length + 1}>
-                  No hay reportes {activeReportTab === "municipal" ? "municipales" : "de alquiler"} con ese filtro.
+                <td
+                  className="px-4 py-6 text-center text-gray-500"
+                  colSpan={columns.length + 2}
+                >
+                  No hay reportes {isMunicipal ? "municipales" : "de alquiler"} con
+                  ese filtro.
                 </td>
               </tr>
             )}
@@ -656,117 +990,298 @@ export default function ReportsTable({
 
       {/* Paginación */}
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-600">Página {page} de {totalPages}</span>
+        <span className="text-sm text-gray-600">
+          Página {page} de {totalPages}
+        </span>
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+          <Button
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
             Anterior
           </Button>
-          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+          <Button
+            variant="secondary"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
             Siguiente
           </Button>
         </div>
       </div>
 
-      {/* Modal VER */}
+      {/* Modal VER (tu bloque completo, sin cambios funcionales) */}
+      {/* ... ⬇️ tu modal tal como lo tenías, incluido el render condicional de Subfuente/Boleta ... */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles del reporte {selectedRow?.id ? `#${selectedRow.id}` : ""}</DialogTitle>
-            <DialogDescription>Información completa del registro seleccionado.</DialogDescription>
+            <DialogTitle>
+              Detalles del reporte {selectedRow?.id ? `#${selectedRow.id}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Información completa del registro seleccionado.
+            </DialogDescription>
           </DialogHeader>
 
-          {selectedRow && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field
-                  label="Operador"
-                  value={
-                    selectedRow?.operador
-                      ? `${selectedRow.operador?.name ?? ""} ${selectedRow.operador?.last ?? ""}${selectedRow.operador?.identification ? ` (${selectedRow.operador.identification})` : ""}`
-                      : selectedRow?.operadorId ?? "—"
-                  }
-                />
-                <Field
-                  label="Maquinaria"
-                  value={
-                    selectedRow?.maquinaria
-                      ? `${selectedRow.maquinaria?.tipo ?? ""}${selectedRow.maquinaria?.placa ? ` - ${selectedRow.maquinaria.placa}` : ""}`
-                      : selectedRow?.maquinariaId ?? "—"
-                  }
-                />
-                <Field
-                  label={["vagoneta","cabezal","cisterna"].includes(String(selectedRow?.maquinaria?.tipo || "").toLowerCase()) ? "Kilometraje" : "Horímetro"}
-                  value={
-                    ["vagoneta","cabezal","cisterna"].includes(String(selectedRow?.maquinaria?.tipo || "").toLowerCase())
-                      ? (selectedRow?.kilometraje ?? selectedRow?.detalles?.kilometraje ?? "—")
-                      : (selectedRow?.horimetro ?? selectedRow?.detalles?.horimetro ?? "—")
-                  }
-                />
-                <Field
-                  label="Estación"
-                  value={(() => {
-                    if (selectedRow?.estacion) return String(selectedRow.estacion);
-                    const d = selectedRow?.estacionDesde ?? selectedRow?.detalles?.estacionDesde;
-                    const h = selectedRow?.estacionHasta ?? selectedRow?.detalles?.estacionHasta;
-                    if (d != null || h != null) return `${d ?? "—"}+${h ?? "—"}`;
-                    return "—";
-                  })()}
-                />
-              </div>
+          {selectedRow && (() => {
+  const r = selectedRow;
+  const t = getType(r);               // "vagoneta", "cabezal", "niveladora", etc.
+  const v = getVar(r);
+  const d = r.detalles || {};
+  const kmType = ["vagoneta","cabezal","cisterna"].includes(t);
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field label="Tipo actividad" value={selectedRow?.tipoActividad ?? selectedRow?.actividad ?? "—"} />
-                <Field
-                  label="Horario"
-                  value={(() => {
-                    const ini = selectedRow?.horaInicio ?? selectedRow?.detalles?.horaInicio;
-                    const fin = selectedRow?.horaFin ?? selectedRow?.detalles?.horaFin;
-                    return (ini || fin) ? `${ini ?? "—"} – ${fin ?? "—"}` : "—";
-                  })()}
-                />
-                <Field label="Diésel" value={selectedRow?.diesel ?? selectedRow?.combustible ?? "—"} />
-                <Field label="Horas (Ord/Ext)" value={`${selectedRow?.horasOrd ?? "—"} / ${selectedRow?.horasExt ?? "—"}`} />
-                <Field label="Distrito" value={selectedRow?.distrito ?? "—"} />
-                <Field label="Código Camino" value={selectedRow?.codigoCamino ?? "—"} />
-                <Field label="Viáticos" value={selectedRow?.viaticos ?? "—"} />
-                <Field label="Fecha" value={fmtDate(selectedRow?.fecha)} />
-              </div>
+  // ✨ Reglas por tipo
+  const typesWithBoletas   = ["vagoneta","cabezal"];
+  const typesWithEstacion  = ["niveladora"];            // agrega aquí otros que usen estación
+  const typesWithVariante  = ["vagoneta","cabezal","cisterna"]; // niveladora NO lleva variante
 
-              <div className="border rounded-lg p-3">
-                <div className="text-sm font-semibold mb-2">Detalles</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(selectedRow?.detalles?.tipoMaterial ||
-                    selectedRow?.detalles?.cantidadMaterial != null ||
-                    selectedRow?.detalles?.fuente ||
-                    selectedRow?.detalles?.boleta) && (
-                    <>
-                      <Field label="Tipo material" value={selectedRow?.detalles?.tipoMaterial ?? "—"} />
-                      <Field label="Cantidad (m³)" value={selectedRow?.detalles?.cantidadMaterial ?? "—"} />
-                      <Field label="Fuente" value={selectedRow?.detalles?.fuente ?? "—"} />
-                      <Field label="Boleta" value={selectedRow?.detalles?.boleta ?? "—"} />
-                    </>
+  const showBoletas  = typesWithBoletas.includes(t);
+  const showEstacion = typesWithEstacion.includes(t);
+  const showVariante = typesWithVariante.includes(t);
+
+  const KV = ({label, value}) => (
+    <div className="bg-white border rounded-lg p-3">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="font-medium break-words">{(value ?? value === 0) ? value : "—"}</div>
+    </div>
+  );
+
+  // ✨ Campos base (solo se agregan los que aplican)
+  const base = [
+    { label: "Operador", value: r?.operador
+        ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
+        : r?.operadorId },
+
+    { label: "Maquinaria", value: r?.maquinaria
+        ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
+        : r?.maquinariaId },
+
+    { label: kmType ? "Kilometraje" : "Horímetro",
+      value: kmType
+        ? (r?.kilometraje ?? d?.kilometraje)
+        : (r?.horimetro ?? d?.horimetro) },
+
+    { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
+
+    { label: "Horario", value: (() => {
+        const ini = r?.horaInicio ?? d?.horaInicio;
+        const fin = r?.horaFin   ?? d?.horaFin;
+        return (ini || fin) ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
+      })()
+    },
+
+    { label: "Diésel", value: r?.diesel ?? r?.combustible },
+
+    { label: "Horas (Ord/Ext)", value:
+        (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
+        (r?.horasExt ?? r?.horas_ext ?? null) !== null
+          ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${r?.horasExt ?? r?.horas_ext ?? "—"}`
+          : null },
+
+    { label: "Distrito", value: r?.distrito },
+    { label: "Código Camino", value: r?.codigoCamino },
+    { label: "Viáticos", value: r?.viaticos },
+    { label: "Fecha", value: fmtDate(r?.fecha) },
+  ];
+
+  // Variante SOLO si aplica
+  if (showVariante) base.push({ label: "Variante", value: v || null });
+
+  // Estación SOLO si aplica (niveladora, etc.)
+  if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
+
+  // Placa extra si la necesitas como campo aparte (opcional)
+  // base.push({ label: "Placa", value: r?.maquinaria?.placa ?? r?.placa ?? d?.placa ?? null });
+
+  // --- Render ---
+  const boletas = getBoletasArr(r);
+  const totalM3 = getTotalM3(r);
+  const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
+  const showSubfuenteCol = boletas.some((b) => isRioOTajo(b?.fuente));
+  const showBoletaCol    = boletas.some((b) => !isRioOTajo(b?.fuente));
+
+  return (
+    <div className="space-y-4">
+      {/* Grid de campos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {base.map((k, i) => <KV key={`b-${i}`} {...k} />)}
+      </div>
+
+      {/* Detalle de boleta SOLO si aplica (vagoneta/cabezal) */}
+      {showBoletas && (
+        <div className="border rounded-lg p-3">
+          <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
+
+          <div className="mb-3">
+            <div className="bg-white border rounded-lg p-3">
+              <div className="text-xs text-gray-500">Total m<sup>3</sup> del día</div>
+              <div className="font-medium">{showNum(totalM3)}</div>
+            </div>
+          </div>
+
+          {Array.isArray(boletas) && boletas.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-2">#</th>
+                    <th className="text-left px-3 py-2">Tipo material</th>
+                    <th className="text-left px-3 py-2">Fuente</th>
+                    {showSubfuenteCol && <th className="text-left px-3 py-2">Subfuente</th>}
+                    {showBoletaCol    && <th className="text-left px-3 py-2">Boleta</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {boletas.map((b, i) => {
+                    const rioOTajo = isRioOTajo(b?.fuente);
+                    return (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-2">{i + 1}</td>
+                        <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
+                        <td className="px-3 py-2">{showText(b?.fuente)}</td>
+                        {showSubfuenteCol && (
+                          <td className="px-3 py-2">{rioOTajo ? showText(b?.subFuente) : "—"}</td>
+                        )}
+                        {showBoletaCol && (
+                          <td className="px-3 py-2">{rioOTajo ? "—" : showText(b?.boleta)}</td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Sin boletas registradas.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+})()}
+
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo ELIMINAR */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(v) => {
+          setDeleteOpen(v);
+          if (!v) {
+            setConfirmDeleteId(null);
+            setDeleteReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Eliminar reporte #{confirmDeleteId}</DialogTitle>
+            <DialogDescription>
+              Indica la justificación de la eliminación. Esta quedará registrada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm">Motivo</label>
+            <textarea
+              className="w-full border rounded-md p-2 min-h-[100px]"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="Ej.: Boleta duplicada / error de digitación / etc."
+            />
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setDeleteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteReason.trim()}
+              onClick={async () => {
+                await confirmDelete();
+                setDeleteOpen(false);
+              }}
+            >
+              Eliminar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Eliminados */}
+      <Dialog open={deletedOpen} onOpenChange={setDeletedOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              Reportes eliminados ({isMunicipal ? "Municipales" : "Alquiler"})
+            </DialogTitle>
+            <DialogDescription>
+              Motivo, fecha de eliminación y quién lo realizó.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingDeleted ? (
+            <div className="p-6 text-center text-sm text-gray-500">Cargando…</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">ID</th>
+                    <th className="px-3 py-2 text-left">Eliminado por</th>
+                    <th className="px-3 py-2 text-left">Fecha eliminación</th>
+                    <th className="px-3 py-2 text-left">Motivo</th>
+                    <th className="px-3 py-2 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deletedRows.map((r) => (
+                    <tr key={r.id} className="border-t">
+                      <td className="px-3 py-2">#{r.id}</td>
+                      <td className="px-3 py-2">{r.deletedBy?.name ?? r.deletedById ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        {r.deletedAt ? new Date(r.deletedAt).toLocaleString() : "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-pre-wrap">
+                        {r.deleteReason ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          variant="secondary"
+                          onClick={async () => {
+                            try {
+                              let restored;
+                              if (isMunicipal) {
+                                restored = await machineryService.restoreReport(r.id);
+                                setRowsMunicipal((prev) =>
+                                  [restored, ...prev.filter((x) => x.id !== restored.id)]
+                                );
+                              } else {
+                                restored = await machineryService.restoreRentalReport(r.id);
+                                setRowsRental((prev) =>
+                                  [restored, ...prev.filter((x) => x.id !== restored.id)]
+                                );
+                              }
+                              setDeletedRows((prev) => prev.filter((x) => x.id !== r.id));
+                            } catch {
+                              alert("No se pudo restaurar.");
+                            }
+                          }}
+                        >
+                          Restaurar
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {deletedRows.length === 0 && (
+                    <tr>
+                      <td className="px-3 py-6 text-center text-gray-500" colSpan={5}>
+                        No hay eliminados.
+                      </td>
+                    </tr>
                   )}
-
-                  {(selectedRow?.detalles?.placaCarreta ||
-                    selectedRow?.detalles?.tipoCarga ||
-                    selectedRow?.detalles?.destino ||
-                    selectedRow?.detalles?.placaMaquinariaLlevada) && (
-                    <>
-                      <Field label="Placa carreta" value={selectedRow?.detalles?.placaCarreta ?? "—"} />
-                      <Field label="Tipo carga" value={selectedRow?.detalles?.tipoCarga ?? "—"} />
-                      <Field label="Destino" value={selectedRow?.detalles?.destino ?? "—"} />
-                      <Field label="Placa maquinaria llevada" value={selectedRow?.detalles?.placaMaquinariaLlevada ?? "—"} />
-                    </>
-                  )}
-
-                  {(selectedRow?.detalles?.cantidadLiquido != null || selectedRow?.detalles?.fuente) && (
-                    <>
-                      <Field label="Cantidad líquido (L)" value={selectedRow?.detalles?.cantidadLiquido ?? "—"} />
-                      <Field label="Fuente" value={selectedRow?.detalles?.fuente ?? "—"} />
-                    </>
-                  )}
-                </div>
-              </div>
+                </tbody>
+              </table>
             </div>
           )}
         </DialogContent>

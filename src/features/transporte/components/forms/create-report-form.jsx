@@ -1,3 +1,5 @@
+
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -9,10 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
 import { machineryFields } from "@/utils/machinery-fields";
-import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions } from "@/utils/districts";
+import {
+  districts,
+  materialTypes,
+  activityTypes,
+  cargoTypes,
+  activityOptions,
+  sourceOptions,
+  rivers,
+  tajosBase,
+} from "@/utils/districts";
 import { useToast } from "@/hooks/use-toast";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
+
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 export default function CreateReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
@@ -24,12 +37,18 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
   const [totalHours, setTotalHours] = useState("");
+
   const normKey = (s = "") =>
-  String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
   const [lastCounters, setLastCounters] = useState({
     horimetro: null,
+    kilometraje: null,
     estacionHasta: null,
+    estacionUpdatedAt: null,
+    // opcionales si tu API los devuelve:
+    estacionDesde: null,
+    estacionAvance: null,
   });
 
   const INITIAL_FORM = {
@@ -51,6 +70,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
     tipoMaterial: "",
     cantidadMaterial: "",
     fuente: "",
+    subFuente: "",
     boleta: "",
     cantidadLiquido: "",
     placaCarreta: "",
@@ -61,8 +81,14 @@ export default function CreateReportForm({ onGoToCatalog }) {
     tipoActividad: "",
     horaInicio: "",
     horaFin: "",
-    // NUEVO:
     placaMaquinariaLlevada: "",
+
+    _tajos: tajosBase,
+    _nuevoTajo: "",
+
+    // flujo material
+    totalCantidadMaterial: "",
+    boletas: [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
 
@@ -78,29 +104,17 @@ export default function CreateReportForm({ onGoToCatalog }) {
 
   const TRAILER_PLATES = {
     vagoneta: { carreta: ["SM 5765"] },
-    cabezal: {
-      material: ["SM 8803", "SM 8844"],
-      cisterna: ["SM 8678"],
-      carreta: ["SM 8753"],
-    },
+    cabezal: { material: ["SM 8803", "SM 8844"], cisterna: ["SM 8678"], carreta: ["SM 8753"] },
   };
 
-   const requiresField = (name) =>
-   getDynamicFields().some((f) => normKey(f) === normKey(name));
-
-  // Mostrar campo Boleta en vagoneta/material y cabezal/material
+  // Mostrar boleta global solo en vagoneta/cabezal material y cuando la fuente NO sea Río/Tajo
   const showBoletaField = useCallback(() => {
     const t = (selectedMachineryType || "").toLowerCase();
     const v = (selectedVariant || "").toLowerCase();
-    return (t === "vagoneta" && v === "material") || (t === "cabezal" && v === "material");
-  }, [selectedMachineryType, selectedVariant]);
-
-  // Requerir boleta solo para vagoneta/material con diésel > 0
-  const mustRequireBoleta = useCallback(() => {
-    const t = (selectedMachineryType || "").toLowerCase();
-    const v = (selectedVariant || "").toLowerCase();
-    return t === "vagoneta" && v === "material" && Number(formData.combustible) > 0;
-  }, [selectedMachineryType, selectedVariant, formData.combustible]);
+    const byType = (t === "vagoneta" && v === "material") || (t === "cabezal" && v === "material");
+    const hideByFuente = formData.fuente === "Ríos" || formData.fuente === "Tajo";
+    return byType && !hideByFuente;
+  }, [selectedMachineryType, selectedVariant, formData.fuente]);
 
   // ====== DERIVADOS / CALLBACKS ======
   const getPlacaById = useCallback(
@@ -119,17 +133,14 @@ export default function CreateReportForm({ onGoToCatalog }) {
 
   const placasOptions = useMemo(() => {
     let list = Array.isArray(machineryList) ? machineryList : [];
-
     if (selectedMachineryType) {
       const t = selectedMachineryType.toLowerCase();
       list = list.filter((m) => String(m.tipo || "").toLowerCase() === t);
     }
-
     if (selectedVariant) {
       const v = selectedVariant.toLowerCase();
       list = list.filter((m) => rolesOf(m).includes(v));
     }
-
     return list
       .filter((m) => m.placa || m.plate)
       .map((m) => ({ id: String(m.id), placa: String(m.placa ?? m.plate) }));
@@ -138,11 +149,9 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const activityChoices = useMemo(() => {
     const t = (selectedMachineryType || "").toLowerCase();
     const v = (selectedVariant || "").toLowerCase();
-
     if (t && activityOptions[t]) {
       const byVariant = activityOptions[t][v];
       if (byVariant && byVariant.length) return byVariant;
-
       const def = activityOptions[t].default;
       if (def && def.length) return def;
     }
@@ -152,11 +161,10 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const getFuenteOptions = useCallback(() => {
     const t = String(selectedMachineryType || "").toLowerCase();
     const v = String(selectedVariant || "").toLowerCase();
-
     const entry = sourceOptions[t];
-    if (Array.isArray(entry)) return entry; // tipo sin variantes
-    if (entry && Array.isArray(entry[v])) return entry[v]; // tipo con variantes
-    return sourceOptions.default; // fallback
+    if (Array.isArray(entry)) return entry;
+    if (entry && Array.isArray(entry[v])) return entry[v];
+    return sourceOptions.default;
   }, [selectedMachineryType, selectedVariant]);
 
   // ====== EFECTOS ======
@@ -169,7 +177,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
         console.error("[CreateReportForm] getAllMachinery error:", e);
         toast({
           title: "No se pudieron cargar las maquinarias",
-          description: "Verifica tu conexión o el inicio de sesión.",
+          description: "Verifica tu conexión.",
           variant: "destructive",
         });
       }
@@ -185,20 +193,22 @@ export default function CreateReportForm({ onGoToCatalog }) {
         console.error("[CreateReportForm] getAllOperators error:", e);
         toast({
           title: "No se pudieron cargar los operadores",
-          description: "Verifica tu conexión o el inicio de sesión.",
+          description: "Verifica tu conexión.",
           variant: "destructive",
         });
       }
     })();
   }, [toast]);
 
+  // Si la fuente cambia a una que no está disponible, limpiar
   useEffect(() => {
     const opts = getFuenteOptions();
     if (formData.fuente && !opts.includes(formData.fuente)) {
-      setFormData((p) => ({ ...p, fuente: "" }));
+      setFormData((p) => ({ ...p, fuente: "", subFuente: "" }));
     }
   }, [getFuenteOptions, formData.fuente]);
 
+  // Sugerir/validar placa de carreta
   useEffect(() => {
     const opts = getTrailerOptions();
     setFormData((p) => {
@@ -207,6 +217,42 @@ export default function CreateReportForm({ onGoToCatalog }) {
       return p;
     });
   }, [getTrailerOptions]);
+
+  // ====== BOLETAS HELPERS ======
+  const addBoleta = () => {
+    setFormData((p) => ({
+      ...p,
+      boletas: [...(p.boletas || []), { boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
+    }));
+  };
+
+  const removeBoleta = (idx) => {
+    setFormData((p) => {
+      const next = [...(p.boletas || [])];
+      next.splice(idx, 1);
+      return {
+        ...p,
+        boletas: next.length ? next : [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
+      };
+    });
+  };
+
+  const updateBoleta = (idx, patch) => {
+    setFormData((p) => {
+      const next = [...(p.boletas || [])];
+      const cur = next[idx] || { boleta: "", tipoMaterial: "", fuente: "", subFuente: "" };
+      next[idx] = { ...cur, ...patch };
+      return { ...p, boletas: next };
+    });
+  };
+
+  // Útil para saber si estamos en material (vagoneta/cabezal)
+ function isMaterialFlow() {
+  const t = (selectedMachineryType || "").toLowerCase();
+  const v = (selectedVariant || "").toLowerCase();
+  return ["vagoneta", "cabezal"].includes(t) && v === "material";
+}
+
 
   // ====== HANDLERS ======
   const handleTotalHoursChange = (e) => {
@@ -223,10 +269,53 @@ export default function CreateReportForm({ onGoToCatalog }) {
     setFormData((p) => ({ ...p, horasOrd: ord, horasExt: ext }));
   };
 
-  const handleInputChange = (e) => {
+  const handleEditMunicipal = async (row) => {
+  try {
+    const data = await machineryService.getReportById(row.id);
+    // normaliza detalles
+    if (!data.detalles) data.detalles = {};
+    if (!Array.isArray(data.detalles.boletas)) data.detalles.boletas = [];
+    setEditingRow({ ...data, _kind: "municipal" });
+    setEditOpen(true);
+  } catch (err) {
+    console.error("GET /machinery/report/:id ->", err?.response || err);
+  }
+};
+
+  const handleInputChange = async (e) => {
     const { name, value } = e.target;
 
-    if (name === "codigoCamino") return setFormData((p) => ({ ...p, codigoCamino: onlyDigitsMax(value, 3) }));
+    if (name === "codigoCamino") {
+      const codigo = onlyDigitsMax(value, 3);
+      setFormData((p) => ({ ...p, codigoCamino: codigo }));
+      if (formData.maquinariaId) {
+        try {
+          const c = await machineryService.getLastCounters(formData.maquinariaId, codigo);
+          setLastCounters({
+            horimetro: c?.horimetro ?? null,
+            kilometraje: c?.kilometraje ?? null,
+            estacionHasta: c?.estacionHasta ?? null,
+            estacionUpdatedAt: c?.estacionUpdatedAt ?? null,
+            estacionDesde: c?.estacionDesde ?? null,
+            estacionAvance: c?.estacionAvance ?? null,
+          });
+          const isStale =
+            c?.estacionUpdatedAt &&
+            Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+          setFormData((p) => ({
+            ...p,
+            estacionDesde:
+              requiresField("Estacion") && c?.estacionHasta != null
+                ? isStale
+                  ? "0"
+                  : String(c.estacionHasta)
+                : p.estacionDesde,
+          }));
+        } catch {}
+      }
+      return;
+    }
+
     if (name === "kilometraje") return setFormData((p) => ({ ...p, kilometraje: onlyDigitsMax(value, 6) }));
     if (name === "viaticos") return setFormData((p) => ({ ...p, viaticos: onlyDigitsMax(value, 5) }));
     if (name === "cantidadMaterial") return setFormData((p) => ({ ...p, cantidadMaterial: onlyDigitsMax(value, 2) }));
@@ -249,6 +338,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
       tipoMaterial: "",
       cantidadMaterial: "",
       fuente: "",
+      subFuente: "",
       boleta: "",
       cantidadLiquido: "",
       placaCarreta: "",
@@ -262,72 +352,97 @@ export default function CreateReportForm({ onGoToCatalog }) {
     if (name === "tipoMaquinaria") {
       setSelectedMachineryType(value);
       setSelectedVariant("");
-      //setFormData((prev) => clearVariantSpecific({ ...prev, placa: "", maquinariaId: 0 }));
       setFormData((prev) => clearVariantSpecific({ ...prev, placa: "", maquinariaId: 0, tipoActividad: "" }));
-      setLastCounters({ horimetro: null, estacionHasta: null });
+      setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
       return;
     }
 
     if (name === "variant") {
       setSelectedVariant(value);
-      //setFormData((prev) => clearVariantSpecific({ ...prev, variant: value, placa: "", maquinariaId: 0 }));
       setFormData((prev) => clearVariantSpecific({ ...prev, variant: value, placa: "", maquinariaId: 0, tipoActividad: "" }));
-      setLastCounters({ horimetro: null, estacionHasta: null });
+      setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
       return;
     }
 
     if (name === "placaId") {
+      const id = Number(value);
+      // 1) guarda id y placa
       setFormData((prev) => ({
         ...prev,
-        maquinariaId: Number(value),
-        placa: getPlacaById(value),
+        maquinariaId: id,
+        placa: getPlacaById(id),
       }));
 
       try {
-        const counters = await machineryService.getLastCounters(Number(value));
-        const h = counters?.horimetro ?? null;
-        const est = counters?.estacionHasta ?? null;
+        // 2) counters (pasando código si existe)
+        const c = await machineryService.getLastCounters(id, formData.codigoCamino || undefined);
 
-        setLastCounters({ horimetro: h, estacionHasta: est });
+        setLastCounters({
+          horimetro: c?.horimetro ?? null,
+          kilometraje: c?.kilometraje ?? null,
+          estacionHasta: c?.estacionHasta ?? null,
+          estacionUpdatedAt: c?.estacionUpdatedAt ?? null,
+          estacionDesde: c?.estacionDesde ?? null,
+          estacionAvance: c?.estacionAvance ?? null,
+        });
 
+        const isStale =
+          c?.estacionUpdatedAt &&
+          Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+
+        // 3) precarga estaciónDesde si aplica
         setFormData((p) => ({
           ...p,
-          estacionDesde: requiresField("Estacion") && est != null ? String(est) : p.estacionDesde ?? "",
+          estacionDesde:
+            requiresField("Estacion") && c?.estacionHasta != null
+              ? isStale
+                ? "0"
+                : String(c.estacionHasta)
+              : p.estacionDesde || "",
           horimetro: p.horimetro ?? "",
         }));
-      } catch {
-        setLastCounters({ horimetro: null, estacionHasta: null });
+      } catch (e) {
+        setLastCounters({
+          horimetro: null,
+          kilometraje: null,
+          estacionHasta: null,
+          estacionUpdatedAt: null,
+          estacionDesde: null,
+          estacionAvance: null,
+        });
       }
+      return;
     }
   };
 
-  const getDynamicFields = () => {
+  function getDynamicFields () {
     if (!selectedMachineryType) return [];
     const mach = machineryFields[selectedMachineryType];
     if (!mach) return [];
 
     let fields = [];
-    if (mach.variantes && selectedVariant) {
-      fields = [...(mach.variantes[selectedVariant] || [])];
-    } else {
-      fields = [...(mach.campos || [])];
+    if (mach.variantes && selectedVariant) fields = [...(mach.variantes[selectedVariant] || [])];
+    else fields = [...(mach.campos || [])];
+
+    // En flujo material quitamos Boleta y Cantidad material (se manejan en boletas dinámicas)
+    if (["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
+        (selectedVariant || "").toLowerCase() === "material") {
+      fields = fields.filter((f) => {
+        const k = normKey(f);
+        return k !== "boleta" && k !== "cantidad material";
+      });
     }
 
     const t = (selectedMachineryType || "").toLowerCase();
     const v = (selectedVariant || "").toLowerCase();
     const needsTrailer = !!TRAILER_PLATES[t]?.[v];
 
-    if (needsTrailer) {
-      const hasPlaca = fields.some((f) => f?.toLowerCase().trim() === "placa carreta");
-      if (!hasPlaca) fields.push("Placa carreta");
-    }
+    if (needsTrailer && !fields.some((f) => f?.toLowerCase().trim() === "placa carreta"))
+      fields.push("Placa carreta");
+    if (v === "carreta" && !fields.some((f) => f?.toLowerCase().includes("placa maquinaria llevada")))
+      fields.push("Placa maquinaria llevada");
 
-    // Para carreta, agregamos “Placa maquinaria llevada” si no está
-    if (v === "carreta") {
-      const hasCarry = fields.some((f) => f?.toLowerCase().includes("placa maquinaria llevada"));
-      if (!hasCarry) fields.push("Placa maquinaria llevada");
-    }
-
+    // dedupe
     const seen = new Set();
     fields = fields.filter((f) => {
       const k = normKey(f);
@@ -339,9 +454,11 @@ export default function CreateReportForm({ onGoToCatalog }) {
     return fields;
   };
 
-   const renderDynamicField = (fieldName) => {
-   const key = normKey(fieldName);
-   switch (key) {
+  const requiresField = (name) => getDynamicFields().some((f) => normKey(f) === normKey(name));
+
+  const renderDynamicField = (fieldName) => {
+    const key = normKey(fieldName);
+    switch (key) {
       case "distrito":
         return (
           <div className="space-y-2" key={fieldName}>
@@ -454,44 +571,88 @@ export default function CreateReportForm({ onGoToCatalog }) {
           </div>
         );
 
-      case "estacion":                // 👈 ahora matchea “Estación” y “Estacion”
-      return (
-        <div className="space-y-2" key={fieldName}>
-          <Label>Estación</Label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      case "kilometraje":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="kilometraje">
+              Kilometraje{" "}
+              {lastCounters.kilometraje !== null && (
+                <span className="text-xs text-muted-foreground">(último: {lastCounters.kilometraje})</span>
+              )}
+            </Label>
             <Input
-              name="estacionDesde"
+              id="kilometraje"
+              name="kilometraje"
               inputMode="numeric"
               pattern="\d*"
               maxLength={6}
-              placeholder="Desde (m)"
-              value={formData.estacionDesde}
+              placeholder="000000"
+              value={formData.kilometraje ?? ""}
               onChange={handleInputChange}
             />
-            <Input
-              name="estacionHasta"
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={6}
-              placeholder="Hasta (m)"
-              value={formData.estacionHasta}
-              onChange={handleInputChange}
-            />
-            <div className="flex items-center text-sm text-muted-foreground">
-              Avance:&nbsp;
-              {formData.estacionDesde && formData.estacionHasta
-                ? Math.max(0, Number(formData.estacionHasta) - Number(formData.estacionDesde))
-                : 0}{" "}
-              m
-            </div>
+            <p className="text-xs text-muted-foreground">Máximo 6 dígitos, no menor al último valor.</p>
           </div>
-          {lastCounters.estacionHasta !== null && (
-            <p className="text-xs text-muted-foreground">
-              Continuidad: el “desde” de hoy debe ser ≥ {lastCounters.estacionHasta}
-            </p>
-          )}
-        </div>
-      );
+        );
+
+      case "estacion": {
+        if (!requiresField("Estacion")) return null;
+
+        const ultimoHasta = lastCounters.estacionHasta;
+        const ultimoDesde = lastCounters.estacionDesde ?? null;
+        const ultimoAvance =
+          lastCounters.estacionAvance ??
+          (Number.isFinite(ultimoHasta) && Number.isFinite(ultimoDesde)
+            ? Math.max(0, Number(ultimoHasta) - Number(ultimoDesde))
+            : null);
+
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label>
+              Estación{" "}
+              {Number.isFinite(ultimoHasta) && (
+                <span className="text-xs text-muted-foreground">
+                  (último hasta: {ultimoHasta}
+                  {Number.isFinite(ultimoAvance) ? `, avance: ${ultimoAvance} m` : ""})
+                </span>
+              )}
+            </Label>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Input
+                name="estacionDesde"
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={6}
+                placeholder="Desde (m)"
+                value={formData.estacionDesde}
+                onChange={handleInputChange}
+              />
+              <Input
+                name="estacionHasta"
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={6}
+                placeholder="Hasta (m)"
+                value={formData.estacionHasta}
+                onChange={handleInputChange}
+              />
+              <div className="flex items-center text-sm text-muted-foreground">
+                Avance:&nbsp;
+                {formData.estacionDesde && formData.estacionHasta
+                  ? Math.max(0, Number(formData.estacionHasta) - Number(formData.estacionDesde))
+                  : 0}{" "}
+                m
+              </div>
+            </div>
+
+            {ultimoHasta !== null && (
+              <p className="text-xs text-muted-foreground">
+                Continuidad: el “Desde” de hoy debe ser ≥ {ultimoHasta}.
+              </p>
+            )}
+          </div>
+        );
+      }
 
       case "placa carreta": {
         const opciones = getTrailerOptions();
@@ -518,7 +679,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
         );
       }
 
-      // NUEVO: placa de la maquinaria que va sobre la carreta
       case "placa maquinaria llevada":
         return (
           <div className="space-y-2" key={fieldName}>
@@ -653,28 +813,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
           </div>
         );
 
-      case "fuente": {
-        const opciones = getFuenteOptions();
-        if (!opciones.length) return null;
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label>Fuente</Label>
-            <Select onValueChange={(value) => handleSelectChange("fuente", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar fuente" />
-              </SelectTrigger>
-              <SelectContent>
-                {opciones.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      }
-
       case "codigo camino":
         return (
           <div className="space-y-2" key={fieldName}>
@@ -690,11 +828,114 @@ export default function CreateReportForm({ onGoToCatalog }) {
           </div>
         );
 
+      case "fuente": {
+        // ocultar fuente global en flujo material
+        if (isMaterialFlow()) return null;
+
+        const opciones = getFuenteOptions();
+        if (!opciones.length) return null;
+
+        const handleFuente = (value) => {
+          setFormData((p) => ({
+            ...p,
+            fuente: value,
+            subFuente: "",
+            boleta: value === "Ríos" || value === "Tajo" ? "" : p.boleta,
+            tipoMaterial: value === "Ríos" ? "" : p.tipoMaterial,
+          }));
+        };
+
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label>Fuente</Label>
+            <Select value={formData.fuente || ""} onValueChange={handleFuente}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar fuente" />
+              </SelectTrigger>
+              <SelectContent>
+                {opciones.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {formData.fuente === "Ríos" && (
+              <>
+                <Label className="mt-2">Río</Label>
+                <Select
+                  value={formData.subFuente || ""}
+                  onValueChange={(v) => setFormData((p) => ({ ...p, subFuente: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar río" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rivers.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+
+            {formData.fuente === "Tajo" && (
+              <>
+                <Label className="mt-2">Tajo</Label>
+                <Select
+                  value={formData.subFuente || ""}
+                  onValueChange={(v) => setFormData((p) => ({ ...p, subFuente: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tajo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(formData._tajos || []).map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__add__">+ Agregar nuevo tajo…</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {formData.subFuente === "__add__" && (
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      placeholder="Nombre del tajo"
+                      value={formData._nuevoTajo || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, _nuevoTajo: e.target.value }))}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (!formData._nuevoTajo?.trim()) return;
+                        const nuevo = formData._nuevoTajo.trim();
+                        setFormData((p) => ({
+                          ...p,
+                          _tajos: [...(p._tajos || []), nuevo],
+                          subFuente: nuevo,
+                          _nuevoTajo: "",
+                        }));
+                      }}
+                    >
+                      Agregar
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      }
+
       default:
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>{fieldName}</Label>
-            
             <Input onChange={handleInputChange} name={normKey(fieldName).replace(/\s+/g, "")} />
           </div>
         );
@@ -705,18 +946,25 @@ export default function CreateReportForm({ onGoToCatalog }) {
     e.preventDefault();
     if (loading) return;
 
-    // Buscar el nombre del operador para mostrarlo en la confirmación
-    const selectedOperator = operatorsList.find(op => op.id === Number(formData.operadorId));
-    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
+    // validaciones rápidas
+    if (!formData.operadorId) {
+      await showError("Operador requerido", "Debe seleccionar un operador.");
+      return;
+    }
+    if (!formData.maquinariaId) {
+      await showError("Placa requerida", "Debe seleccionar una placa de maquinaria.");
+      return;
+    }
 
+    // Confirmación
+    const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
+    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
     const res = await confirmAction("¿Crear reporte?", "", {
-      html: `
-        <div style="text-align:left">
-          <div><b>Operador:</b> ${operatorName || "—"}</div>
-          <div><b>Tipo:</b> ${selectedMachineryType || formData.tipoMaquinaria || "—"}</div>
-          <div><b>Placa:</b> ${formData.placa || "—"}</div>
-        </div>
-      `,
+      html: `<div style="text-align:left">
+        <div><b>Operador:</b> ${operatorName || "—"}</div>
+        <div><b>Tipo:</b> ${selectedMachineryType || formData.tipoMaquinaria || "—"}</div>
+        <div><b>Placa:</b> ${formData.placa || "—"}</div>
+      </div>`,
       confirmButtonText: "Guardar",
       cancelButtonText: "Revisar",
     });
@@ -726,35 +974,162 @@ export default function CreateReportForm({ onGoToCatalog }) {
     showLoading("Guardando...", "Por favor, espere");
 
     try {
-      // Validar operador seleccionado
-      if (!formData.operadorId) {
-        closeLoading(); await showError("Operador requerido", "Debe seleccionar un operador."); setLoading(false); return;
-      }
-
-      if (requiresField("Cantidad material")) {
-        if (formData.cantidadMaterial !== "" && !/^\d{1,2}$/.test(String(formData.cantidadMaterial))) {
-          closeLoading(); await showError("Cantidad de m³ inválida", "Solo enteros de 1 o 2 dígitos."); setLoading(false); return;
+      // Horímetro / Kilometraje ≥ último
+      if (requiresField("Horimetro") && lastCounters.horimetro != null) {
+        if (Number(formData.horimetro) < Number(lastCounters.horimetro)) {
+          closeLoading();
+          await showError("Horímetro inválido", "Debe ser igual o mayor al último.");
+          setLoading(false);
+          return;
         }
       }
-      if (requiresField("Litros diesel")) {
-        if (formData.combustible !== "" && !/^\d{1,2}$/.test(String(formData.combustible))) {
-          closeLoading(); await showError("Litros de diésel inválidos", "Solo enteros de 1 o 2 dígitos."); setLoading(false); return;
+      if (requiresField("Kilometraje") && lastCounters.kilometraje != null) {
+        if (Number(formData.kilometraje) < Number(lastCounters.kilometraje)) {
+          closeLoading();
+          await showError("Kilometraje inválido", "Debe ser igual o mayor al último.");
+          setLoading(false);
+          return;
         }
       }
 
-      if (mustRequireBoleta()) {
-        if (!/^\d{6}$/.test(String(formData.boleta))) {
-          closeLoading(); await showError("Boleta requerida", "Ingrese exactamente 6 dígitos."); setLoading(false); return;
+      // Continuidad estación
+      if (requiresField("Estacion")) {
+        const d = Number(formData.estacionDesde || 0);
+        const h = Number(formData.estacionHasta || 0);
+
+        if (Number.isFinite(d) && Number.isFinite(h) && h < d) {
+          closeLoading();
+          await showError("Estación inválida", "'Hasta' no puede ser menor que 'Desde'.");
+          setLoading(false);
+          return;
         }
-      } else if (!showBoletaField() && formData.boleta) {
-        setFormData((p) => ({ ...p, boleta: "" }));
+
+        if (lastCounters.estacionHasta != null) {
+          const stale =
+            lastCounters.estacionUpdatedAt &&
+            Date.now() - new Date(lastCounters.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+
+          if (stale && d !== Number(lastCounters.estacionHasta)) {
+            closeLoading();
+            await showError(
+              "Continuidad requerida",
+              `Debe iniciar en ${lastCounters.estacionHasta} m (último avance en este camino).`
+            );
+            setLoading(false);
+            return;
+          }
+          if (!stale && d < Number(lastCounters.estacionHasta)) {
+            closeLoading();
+            await showError("Continuidad requerida", `El 'Desde' debe ser ≥ ${lastCounters.estacionHasta} m.`);
+            setLoading(false);
+            return;
+          }
+        }
       }
 
-      await machineryService.createReport({
-        ...formData,
-        tipoMaquinaria: selectedMachineryType || formData.tipoMaquinaria,
-        variant: selectedVariant || formData.variant,
-      });
+      // === Validaciones específicas para MATERIAL (vagoneta/cabezal)
+      if (isMaterialFlow()) {
+        const totalM3 = Number(formData.totalCantidadMaterial || 0);
+        if (!(Number.isFinite(totalM3) && totalM3 > 0)) {
+          closeLoading();
+          await showError("Total m³ requerido", "Ingrese el total de material del día (> 0).");
+          setLoading(false);
+          return;
+        }
+
+        const needsBoletaIfFuel = Number(formData.combustible || 0) > 0;
+        for (const [i, b] of (formData.boletas || []).entries()) {
+          const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
+
+          if (isRiverOrTajo && !b.subFuente) {
+            closeLoading();
+            await showError(
+              `Seleccione el ${b.fuente === "Ríos" ? "Río" : "Tajo"} en boleta #${i + 1}`,
+              "Elija la sub-fuente."
+            );
+            setLoading(false);
+            return;
+          }
+
+          if (!isRiverOrTajo && needsBoletaIfFuel) {
+            if (!/^\d{6}$/.test(String(b.boleta || ""))) {
+              closeLoading();
+              await showError(`Boleta #${i + 1} inválida`, "Ingrese exactamente 6 dígitos.");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      }
+
+// === Construir payload limpio ===
+const isMat =
+  ["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
+  (selectedVariant || "").toLowerCase() === "material";
+
+// —— RAÍZ: SOLO campos permitidos por CreateReportDto ——
+const base = {
+  operadorId: Number(formData.operadorId),
+  maquinariaId: Number(formData.maquinariaId),
+  fecha: formData.fecha,
+  horasOrd: formData.horasOrd === "" ? null : Number(formData.horasOrd),
+  horasExt: formData.horasExt === "" ? null : Number(formData.horasExt),
+  diesel: formData.combustible === "" ? null : Number(formData.combustible),
+  codigoCamino: formData.codigoCamino || null,
+  distrito: formData.distrito || null,
+  viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
+  tipoActividad: formData.tipoActividad || null,
+  horaInicio: formData.horaInicio || null,
+  horaFin: formData.horaFin || null,
+
+  // Si manejas horímetro/kilometraje en raíz (DTO los acepta):
+  horimetro: formData.horimetro === "" ? null : Number(formData.horimetro),
+  kilometraje: formData.kilometraje === "" ? null : Number(formData.kilometraje),
+
+  // Si usas estación “N+M”, puedes armarla aquí (opcional):
+  // estacion: formData.estacionDesde && formData.estacionHasta
+  //   ? `${Number(formData.estacionDesde)}+${Number(formData.estacionHasta)}`
+  //   : null,
+};
+
+// —— DETALLES: aquí sí puedes mandar tipo/variante/placa y todo lo específico ——
+const detalles = {
+  variante: selectedVariant || formData.variant || null,
+  tipoMaquinaria: selectedMachineryType || formData.tipoMaquinaria || null,
+  placa: formData.placa || null,
+
+  // métrica estación desglosada (si la usas en UI)
+  ...(formData.estacionDesde || formData.estacionHasta
+    ? { estacionDesde: formData.estacionDesde || "", estacionHasta: formData.estacionHasta || "" }
+    : {}),
+
+  placaCarreta: formData.placaCarreta || "",
+  tipoCarga: formData.tipoCarga || "",
+  destino: formData.destino || "",
+  placaMaquinariaLlevada: formData.placaMaquinariaLlevada || "",
+  cantidadLiquido: formData.cantidadLiquido || "",
+
+  // flujo “no material”
+  tipoMaterial: formData.tipoMaterial || "",
+  cantidadMaterial: formData.cantidadMaterial || "",
+  boleta: formData.boleta || "",
+  fuente: formData.fuente || "",
+  subFuente: formData.subFuente || "",
+
+  // flujo MATERIAL
+  ...(isMat
+    ? {
+        totalCantidadMaterial:
+          formData.totalCantidadMaterial === "" ? null : Number(formData.totalCantidadMaterial),
+        boletas: Array.isArray(formData.boletas) ? formData.boletas : [],
+      }
+    : {}),
+};
+
+const payload = { ...base, detalles };
+
+// ¡y solo una vez!
+await machineryService.createReport(payload);
 
       closeLoading();
       await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
@@ -763,7 +1138,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
       setSelectedMachineryType("");
       setSelectedVariant("");
       setTotalHours("");
-      setLastCounters({ horimetro: null, estacionHasta: null });
+      setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
     } catch (err) {
       console.error("createReport error", err?.response?.data || err);
       closeLoading();
@@ -787,8 +1162,8 @@ export default function CreateReportForm({ onGoToCatalog }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Operador</Label>
-              <Select 
-                value={formData.operadorId ? String(formData.operadorId) : ""} 
+              <Select
+                value={formData.operadorId ? String(formData.operadorId) : ""}
                 onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
               >
                 <SelectTrigger>
@@ -867,7 +1242,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
 
                 {placasOptions.length === 0 && (
                   <div className="text-sm text-muted-foreground">
-                    No hay placas disponibles para este tipo/variante.{" "}
+                    No hay placas disponibles para este tipo/variante{" "}
                     <button type="button" onClick={onGoToCatalog} className="text-blue-600 underline">
                       Ir a Catálogo
                     </button>
@@ -912,6 +1287,181 @@ export default function CreateReportForm({ onGoToCatalog }) {
             </div>
           )}
 
+          {/* Sección BOLETAS (solo material) */}
+          {isMaterialFlow() && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Boletas del día</h3>
+                <Button type="button" onClick={addBoleta}>
+                  + Agregar boleta
+                </Button>
+              </div>
+
+              {(formData.boletas || []).map((b, idx) => {
+                const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
+                return (
+                  <div key={idx} className="border rounded-xl p-3 space-y-3 bg-white">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">Boleta #{idx + 1}</div>
+                      <Button type="button" variant="secondary" onClick={() => removeBoleta(idx)}>
+                        Eliminar
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {!isRiverOrTajo && (
+                        <div>
+                          <Label>Boleta (6 dígitos)</Label>
+                          <Input
+                            inputMode="numeric"
+                            pattern="\d{6}"
+                            maxLength={6}
+                            value={b.boleta || ""}
+                            onChange={(e) =>
+                              updateBoleta(idx, {
+                                boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6),
+                              })
+                            }
+                            placeholder="000000"
+                          />
+                        </div>
+                      )}
+
+                      <div>
+                        <Label>Tipo de material</Label>
+                        <Select value={b.tipoMaterial || ""} onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar material" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materialTypes.map((m) => (
+                              <SelectItem key={m} value={m}>
+                                {m}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <Label>Fuente</Label>
+                        <Select
+                          value={b.fuente || ""}
+                          onValueChange={(v) =>
+                            updateBoleta(idx, {
+                              fuente: v,
+                              subFuente: "",
+                              boleta: v === "Ríos" || v === "Tajo" ? "" : b.boleta || "",
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar fuente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(getFuenteOptions() || ["Palo de Arco", "Ríos", "Tajo"]).map((f) => (
+                              <SelectItem key={f} value={f}>
+                                {f}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {b.fuente === "Ríos" && (
+                        <div>
+                          <Label>Río</Label>
+                          <Select value={b.subFuente || ""} onValueChange={(v) => updateBoleta(idx, { subFuente: v })}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar río" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {rivers.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                  {r}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {b.fuente === "Tajo" && (
+                        <div>
+                          <Label>Tajo</Label>
+                          <Select value={b.subFuente || ""} onValueChange={(v) => updateBoleta(idx, { subFuente: v })}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar tajo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(formData._tajos || []).map((t) => (
+                                <SelectItem key={t} value={t}>
+                                  {t}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="__add__">+ Agregar nuevo tajo…</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          {b.subFuente === "__add__" && (
+                            <div className="flex gap-2 mt-2">
+                              <Input
+                                placeholder="Nombre del tajo"
+                                value={formData._nuevoTajo || ""}
+                                onChange={(e) => setFormData((p) => ({ ...p, _nuevoTajo: e.target.value }))}
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  if (!formData._nuevoTajo?.trim()) return;
+                                  const nuevo = formData._nuevoTajo.trim();
+                                  setFormData((p) => ({
+                                    ...p,
+                                    _tajos: [...(p._tajos || []), nuevo],
+                                    _nuevoTajo: "",
+                                    boletas: (p.boletas || []).map((x, i) => (i === idx ? { ...x, subFuente: nuevo } : x)),
+                                  }));
+                                }}
+                              >
+                                Agregar
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {isMaterialFlow() && (
+            <div className="space-y-2">
+              <Label htmlFor="totalCantidadMaterial">Total m³ del día</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="totalCantidadMaterial"
+                  name="totalCantidadMaterial"
+                  inputMode="numeric"
+                  pattern="\d*"
+                  placeholder="00"
+                  maxLength={4}
+                  value={formData.totalCantidadMaterial ?? ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      totalCantidadMaterial: (e.target.value || "").replace(/\D/g, "").slice(0, 4),
+                    }))
+                  }
+                />
+                <span className="text-sm text-muted-foreground">m³</span>
+              </div>
+            </div>
+          )}
+
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Enviando..." : "Crear Reporte"}
           </Button>
@@ -920,3 +1470,4 @@ export default function CreateReportForm({ onGoToCatalog }) {
     </Card>
   );
 }
+

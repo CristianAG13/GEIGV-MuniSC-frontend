@@ -81,29 +81,20 @@ class MachineryService {
   }
 
   async createReport(formData) {
-    // normaliza siempre
-    const data = this.buildReportPayload(formData || {});
-    if (!data.operadorId || !data.maquinariaId) {
-      throw new Error("Debes especificar operadorId y maquinariaId.");
-    }
-    try {
-      // logs útiles para depurar
-      MachineryService.log("estacion (raw)", {
-        estacion: formData?.estacion,
-        estacionStr: formData?.estacionStr,
-        estacionDesde: formData?.estacionDesde,
-        estacionHasta: formData?.estacionHasta,
-      });
-      MachineryService.log("estacion (payload)", data.estacion);
-      MachineryService.log("POST /machinery/report payload", data);
+  // Si viene como "payload ya construido" (con boletas o total), úsalo tal cual.
+  const looksPrebuilt =
+    formData &&
+    formData.detalles &&
+    (Array.isArray(formData.detalles.boletas) ||
+     formData.detalles.totalCantidadMaterial != null);
 
-      const res = await apiClient.post("/machinery/report", data);
-      return res.data;
-    } catch (err) {
-      MachineryService.log("createReport -> error", err?.response?.data || err);
-      throw err;
-    }
-  }
+  const data = looksPrebuilt ? formData : this.buildReportPayload(formData);
+
+  MachineryService.log("POST /machinery/report payload", data);
+  const res = await apiClient.post("/machinery/report", data);
+  return res.data;
+}
+
 
   async getAllReports() {
     try {
@@ -221,41 +212,62 @@ class MachineryService {
     }
   }
 
-  async getLastCounters(maquinariaId) {
-    if (!maquinariaId) throw new Error("maquinariaId es requerido");
-    try {
-      const res = await apiClient.get(`/machinery/${maquinariaId}/last-counters`);
-      return res.data || {};
-    } catch (err) {
-      MachineryService.log("getLastCounters -> error", err?.response?.data || err);
-      throw err;
-    }
+  async getLastCounters(maquinariaId, codigoCamino) {
+  if (!maquinariaId) throw new Error("maquinariaId es requerido");
+  try {
+    const res = await apiClient.get(
+      `/machinery/${maquinariaId}/last-counters`,
+      { params: codigoCamino ? { codigoCamino } : undefined }
+    );
+    return res.data || {};
+  } catch (err) {
+    MachineryService.log("getLastCounters -> error", err?.response?.data || err);
+    throw err;
   }
+}
 
   // ========= Rental Reports =========
   async createRentalReport(formData) {
-    try {
-      const payload = {
-        fecha: formData.fecha,
-        operadorId: formData.operadorId,
-        tipoMaquinaria: formData.tipoMaquinaria,
-        placa: formData.placa || null,
-        actividad: formData.actividad,
-        cantidad: formData.cantidad || null,
-        horas: Number(formData.horas),
-        estacion: formData.estacion || null,
-        boleta: formData.boleta || null,
-        fuente: formData.fuente || null,
-      };
+  try {
+    const payload = {
+      fecha: formData.fecha,
+      operadorId: formData.operadorId,
+      tipoMaquinaria: formData.tipoMaquinaria,   // vagoneta/cabezal/...
+      placa: formData.placa || null,
+      actividad: formData.actividad || null,
+      cantidad: formData.cantidad || null,
+      horas: Number(formData.horas) || null,
+      estacion: formData.estacion || null,
+      // boletas según fuente:
+      boleta: (!['Ríos','Tajo'].includes(formData.fuente) && formData.fuente !== 'KYLCSA')
+        ? (formData.boleta || null) : null,
+      boletaKylcsa: (formData.fuente === 'KYLCSA') ? (formData.boletaKylcsa || null) : null,
+      fuente: formData.fuente || null,
 
-      MachineryService.log("POST /machinery/rental-report payload", payload);
-      const res = await apiClient.post("/machinery/rental-report", payload);
-      return res.data;
-    } catch (err) {
-      MachineryService.log("createRentalReport -> error", err?.response?.data || err);
-      throw err;
-    }
+      // 👇 espejo municipal pero en `detalles`
+      detalles: {
+        codigoCamino: formData.codigoCamino || null,
+        distrito: formData.distrito || null,
+        tipoMaterial: formData.tipoMaterial || null,
+        cantidadMaterial: formData.cantidadMaterial ? Number(formData.cantidadMaterial) : null,
+        destino: formData.destino || null,
+        tipoCarga: formData.tipoCarga || null,
+        placaCarreta: formData.placaCarreta || null,
+        placaMaquinariaLlevada: formData.placaMaquinariaLlevada || null,
+        horaInicio: formData.horaInicio || null,
+        horaFin: formData.horaFin || null,
+      },
+    };
+
+    MachineryService.log("POST /machinery/rental-report payload", payload);
+    const res = await apiClient.post("/machinery/rental-report", payload);
+    return res.data;
+  } catch (err) {
+    MachineryService.log("createRentalReport -> error", err?.response?.data || err);
+    throw err;
   }
+}
+
 
 
   async getAllRentalReports() {
@@ -295,6 +307,109 @@ class MachineryService {
     throw err;
   }
 }
+
+async deleteReport(id, reason = "") {
+  const res = await apiClient.delete(`/machinery/report/${id}`, {
+    data: { reason },   // <-- importante
+  });
+  return res.data;
+}
+
+async getDeletedRental() {
+  const res = await apiClient.get('/machinery/rental-report/deleted');
+  return res.data;
+}
+
+async deleteRentalReport(id, reason = "") {
+  const res = await apiClient.delete(`/machinery/rental-report/${id}`, {
+    data: { reason },
+  });
+  return res.data;
+}
+
+async getReportById(id) {
+  const res = await apiClient.get(`/machinery/report/${id}`);
+  return res.data;
+}
+async getRentalReportById(id) {
+  const res = await apiClient.get(`/machinery/rental-report/${id}`);
+  return res.data;
+}
+
+// === Municipales: obtener y actualizar ===
+async getReportById(id) {
+  const res = await apiClient.get(`/machinery/report/${id}`);
+  return res.data;
+}
+
+async updateReport(id, dto) {
+  const res = await apiClient.patch(`/machinery/report/${id}`, dto);
+  return res.data;
+}
+
+// === Alquiler: obtener y actualizar (por si editas alquiler también) ===
+async getRentalReportById(id) {
+  const res = await apiClient.get(`/machinery/rental-report/${id}`);
+  return res.data;
+}
+
+async updateRentalReport(id, dto) {
+  const res = await apiClient.patch(`/machinery/rental-report/${id}`, dto);
+  return res.data;
+}
+
+// machinery.service.js  (soft delete recomendado)
+async removeMunicipal(id, reason, userId) {
+  const row = await this.reportRepo.findOne({ where: { id } });
+  if (!row) throw new NotFoundException('Reporte municipal no existe');
+
+  row.deletedAt    = new Date();
+  row.deleteReason = reason ?? null;
+  row.deletedById  = userId ?? null;
+
+  await this.reportRepo.save(row);
+
+  return {
+    ok: true,
+    deleted: {
+      id: row.id,
+      deleteReason: row.deleteReason,
+      deletedAt: row.deletedAt,
+      deletedById: row.deletedById,
+      tipo: 'municipal',
+    },
+  };
+}
+
+async removeRental(id, reason,userId) {
+  const row = await this.rentalRepo.findOne({ where: { id } });
+  if (!row) throw new NotFoundException('Reporte de alquiler no existe');
+
+  row.deleteReason = reason ?? null;
+  row.deletedById  = userId ?? null;   // <- importante
+  await this.rentalRepo.save(row);
+  await this.rentalRepo.softDelete(id);
+
+  return { ok: true, id, reason: row.deleteReason, deletedById: row.deletedById };
+}
+
+async getDeletedMunicipal() {
+  const res = await apiClient.get('/machinery/report/deleted');
+  return res.data;
+}
+async getDeletedRental() {
+  const res = await apiClient.get('/machinery/rental-report/deleted');
+  return res.data;
+}
+async restoreReport(id) {
+  const res = await apiClient.patch(`/machinery/report/${id}/restore`);
+  return res.data;
+}
+async restoreRentalReport(id) {
+  const res = await apiClient.patch(`/machinery/rental-report/${id}/restore`);
+  return res.data;
+}
+
 
 }
 
