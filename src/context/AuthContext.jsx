@@ -3,6 +3,7 @@
 // context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService.js';
+import auditService from '../services/auditService.js';
 import { clearNavigationCache } from '@/utils/refreshNavigation.js';
 
 const AuthContext = createContext();
@@ -60,11 +61,54 @@ const refreshUserFromBackend = async () => {
       };
       setUser(normalizedUser);
       
+      // ✅ REGISTRAR LOGIN EN AUDITORÍA
+      try {
+        await auditService.logEvent({
+          action: 'AUTH',
+          entity: 'authentication',
+          entityId: normalizedUser.id?.toString() || 'unknown',
+          userId: normalizedUser.id,
+          userEmail: normalizedUser.email,
+          userRoles: normalizedUser.roles,
+          description: `Usuario ${normalizedUser.email} inició sesión exitosamente`,
+          changes: null,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            url: window.location.pathname,
+            eventType: 'login_success'
+          }
+        });
+      } catch (auditError) {
+        console.warn('Error registrando login en auditoría:', auditError);
+      }
+      
       // Limpiar cualquier configuración de navegación cacheada
       clearNavigationCache();
       
       return { success: true };
     } else {
+      // ✅ REGISTRAR INTENTO FALLIDO EN AUDITORÍA
+      try {
+        await auditService.logEvent({
+          action: 'AUTH',
+          entity: 'authentication',
+          entityId: 'unknown',
+          description: `Intento de login fallido para ${email}`,
+          changes: null,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            url: window.location.pathname,
+            eventType: 'login_failed',
+            attemptedEmail: email,
+            errorReason: result.error
+          }
+        });
+      } catch (auditError) {
+        console.warn('Error registrando intento fallido en auditoría:', auditError);
+      }
+      
       return { success: false, error: result.error };
     }
   } catch (error) {
@@ -76,6 +120,30 @@ const refreshUserFromBackend = async () => {
 
 
  const logout = () => {
+  // ✅ REGISTRAR LOGOUT EN AUDITORÍA ANTES DE LIMPIAR USUARIO
+  if (user) {
+    try {
+      auditService.logEvent({
+        action: 'AUTH',
+        entity: 'authentication',
+        entityId: user.id?.toString() || 'unknown',
+        userId: user.id,
+        userEmail: user.email,
+        userRoles: user.roles,
+        description: `Usuario ${user.email} cerró sesión`,
+        changes: null,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          url: window.location.pathname,
+          eventType: 'logout'
+        }
+      });
+    } catch (auditError) {
+      console.warn('Error registrando logout en auditoría:', auditError);
+    }
+  }
+  
   authService.logout();
   setUser(null);
   // Asegurarse de limpiar cualquier configuración de navegación cacheada

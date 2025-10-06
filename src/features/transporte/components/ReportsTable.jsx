@@ -939,6 +939,15 @@ export default function ReportsTable({
             <col className="w-28" />
             {isMunicipal ? (
               <>
+
+                <col className="w-16" />
+                <col className="w-64" />
+                <col className="w-56" />
+                <col className="w-24" />
+                <col className="w-40" />
+                <col className="w-32" />
+                <col className="w-28" />
+
                 {columns.map((c) => {
                   const w = {
                     ID: "w-16",
@@ -952,6 +961,7 @@ export default function ReportsTable({
                   }[c] || "w-32";
                   return <col key={c} className={w} />;
                 })}
+
               </>
             ) : (
               <>

@@ -22,6 +22,7 @@ import {
   tajosBase,
 } from "@/utils/districts";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLogger } from "@/hooks/useAuditLogger";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 
@@ -29,6 +30,7 @@ const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 export default function CreateReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
+  const { logCreate } = useAuditLogger();
 
   // ====== ESTADO ======
   const [loading, setLoading] = useState(false);
@@ -1129,7 +1131,26 @@ const detalles = {
 const payload = { ...base, detalles };
 
 // ¡y solo una vez!
-await machineryService.createReport(payload);
+const result = await machineryService.createReport(payload);
+
+      // ✅ REGISTRAR EN AUDITORÍA
+      console.log('🔍 Verificando resultado para logging:', result);
+      if (result && result.success) {
+        console.log('📝 Iniciando logging de auditoría para reporte...');
+        console.log('🔧 Datos para logging:', {
+          entity: 'reportes',
+          data: result.data,
+          description: `Se creó reporte de ${selectedMachineryType || formData.tipoMaquinaria} - Placa: ${formData.placa} - Operador: ${operatorName}`
+        });
+        
+        const auditResult = await logCreate('reportes', result.data,
+          `Se creó reporte de ${selectedMachineryType || formData.tipoMaquinaria} - Placa: ${formData.placa} - Operador: ${operatorName}`
+        );
+        
+        console.log('✅ Resultado del logging de auditoría:', auditResult);
+      } else {
+        console.log('❌ No se realizó logging - resultado:', result);
+      }
 
       closeLoading();
       await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");

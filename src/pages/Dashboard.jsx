@@ -14,6 +14,7 @@ import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/s
 import { clearNavigationCache } from '@/utils/refreshNavigation';
 import TransporteModule from '../features/transporte/TransporteModule';
 import { OperadoresModule } from '../features/operadores';
+import { AuditoriaModule } from '../features/auditoria';
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
 import RoleRequestsManagement from '../components/RoleRequestsManagement';
@@ -799,6 +800,8 @@ export default function Dashboard() {
         );
       case 'configuracion':
         return <SweetAlertDemo />;
+      case 'auditoria':
+        return <AuditoriaModule />;
       default:
         return renderDashboard();
     }

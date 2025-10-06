@@ -11,6 +11,7 @@ import TokenExpirationWarning from "./components/TokenExpirationWarning.jsx";
 
 import TransporteModule from "./features/transporte/TransporteModule.jsx";
 import OperatorsPage from "./features/operadores/components/OperatorsIndex.jsx"; // <- si lo tienes
+import { AuditoriaModule } from "./features/auditoria/index.js";
 
  import CreateMachineryForm from "./features/transporte/components/forms/create-machinery-form.jsx";
 import CreateMaterialReportForm from "./features/transporte/components/forms/create-material-report-form.jsx";
@@ -66,6 +67,15 @@ export default function App() {
             </ProtectedRoute>
           }
         /> 
+
+        <Route
+          path="/auditoria/*"
+          element={
+            <ProtectedRoute roles={["superadmin"]}>
+              <AuditoriaModule />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
   path="/transporte/create-machinery"
