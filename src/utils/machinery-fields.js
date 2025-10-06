@@ -1,5 +1,4 @@
 
-
 // src/features/machinery/machineryFields.js
 
 export const machineryFields = {
