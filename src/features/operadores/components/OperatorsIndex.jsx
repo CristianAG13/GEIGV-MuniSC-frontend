@@ -5,11 +5,15 @@ import {
 import operatorsService from '../../../services/operatorsService';
 import usersService from '../../../services/usersService';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../../../utils/sweetAlert';
+import { useAuditLogger } from '../../../hooks/useAuditLogger';
 
 /**
  * Componente principal para gestión de operadores
  */
 const OperatorsIndex = () => {
+  // Hook de auditoría
+  const { logCreate, logUpdate, logDelete } = useAuditLogger();
+  
   const [operators, setOperators] = useState([]);
   const [filteredOperators, setFilteredOperators] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +133,11 @@ const OperatorsIndex = () => {
         // Asociar operador con usuario
         await operatorsService.associateWithUser(createdOperator.id, newOperator.userId);
         
+        // Registrar en auditoría
+        await logCreate('operadores', createdOperator, 
+          `Se creó y asoció el operador: ${selectedUser.name} ${selectedUser.lastname}`
+        );
+        
         showSuccess('Operador creado y asociado', 'El operador ha sido registrado y asociado al usuario correctamente');
       } else {
         // Creación normal con todos los campos
@@ -143,6 +152,11 @@ const OperatorsIndex = () => {
           identification: newOperator.identification.trim(),
           phoneNumber: newOperator.phoneNumber.trim()
         });
+
+        // Registrar en auditoría
+        await logCreate('operadores', newOperator, 
+          `Se creó el operador: ${newOperator.name} ${newOperator.last}`
+        );
 
         showSuccess('Operador creado', 'El operador ha sido registrado correctamente');
       }
@@ -178,12 +192,25 @@ const OperatorsIndex = () => {
         return;
       }
 
-      await operatorsService.updateOperator(currentOperator.id, {
+      // Capturar datos antes de la actualización
+      const dataBefore = operators.find(op => op.id === currentOperator.id);
+
+      const updatedData = {
         name: currentOperator.name.trim(),
         last: currentOperator.last.trim(),
         identification: currentOperator.identification.trim(),
         phoneNumber: currentOperator.phoneNumber?.trim() || ''
-      });
+      };
+
+      await operatorsService.updateOperator(currentOperator.id, updatedData);
+
+      // Registrar en auditoría
+      await logUpdate(
+        'operadores',
+        dataBefore,
+        { ...dataBefore, ...updatedData },
+        `Se actualizó el operador: ${updatedData.name} ${updatedData.last}`
+      );
 
       showSuccess('Operador actualizado', 'Los datos del operador han sido actualizados correctamente');
       setShowEditModal(false);
@@ -199,7 +226,18 @@ const OperatorsIndex = () => {
     const result = await confirmDelete('este operador');
     if (result.isConfirmed) {
       try {
+        // Capturar datos del operador antes de eliminar
+        const operatorToDelete = operators.find(op => op.id === id);
+
         await operatorsService.deleteOperator(id);
+
+        // Registrar en auditoría
+        await logDelete(
+          'operadores',
+          operatorToDelete,
+          `Se eliminó el operador: ${operatorToDelete?.name} ${operatorToDelete?.last} (ID: ${operatorToDelete?.identification})`
+        );
+
         showSuccess('Operador eliminado', 'El operador ha sido eliminado correctamente');
         loadOperators();
       } catch (error) {
@@ -223,7 +261,19 @@ const OperatorsIndex = () => {
     }
 
     try {
+      // Encontrar el usuario seleccionado
+      const selectedUser = availableUsers.find(u => u.id === parseInt(selectedUserId));
+
       await operatorsService.associateWithUser(currentOperator.id, selectedUserId);
+
+      // Registrar en auditoría
+      await logUpdate(
+        'operadores',
+        currentOperator,
+        { ...currentOperator, userId: selectedUserId },
+        `Se asoció el operador ${currentOperator.name} ${currentOperator.last} con el usuario ${selectedUser?.username || selectedUserId}`
+      );
+
       showSuccess('Usuario asociado', 'El usuario ha sido asociado al operador correctamente');
       setShowLinkModal(false);
       loadOperators();
@@ -246,7 +296,19 @@ const OperatorsIndex = () => {
 
     if (result.isConfirmed) {
       try {
+        // Capturar datos del operador antes de desasociar
+        const operatorToUpdate = operators.find(op => op.id === operatorId);
+
         await operatorsService.dissociateFromUser(operatorId);
+
+        // Registrar en auditoría
+        await logUpdate(
+          'operadores',
+          operatorToUpdate,
+          { ...operatorToUpdate, userId: null },
+          `Se desasoció el usuario del operador: ${operatorToUpdate?.name} ${operatorToUpdate?.last}`
+        );
+
         showSuccess('Usuario desasociado', 'El usuario ha sido desasociado del operador correctamente');
         loadOperators();
       } catch (error) {

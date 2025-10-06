@@ -7,10 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { useToast } from "@/hooks/use-toast"
+import { useAuditLogger } from "@/hooks/useAuditLogger"
 import machineryService from "@/services/machineryService"
 
 export function CreateMachineryForm() {
   const { toast } = useToast()
+  const { logCreate } = useAuditLogger()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     tipo: "",
@@ -46,19 +49,27 @@ export function CreateMachineryForm() {
     setLoading(true)
 
     try {
-      await machineryService.createMachinery(formData)
-      toast({
-        title: "Maquinaria registrada exitosamente",
-        description: "La maquinaria ha sido añadida al sistema.",
-      })
+      const result = await machineryService.createMachinery(formData)
+      
+      if (result.success) {
+        // ✅ REGISTRAR EN AUDITORÍA
+        await logCreate('transporte', result.data,
+          `Se registró la maquinaria ${formData.tipo} con placa ${formData.placa}`
+        )
+        
+        toast({
+          title: "Maquinaria registrada exitosamente",
+          description: "La maquinaria ha sido añadida al sistema.",
+        })
 
-      // Reset form
-      setFormData({
-        tipo: "",
-        placa: "",
-        rol: "",
-        esPropietaria: true,
-      })
+        // Reset form
+        setFormData({
+          tipo: "",
+          placa: "",
+          rol: "",
+          esPropietaria: true,
+        })
+      }
     } catch (error) {
       toast({
         title: "Error al registrar maquinaria",

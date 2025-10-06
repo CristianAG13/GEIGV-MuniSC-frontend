@@ -878,30 +878,29 @@ export default function ReportsTable({
       {/* Tabla */}
       <div className="rounded-2xl border bg-white overflow-hidden">
         <table className="w-full table-fixed text-sm">
-          {/* anchos fijos */}
           <colgroup>
-            <col className="w-28" /> {/* badge Tipo */}
+            <col className="w-28" />
             {isMunicipal ? (
               <>
-                <col className="w-16" /> {/* ID */}
-                <col className="w-64" /> {/* Operador */}
-                <col className="w-56" /> {/* Maquinaria */}
-                <col className="w-24" /> {/* Variante */}
-                <col className="w-40" /> {/* Distrito */}
-                <col className="w-32" /> {/* Código Camino */}
-                <col className="w-28" /> {/* Fecha */}
+                <col className="w-16" />
+                <col className="w-64" />
+                <col className="w-56" />
+                <col className="w-24" />
+                <col className="w-40" />
+                <col className="w-32" />
+                <col className="w-28" />
               </>
             ) : (
               <>
-                <col className="w-16" /> {/* ID */}
-                <col className="w-64" /> {/* Operador */}
-                <col className="w-40" /> {/* Tipo Maquinaria */}
-                <col className="w-40" /> {/* Placa */}
-                <col className="w-40" /> {/* Actividad */}
-                <col className="w-28" /> {/* Fecha */}
+                <col className="w-16" />
+                <col className="w-64" />
+                <col className="w-40" />
+                <col className="w-40" />
+                <col className="w-40" />
+                <col className="w-28" />
               </>
             )}
-            <col className="w-28" /> {/* Acciones */}
+            <col className="w-28" />
           </colgroup>
 
           <thead className="bg-gray-50 text-gray-700">

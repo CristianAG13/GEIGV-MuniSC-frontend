@@ -2,7 +2,7 @@
 // config/navigation.js
 import { 
   Home, Users, Truck, FileText, BarChart3, Settings,
-  UserCheck, HardHat, Wrench, ClipboardList
+  UserCheck, HardHat, Wrench, ClipboardList, Shield
 } from 'lucide-react';
 
 // ========================
@@ -30,7 +30,8 @@ export const rolePermissions = {
     'configuracion', 
     'solicitudes-rol', 
     'operadores',
-    'reportes-maquinaria'
+    'reportes-maquinaria',
+    'auditoria'
   ],
   guest: ['dashboard'],
   invitado: ['dashboard'], // Usuario invitado solo tiene acceso al dashboard
@@ -141,6 +142,14 @@ export const sidebarData = {
       icon: Settings, 
       permission: 'configuracion',
       description: 'Configuración del sistema',
+      category: 'system'
+    },
+    { 
+      id: 'auditoria', 
+      name: 'Auditoría del Sistema', 
+      icon: Shield, 
+      permission: 'auditoria',
+      description: 'Registro y seguimiento de todas las actividades del sistema',
       category: 'system'
     }
   ]

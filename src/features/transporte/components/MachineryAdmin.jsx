@@ -12,10 +12,12 @@ import { machineryFields } from "@/utils/machinery-fields";
 import MultiSelect from "@/features/transporte/components/MultiSelect";
 import { confirmDelete, confirmAction, showSuccess, showError } from "@/utils/sweetAlert";
 import { Edit, Trash2, Check, X } from "lucide-react";
+import { useAuditLogger } from "@/hooks/useAuditLogger";
 
 export default function MachineryAdmin() {
   const ALL_ROLES = "__ALL_ROLES__";
   const { toast } = useToast();
+  const { logCreate, logUpdate, logDelete } = useAuditLogger();
 
   // catálogo
   const [loading, setLoading] = useState(false);
@@ -126,6 +128,12 @@ export default function MachineryAdmin() {
       const created = await machineryService.createMachinery(payload);
       const createdNormalized = normalizeRow(created);
 
+      // ✅ REGISTRAR EN AUDITORÍA - CREAR MAQUINARIA
+      console.log('📝 Registrando creación de maquinaria en auditoría:', created);
+      await logCreate('maquinaria', created, 
+        `Se creó maquinaria ${tipo} - Placa: ${placa.trim().toUpperCase()}${esPropietaria ? ' (Propietaria)' : ''}`
+      );
+
       setList((prev) => [createdNormalized, ...prev]);
       setViewTipo(tipo);
       toast({ title: "Maquinaria agregada", description: "Se creó correctamente." });
@@ -172,6 +180,10 @@ export default function MachineryAdmin() {
 
     try {
       setLoading(true);
+      
+      // Obtener datos anteriores para auditoría
+      const previousData = list.find(item => item.id === editingId);
+      
       const payload = {
         tipo: editForm.tipo,
         placa: editForm.placa.trim().toUpperCase(),
@@ -180,6 +192,13 @@ export default function MachineryAdmin() {
       };
       const updated = await machineryService.updateMachinery(editingId, payload);
       const normalized = normalizeRow(updated);
+      
+      // ✅ REGISTRAR EN AUDITORÍA - ACTUALIZAR MAQUINARIA
+      console.log('📝 Registrando actualización de maquinaria en auditoría:', { previousData, updated });
+      await logUpdate('maquinaria', editingId, previousData, updated,
+        `Se actualizó maquinaria ${editForm.tipo} - Placa: ${editForm.placa.trim().toUpperCase()}`
+      );
+      
       setList((prev) => prev.map((r) => (r.id === editingId ? normalized : r)));
       await showSuccess("Actualizado", "Cambios guardados correctamente.");
       cancelEdit();
@@ -196,7 +215,17 @@ export default function MachineryAdmin() {
     const res = await confirmDelete("la maquinaria seleccionada");
     if (!res.isConfirmed) return;
     try {
+      // Obtener datos antes de eliminar para auditoría
+      const dataToDelete = list.find(item => item.id === id);
+      
       await machineryService.deleteMachinery(id);
+      
+      // ✅ REGISTRAR EN AUDITORÍA - ELIMINAR MAQUINARIA
+      console.log('📝 Registrando eliminación de maquinaria en auditoría:', dataToDelete);
+      await logDelete('maquinaria', id, dataToDelete,
+        `Se eliminó maquinaria ${dataToDelete?.tipo || 'N/A'} - Placa: ${dataToDelete?.placa || dataToDelete?.plate || 'N/A'}`
+      );
+      
       setList((prev) => prev.filter((it) => it.id !== id));
       await showSuccess("Eliminada", "La maquinaria fue eliminada.");
     } catch (e) {
