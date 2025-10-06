@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,17 @@ const VARIANT_OPTIONS_BY_TYPE = {
   vagoneta: ["material", "carreta", "cisterna"],
   cabezal: ["material", "carreta", "cisterna"],
 };
+
+// Tipos que usan Estación (se pinta en columna/exports)
+const STATION_TYPES = new Set(["niveladora", "excavadora", "compactadora", "backhoe"]);
+
+// Tipos que muestran "Variante" (coinciden con los de km)
+const VARIANT_TYPES = new Set(["vagoneta", "cabezal", "cisterna"]);
+
+// Tipos que usan Kilometraje (no horímetro)
+const KM_TYPES = ["vagoneta", "cabezal", "cisterna"];
+const isKmType = (t) => KM_TYPES.includes((t || "").toLowerCase());
+const medidorLabelFor = (t) => (t ? (isKmType(t) ? "Kilometraje" : "Horímetro") : "Medidor");
 
 /* ---------------- helpers genéricos ---------------- */
 const fmtDate = (d) => {
@@ -40,15 +51,57 @@ const get = (obj, path) =>
     .reduce((acc, k) => (acc && acc[k] !== undefined ? acc[k] : undefined), obj);
 const pick = (...vals) => vals.find((v) => v !== undefined && v !== null);
 
+
+// Helpers pequeñitos
+const _hasVal = (x) => x !== undefined && x !== null && String(x).trim() !== "";
+const _first = (...vals) => vals.find((v) => _hasVal(v));
+const _numOrUndef = (v) => {
+  if (v === 0) return 0;
+  if (!_hasVal(v)) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+// Lee posibles nombres de campos para estación (string o pares)
+function _readStationPair(r) {
+  const d = _first(
+    get(r, "estacionDesde"),
+    get(r, "estacion_desde"),
+    get(r, "detalles.estacionDesde"),
+    get(r, "detalles.estacion_desde"),
+    get(r, "estacion.desde"),
+    get(r, "detalles.estacion.desde")
+  );
+  const h = _first(
+    get(r, "estacionHasta"),
+    get(r, "estacion_hasta"),
+    get(r, "detalles.estacionHasta"),
+    get(r, "detalles.estacion_hasta"),
+    get(r, "estacion.hasta"),
+    get(r, "detalles.estacion.hasta")
+  );
+  return { d, h };
+}
+
+// ¿El registro tiene estación en cualquier forma?
+function _hasStationData(r) {
+  const pre = _first(get(r, "estacion"), get(r, "detalles.estacion"));
+  if (_hasVal(pre)) return true;
+  const { d, h } = _readStationPair(r);
+  return _hasVal(d) || _hasVal(h);
+}
+
 /* ---------------- detectores de tipo/variante ---------------- */
+// Normaliza el tipo
 const getType = (r) => {
   if (!r) return "";
   const t1 =
     r.tipoMaquinaria && typeof r.tipoMaquinaria === "string"
       ? r.tipoMaquinaria
       : pick(get(r, "maquinaria.tipo"), r.tipo, "");
-  return String(t1 || "").toLowerCase();
+  return String(t1 || "").toLowerCase().trim();
 };
+
 
 const getVar = (r) => {
   if (!r) return "";
@@ -126,44 +179,34 @@ function getTotalM3(r) {
 }
 
 // Texto de estación "desde+hasta" o "—"
+// Texto de estación "desde+hasta", acepta string directo o pares
 const toEstacionTxt = (r) => {
-  const d = r?.estacionDesde ?? r?.detalles?.estacionDesde;
-  const h = r?.estacionHasta ?? r?.detalles?.estacionHasta;
-  if (d != null || h != null) {
-    const L = showNum(d);
-    const R = showNum(h);
-    if (L !== "—" || R !== "—") return `${L}+${R}`;
+  // 1) Si ya viene como string "0+100", úsalo.
+  const pre = _first(get(r, "estacion"), get(r, "detalles.estacion"));
+  if (_hasVal(pre)) return String(pre);
+
+  // 2) Si vienen como pares (camelCase, snake_case o anidado)
+  const { d, h } = _readStationPair(r);
+  const L = _numOrUndef(d);
+  const R = _numOrUndef(h);
+  if (L !== undefined || R !== undefined) {
+    const ltxt = L !== undefined ? L : "—";
+    const rtxt = R !== undefined ? R : "—";
+    return `${ltxt}+${rtxt}`;
   }
+
   return "—";
 };
 
-
-// Tipos que NO usan estación
-const KM_TYPES = ["vagoneta", "cabezal", "cisterna"];
 
 // ¿Esta fila usa columna Estación?
-const usesStation = (r) => !KM_TYPES.includes(getType(r));
-
-// Formatea "estación" (desde+hasta)
-const estacionText = (r) => {
-  const d = r?.estacionDesde ?? get(r, "detalles.estacionDesde");
-  const h = r?.estacionHasta ?? get(r, "detalles.estacionHasta");
-  if (d != null || h != null) {
-    const L = showNum(d);
-    const R = showNum(h);
-    if (L !== "—" || R !== "—") return `${L}+${R}`;
-  }
-  return "—";
-};
-
-
-// Construye una fila completa MUNICIPAL (por fila decide si es km o hr)
-// Construye una fila completa MUNICIPAL (por fila decide si es km o hr)
-// Construye una fila completa MUNICIPAL. Si withStation=false no mete la columna.
-function buildMunicipalExportRow(r, withStation) {
+const usesStation = (r) => {
   const t = getType(r);
-  const isKm = KM_TYPES.includes(t);
-
+  return STATION_TYPES.has(t) || _hasStationData(r);
+};
+/* --------- filas para export --------- */
+function buildMunicipalExportRow(r) {
+  const t = getType(r);
   const operadorTxt = r?.operador
     ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
         r.operador?.identification ? ` (${r.operador.identification})` : ""
@@ -171,73 +214,44 @@ function buildMunicipalExportRow(r, withStation) {
     : r?.operadorId ?? "—";
 
   const maquinariaTxt = r?.maquinaria
-    ? `${r.maquinaria?.tipo ?? ""}${
-        r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""
-      }`
+    ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
     : r?.maquinariaId ?? "—";
 
   const horasTxt = `${showNum(pick(r?.horasOrd, r?.horas_or))} / ${showNum(
     pick(r?.horasExt, r?.horas_ext)
   )}`;
 
-  const metricVal = isKm
+  const metricVal = isKmType(t)
     ? showNum(pick(r?.kilometraje, get(r, "detalles.kilometraje")))
     : showNum(pick(r?.horimetro, get(r, "detalles.horimetro")));
 
   const tipoActividad = showText(pick(r.tipoActividad, r.actividad));
-
   const hi = pick(r.horaInicio, get(r, "detalles.horaInicio"));
   const hf = pick(r.horaFin, get(r, "detalles.horaFin"));
   const horario = hi || hf ? `${showText(hi)} – ${showText(hf)}` : "—";
 
-  const row = [
+  const estacionTxt = STATION_TYPES.has(t) ? toEstacionTxt(r) : "—";
+
+  return [
     "Municipal",
     r.id,
     operadorTxt,
     maquinariaTxt,
-    metricVal,                                // Medidor (km u hr)
-    showNum(pick(r?.diesel, r?.combustible)), // Diésel
-    horasTxt,                                 // Horas (Ord/Ext)
-  ];
-
-  // Solo inserta la columna Estación si se decidió incluirla en el export
-  if (withStation) row.push(usesStation(r) ? estacionText(r) : "—");
-
-  row.push(
+    metricVal,
+    showNum(pick(r?.diesel, r?.combustible)),
+    horasTxt,
+    estacionTxt,
     tipoActividad,
     horario,
     showText(r?.distrito),
     showText(r?.codigoCamino),
     showNum(r?.viaticos),
     fmtDate(r?.fecha),
-  );
-
-  return row;
+  ];
 }
 
-
-// ===== Exportación COMPLETA (todas las columnas importantes) =====
-
-// Headers completos (independientes de lo que se ve en pantalla)
-const EXPORT_HEADERS_MUNICIPAL = [
-  "Tipo",          // Municipal
-  "ID",
-  "Operador",
-  "Maquinaria",
-  "Kilometraje",       // (Kilometraje u Horímetro según el tipo de esa fila)
-  "Diésel",
-  "Horas (Ord/Ext)",
-  "Estación",
-  "Tipo actividad",
-  "Horario",
-  "Distrito",
-  "Código Camino",
-  "Viáticos",
-  "Fecha",
-];
-
 const EXPORT_HEADERS_RENTAL = [
-  "Tipo",              // Alquiler
+  "Tipo",
   "ID",
   "Operador",
   "Tipo Maquinaria",
@@ -251,30 +265,6 @@ const EXPORT_HEADERS_RENTAL = [
   "Fecha",
 ];
 
-
-// Construye una fila completa ALQUILER
-function buildRentalExportRow(r) {
-  const operadorTxt = r?.operador
-    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
-    : r?.operadorId ?? "—";
-
-  return [
-    "Alquiler",
-    r.id,
-    operadorTxt,
-    showText(r?.tipoMaquinaria),
-    showText(r?.placa),
-    showText(r?.actividad),
-    showNum(r?.cantidad),
-    showNum(r?.horas),
-    showText(r?.estacion),
-    showText(r?.boleta),
-    showText(r?.fuente),
-    fmtDate(r?.fecha),
-  ];
-}
-
-
 /* ==================== componente principal ==================== */
 export default function ReportsTable({
   municipalReports = [],
@@ -285,12 +275,8 @@ export default function ReportsTable({
   const [rowsMunicipal, setRowsMunicipal] = useState(municipalReports);
   const [rowsRental, setRowsRental] = useState(rentalReports);
 
-  useEffect(() => {
-    setRowsMunicipal(municipalReports);
-  }, [municipalReports]);
-  useEffect(() => {
-    setRowsRental(rentalReports);
-  }, [rentalReports]);
+  useEffect(() => setRowsMunicipal(municipalReports), [municipalReports]);
+  useEffect(() => setRowsRental(rentalReports), [rentalReports]);
 
   /* eliminar */
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -365,11 +351,23 @@ export default function ReportsTable({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rowsScope]);
 
+  // Auto-seleccionar el primer tipo disponible al abrir/recargar Municipal
+  const appliedDefaultType = useRef(false);
+  useEffect(() => {
+    if (!isMunicipal) return;
+    if (!typeFilter && tiposDisponibles.length && !appliedDefaultType.current) {
+      setTypeFilter(tiposDisponibles[0]);
+      setPage(1);
+      appliedDefaultType.current = true;
+    }
+  }, [isMunicipal, typeFilter, tiposDisponibles]);
+
   useEffect(() => {
     if (typeFilter && !tiposDisponibles.includes(typeFilter)) {
       setTypeFilter("");
       setVariantFilter("");
       setPage(1);
+      appliedDefaultType.current = false;
     }
   }, [tiposDisponibles, typeFilter]);
 
@@ -402,24 +400,24 @@ export default function ReportsTable({
   }, [rowsScope, typeFilter, variantFilter, actividadFilter, isMunicipal, isRental]);
 
   /* columnas compactas */
-  const COLUMNS_MUNICIPAL = [
-    "ID",
-    "Operador",
-    "Maquinaria",
-    "Variante",
-    "Distrito",
-    "Código Camino",
-    "Fecha",
-  ];
-  const COLUMNS_RENTAL = [
-    "ID",
-    "Operador",
-    "Tipo Maquinaria",
-    "Placa",
-    "Actividad",
-    "Fecha",
-  ];
-  const columns = isMunicipal ? COLUMNS_MUNICIPAL : COLUMNS_RENTAL;
+  const COLUMNS_MUNICIPAL_BASE = ["ID", "Operador", "Maquinaria", "Distrito", "Código Camino", "Fecha"];
+
+  const columns = useMemo(() => {
+    if (!isMunicipal) return ["ID", "Operador", "Tipo Maquinaria", "Placa", "Actividad", "Fecha"];
+    if (!typeFilter) return COLUMNS_MUNICIPAL_BASE; // sin huecos
+    const t = (typeFilter || "").toLowerCase();
+    const cols = [...COLUMNS_MUNICIPAL_BASE];
+
+    const insertAfter = (arr, after, label) => {
+      const i = arr.indexOf(after);
+      if (i >= 0) arr.splice(i + 1, 0, label);
+      else arr.push(label);
+    };
+    if (VARIANT_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Variante");
+    if (STATION_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Estación");
+
+    return cols;
+  }, [isMunicipal, typeFilter]);
 
   /* celdas según columna */
   function cellValueMunicipal(r, col) {
@@ -441,6 +439,8 @@ export default function ReportsTable({
         return r?.maquinariaId ?? "—";
       case "Variante":
         return getVar(r) || "—";
+      case "Estación":
+        return toEstacionTxt(r);
       case "Distrito":
         return showText(r?.distrito);
       case "Código Camino":
@@ -539,25 +539,155 @@ export default function ReportsTable({
     }
   };
 
-  /* -------- export -------- */
+  /* -------- export: Excel -------- */
+  const exportExcel = () => {
+    if (isRental) {
+      const rows = filtered.map((r) => {
+        const operadorTxt = r?.operador
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+              r.operador?.identification ? ` (${r.operador.identification})` : ""
+            }`
+          : r?.operadorId ?? "—";
+        return [
+          "Alquiler",
+          r.id,
+          operadorTxt,
+          showText(r?.tipoMaquinaria),
+          showText(r?.placa),
+          showText(r?.actividad),
+          showNum(r?.cantidad),
+          showNum(r?.horas),
+          showText(r?.estacion),
+          showText(r?.boleta),
+          showText(r?.fuente),
+          fmtDate(r?.fecha),
+        ];
+      });
+      const ws = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS_RENTAL, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Reportes");
+      XLSX.writeFile(wb, `reportes_alquiler_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      return;
+    }
+
+    // MUNICIPAL
+    const anyStation = filtered.some(usesStation);
+    const typeForHeader = typeFilter || (filtered[0] ? getType(filtered[0]) : "");
+    const medidorHeader = medidorLabelFor(typeForHeader);
+
+    const HEADERS_MUNICIPAL = [
+      "Tipo",
+      "ID",
+      "Operador",
+      "Maquinaria",
+      medidorHeader,
+      "Diésel",
+      "Horas (Ord/Ext)",
+      ...(anyStation ? ["Estación"] : []),
+      "Tipo actividad",
+      "Horario",
+      "Distrito",
+      "Código Camino",
+      "Viáticos",
+      "Fecha",
+    ];
+
+    const rows = filtered.map((r) => {
+      const base = buildMunicipalExportRow(r);
+      // si no incluyo estación en headers, remuevo la columna (está en posición 7 de base)
+      if (!anyStation) {
+        const withoutStation = base.slice(0, 7).concat(base.slice(8));
+        return withoutStation;
+      }
+      return base;
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([HEADERS_MUNICIPAL, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reportes");
+    XLSX.writeFile(
+      wb,
+      `reportes_municipales_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
+
+  /* -------- export: PDF -------- */
   const exportPDF = () => {
-    const win = window.open("", "_blank");
-    const head = `<style>body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;padding:16px}table{width:100%;border-collapse:collapse;font-size:12px}thead th{text-align:left;background:#f6f7f9;padding:8px;border-bottom:1px solid #e5e7eb}tbody td{padding:8px;border-bottom:1px solid #f1f5f9}h1{font-size:18px;margin-bottom:12px}</style>`;
-    const headers = ["Tipo", ...columns, "Acciones"];
-    const rowsHtml = filtered
-      .map((r) => {
-        const cells = columns
-          .map((c) =>
-            isMunicipal ? cellValueMunicipal(r, c) : cellValueRental(r, c)
-          )
-          .map((v) => `<td>${v}</td>`)
-          .join("");
-        return `<tr><td>${isMunicipal ? "Municipal" : "Alquiler"}</td>${cells}<td></td></tr>`;
-      })
+    const head = `
+      <style>
+        body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;padding:16px}
+        table{width:100%;border-collapse:collapse;font-size:12px}
+        thead th{text-align:left;background:#f6f7f9;padding:8px;border-bottom:1px solid #e5e7eb}
+        tbody td{padding:8px;border-bottom:1px solid #f1f5f9}
+        h1{font-size:18px;margin-bottom:12px}
+      </style>
+    `;
+
+    let headers = [];
+    let rows = [];
+
+    if (isRental) {
+      headers = EXPORT_HEADERS_RENTAL;
+      rows = filtered.map((r) => [
+        "Alquiler",
+        r.id,
+        r?.operador
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+              r.operador?.identification ? ` (${r.operador.identification})` : ""
+            }`
+          : r?.operadorId ?? "—",
+        showText(r?.tipoMaquinaria),
+        showText(r?.placa),
+        showText(r?.actividad),
+        showNum(r?.cantidad),
+        showNum(r?.horas),
+        showText(r?.estacion),
+        showText(r?.boleta),
+        showText(r?.fuente),
+        fmtDate(r?.fecha),
+      ]);
+    } else {
+      const anyStation = filtered.some(usesStation);
+      const typeForHeader = typeFilter || (filtered[0] ? getType(filtered[0]) : "");
+      const medidorHeader = medidorLabelFor(typeForHeader);
+
+      headers = [
+        "Tipo",
+        "ID",
+        "Operador",
+        "Maquinaria",
+        medidorHeader,
+        "Diésel",
+        "Horas (Ord/Ext)",
+        ...(anyStation ? ["Estación"] : []),
+        "Tipo actividad",
+        "Horario",
+        "Distrito",
+        "Código Camino",
+        "Viáticos",
+        "Fecha",
+      ];
+
+      rows = filtered.map((r) => {
+        const base = buildMunicipalExportRow(r);
+        if (!anyStation) {
+          return base.slice(0, 7).concat(base.slice(8));
+        }
+        return base;
+      });
+    }
+
+    const thead = `<tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+    const tbody = rows
+      .map((row) => `<tr>${row.map((v) => `<td>${v ?? ""}</td>`).join("")}</tr>`)
       .join("");
-    const thead = headers.map((h) => `<th>${h}</th>`).join("");
+
+    const win = window.open("", "_blank");
     win.document.write(
-      `<html><head><title>Reportes</title>${head}</head><body><h1>Reportes</h1><table><thead><tr>${thead}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`
+      `<html><head><title>Reportes</title>${head}</head>
+       <body><h1>Reportes</h1>
+       <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+       </body></html>`
     );
     win.document.close();
     win.focus();
@@ -572,10 +702,11 @@ export default function ReportsTable({
         <button
           onClick={() => {
             setActiveReportTab("municipal");
-            setTypeFilter("");
             setVariantFilter("");
             setActividadFilter("");
             setPage(1);
+            // permitimos aplicar default de nuevo
+            appliedDefaultType.current = false;
           }}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
             isMunicipal
@@ -689,99 +820,26 @@ export default function ReportsTable({
             setVariantFilter("");
             setActividadFilter("");
             setPage(1);
+            appliedDefaultType.current = false;
           }}
         >
           Limpiar
         </Button>
 
         <div className="ml-auto flex gap-2">
-          {/* Exportar a Excel (TODO completo, no solo visibles) */}
-<Button
-  className="bg-green-500 hover:bg-green-600 text-white"
-  onClick={() => {
-    // ¿Hay alguna fila que use Estación?
-    const withStation = filtered.some(usesStation);
+          <Button
+            className="bg-green-500 hover:bg-green-600 text-white"
+            onClick={exportExcel}
+          >
+            Exportar a Excel
+          </Button>
 
-    const headersBase = [
-      "Tipo","ID","Operador","Maquinaria","Medidor","Diésel","Horas (Ord/Ext)"
-    ];
-    const headersTail = [
-      "Tipo actividad","Horario","Distrito","Código Camino","Viáticos","Fecha"
-    ];
-    const headers = withStation
-      ? [...headersBase, "Estación", ...headersTail]
-      : [...headersBase, ...headersTail];
-
-    const rows = filtered.map((r) => buildMunicipalExportRow(r, withStation));
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reportes");
-    XLSX.writeFile(
-      wb,
-      `reportes_${isMunicipal ? "municipales" : "alquiler"}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
-    );
-  }}
->
-  Exportar a Excel
-</Button>
-
-
-{/* Exportar a PDF (TODO completo, no solo visibles) */}
-<Button
-  className="bg-red-500 hover:bg-red-600 text-white"
-  onClick={() => {
-    const withStation = filtered.some(usesStation);
-
-    const headersBase = [
-      "Tipo","ID","Operador","Maquinaria","Medidor","Diésel","Horas (Ord/Ext)"
-    ];
-    const headersTail = [
-      "Tipo actividad","Horario","Distrito","Código Camino","Viáticos","Fecha"
-    ];
-    const headers = withStation
-      ? [...headersBase, "Estación", ...headersTail]
-      : [...headersBase, ...headersTail];
-
-    const rows = filtered.map((r) => buildMunicipalExportRow(r, withStation));
-
-    const win = window.open("", "_blank");
-    const head = `
-      <style>
-        body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;padding:16px}
-        table{width:100%;border-collapse:collapse;font-size:12px}
-        thead th{text-align:left;background:#f6f7f9;padding:8px;border-bottom:1px solid #e5e7eb}
-        tbody td{padding:8px;border-bottom:1px solid #f1f5f9}
-        h1{font-size:18px;margin-bottom:12px}
-      </style>
-    `;
-    const thead = `<tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>`;
-    const tbody = rows
-      .map(row => `<tr>${row.map(v => `<td>${v ?? ""}</td>`).join("")}</tr>`)
-      .join("");
-
-    win.document.write(`
-      <html>
-        <head><title>Reportes</title>${head}</head>
-        <body>
-          <h1>Reportes</h1>
-          <table>
-            <thead>${thead}</thead>
-            <tbody>${tbody}</tbody>
-          </table>
-        </body>
-      </html>
-    `);
-    win.document.close();
-    win.focus();
-    win.print();
-  }}
->
-  Exportar a PDF
-</Button>
-
+          <Button
+            className="bg-red-500 hover:bg-red-600 text-white"
+            onClick={exportPDF}
+          >
+            Exportar a PDF
+          </Button>
 
           <Button variant="secondary" onClick={openDeleted}>
             Ver reportes eliminados
@@ -821,8 +879,7 @@ export default function ReportsTable({
 
         {isMunicipal &&
           typeFilter &&
-          (VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] || []).length >
-            0 && (
+          (VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] || []).length > 0 && (
             <div className="w-52">
               <Select
                 value={variantFilter}
@@ -878,30 +935,35 @@ export default function ReportsTable({
       {/* Tabla */}
       <div className="rounded-2xl border bg-white overflow-hidden">
         <table className="w-full table-fixed text-sm">
-          {/* anchos fijos */}
           <colgroup>
-            <col className="w-28" /> {/* badge Tipo */}
+            <col className="w-28" />
             {isMunicipal ? (
               <>
-                <col className="w-16" /> {/* ID */}
-                <col className="w-64" /> {/* Operador */}
-                <col className="w-56" /> {/* Maquinaria */}
-                <col className="w-24" /> {/* Variante */}
-                <col className="w-40" /> {/* Distrito */}
-                <col className="w-32" /> {/* Código Camino */}
-                <col className="w-28" /> {/* Fecha */}
+                {columns.map((c) => {
+                  const w = {
+                    ID: "w-16",
+                    Operador: "w-64",
+                    Maquinaria: "w-56",
+                    Variante: "w-24",
+                    Estación: "w-28",
+                    Distrito: "w-40",
+                    "Código Camino": "w-32",
+                    Fecha: "w-28",
+                  }[c] || "w-32";
+                  return <col key={c} className={w} />;
+                })}
               </>
             ) : (
               <>
-                <col className="w-16" /> {/* ID */}
-                <col className="w-64" /> {/* Operador */}
-                <col className="w-40" /> {/* Tipo Maquinaria */}
-                <col className="w-40" /> {/* Placa */}
-                <col className="w-40" /> {/* Actividad */}
-                <col className="w-28" /> {/* Fecha */}
+                <col className="w-16" />
+                <col className="w-64" />
+                <col className="w-40" />
+                <col className="w-40" />
+                <col className="w-40" />
+                <col className="w-28" />
               </>
             )}
-            <col className="w-28" /> {/* Acciones */}
+            <col className="w-28" />
           </colgroup>
 
           <thead className="bg-gray-50 text-gray-700">
@@ -919,20 +981,16 @@ export default function ReportsTable({
           <tbody>
             {pageRows.map((r) => (
               <tr key={r.id} className="border-t hover:bg-gray-50">
-                {/* badge */}
                 <td className="px-4 py-3">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      isMunicipal
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-green-100 text-green-800"
+                      isMunicipal ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
                     }`}
                   >
                     {isMunicipal ? "🏛️ Municipal" : "🚛 Alquiler"}
                   </span>
                 </td>
 
-                {/* celdas compactas */}
                 {columns.map((c) => (
                   <td
                     key={c}
@@ -947,7 +1005,6 @@ export default function ReportsTable({
                   </td>
                 ))}
 
-                {/* acciones */}
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -975,12 +1032,8 @@ export default function ReportsTable({
 
             {filtered.length === 0 && (
               <tr>
-                <td
-                  className="px-4 py-6 text-center text-gray-500"
-                  colSpan={columns.length + 2}
-                >
-                  No hay reportes {isMunicipal ? "municipales" : "de alquiler"} con
-                  ese filtro.
+                <td className="px-4 py-6 text-center text-gray-500" colSpan={columns.length + 2}>
+                  No hay reportes {isMunicipal ? "municipales" : "de alquiler"} con ese filtro.
                 </td>
               </tr>
             )}
@@ -994,173 +1047,175 @@ export default function ReportsTable({
           Página {page} de {totalPages}
         </span>
         <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
+          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
             Anterior
           </Button>
-          <Button
-            variant="secondary"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
+          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
             Siguiente
           </Button>
         </div>
       </div>
 
-      {/* Modal VER (tu bloque completo, sin cambios funcionales) */}
-      {/* ... ⬇️ tu modal tal como lo tenías, incluido el render condicional de Subfuente/Boleta ... */}
+      {/* Modal VER */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Detalles del reporte {selectedRow?.id ? `#${selectedRow.id}` : ""}
             </DialogTitle>
-            <DialogDescription>
-              Información completa del registro seleccionado.
-            </DialogDescription>
+            <DialogDescription>Información completa del registro seleccionado.</DialogDescription>
           </DialogHeader>
 
-          {selectedRow && (() => {
-  const r = selectedRow;
-  const t = getType(r);               // "vagoneta", "cabezal", "niveladora", etc.
-  const v = getVar(r);
-  const d = r.detalles || {};
-  const kmType = ["vagoneta","cabezal","cisterna"].includes(t);
+          {selectedRow &&
+            (() => {
+              const r = selectedRow;
+              const t = getType(r);
+              const v = getVar(r);
+              const d = r.detalles || {};
+              const kmType = isKmType(t);
 
-  // ✨ Reglas por tipo
-  const typesWithBoletas   = ["vagoneta","cabezal"];
-  const typesWithEstacion  = ["niveladora"];            // agrega aquí otros que usen estación
-  const typesWithVariante  = ["vagoneta","cabezal","cisterna"]; // niveladora NO lleva variante
+              const typesWithBoletas = ["vagoneta", "cabezal"];
+              const typesWithEstacion = Array.from(STATION_TYPES);
+              const typesWithVariante = ["vagoneta", "cabezal", "cisterna"];
 
-  const showBoletas  = typesWithBoletas.includes(t);
-  const showEstacion = typesWithEstacion.includes(t);
-  const showVariante = typesWithVariante.includes(t);
+              const showBoletas = typesWithBoletas.includes(t);
+              const showEstacion = typesWithEstacion.includes(t);
+              const showVariante = typesWithVariante.includes(t);
 
-  const KV = ({label, value}) => (
-    <div className="bg-white border rounded-lg p-3">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="font-medium break-words">{(value ?? value === 0) ? value : "—"}</div>
-    </div>
-  );
+              const KV = ({ label, value }) => (
+                <div className="bg-white border rounded-lg p-3">
+                  <div className="text-xs text-gray-500">{label}</div>
+                  <div className="font-medium break-words">
+                    {value || value === 0 ? value : "—"}
+                  </div>
+                </div>
+              );
 
-  // ✨ Campos base (solo se agregan los que aplican)
-  const base = [
-    { label: "Operador", value: r?.operador
-        ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
-        : r?.operadorId },
+              const base = [
+                {
+                  label: "Operador",
+                  value: r?.operador
+                    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${
+                        r.operador?.identification ? ` (${r.operador.identification})` : ""
+                      }`
+                    : r?.operadorId,
+                },
+                {
+                  label: "Maquinaria",
+                  value: r?.maquinaria
+                    ? `${r.maquinaria?.tipo ?? ""}${
+                        r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""
+                      }`
+                    : r?.maquinariaId,
+                },
+                {
+                  label: kmType ? "Kilometraje" : "Horímetro",
+                  value: kmType ? r?.kilometraje ?? d?.kilometraje : r?.horimetro ?? d?.horimetro,
+                },
+                { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
+                {
+                  label: "Horario",
+                  value: (() => {
+                    const ini = r?.horaInicio ?? d?.horaInicio;
+                    const fin = r?.horaFin ?? d?.horaFin;
+                    return ini || fin ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
+                  })(),
+                },
+                { label: "Diésel", value: r?.diesel ?? r?.combustible },
+                {
+                  label: "Horas (Ord/Ext)",
+                  value:
+                    (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
+                    (r?.horasExt ?? r?.horas_ext ?? null) !== null
+                      ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${
+                          r?.horasExt ?? r?.horas_ext ?? "—"
+                        }`
+                      : null,
+                },
+                { label: "Distrito", value: r?.distrito },
+                { label: "Código Camino", value: r?.codigoCamino },
+                { label: "Viáticos", value: r?.viaticos },
+                { label: "Fecha", value: fmtDate(r?.fecha) },
+              ];
 
-    { label: "Maquinaria", value: r?.maquinaria
-        ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
-        : r?.maquinariaId },
+              if (showVariante) base.push({ label: "Variante", value: v || null });
+              if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
 
-    { label: kmType ? "Kilometraje" : "Horímetro",
-      value: kmType
-        ? (r?.kilometraje ?? d?.kilometraje)
-        : (r?.horimetro ?? d?.horimetro) },
+              const boletas = getBoletasArr(r);
+              const totalM3 = getTotalM3(r);
+              const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
+              const showSubfuenteCol = boletas.some((b) => isRioOTajo(b?.fuente));
+              const showBoletaCol = boletas.some((b) => !isRioOTajo(b?.fuente));
 
-    { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {base.map((k, i) => (
+                      <KV key={`b-${i}`} {...k} />
+                    ))}
+                  </div>
 
-    { label: "Horario", value: (() => {
-        const ini = r?.horaInicio ?? d?.horaInicio;
-        const fin = r?.horaFin   ?? d?.horaFin;
-        return (ini || fin) ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
-      })()
-    },
+                  {showBoletas && (
+                    <div className="border rounded-lg p-3">
+                      <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
 
-    { label: "Diésel", value: r?.diesel ?? r?.combustible },
+                      <div className="mb-3">
+                        <div className="bg-white border rounded-lg p-3">
+                          <div className="text-xs text-gray-500">
+                            Total m<sup>3</sup> del día
+                          </div>
+                          <div className="font-medium">{showNum(totalM3)}</div>
+                        </div>
+                      </div>
 
-    { label: "Horas (Ord/Ext)", value:
-        (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
-        (r?.horasExt ?? r?.horas_ext ?? null) !== null
-          ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${r?.horasExt ?? r?.horas_ext ?? "—"}`
-          : null },
-
-    { label: "Distrito", value: r?.distrito },
-    { label: "Código Camino", value: r?.codigoCamino },
-    { label: "Viáticos", value: r?.viaticos },
-    { label: "Fecha", value: fmtDate(r?.fecha) },
-  ];
-
-  // Variante SOLO si aplica
-  if (showVariante) base.push({ label: "Variante", value: v || null });
-
-  // Estación SOLO si aplica (niveladora, etc.)
-  if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
-
-  // Placa extra si la necesitas como campo aparte (opcional)
-  // base.push({ label: "Placa", value: r?.maquinaria?.placa ?? r?.placa ?? d?.placa ?? null });
-
-  // --- Render ---
-  const boletas = getBoletasArr(r);
-  const totalM3 = getTotalM3(r);
-  const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
-  const showSubfuenteCol = boletas.some((b) => isRioOTajo(b?.fuente));
-  const showBoletaCol    = boletas.some((b) => !isRioOTajo(b?.fuente));
-
-  return (
-    <div className="space-y-4">
-      {/* Grid de campos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {base.map((k, i) => <KV key={`b-${i}`} {...k} />)}
-      </div>
-
-      {/* Detalle de boleta SOLO si aplica (vagoneta/cabezal) */}
-      {showBoletas && (
-        <div className="border rounded-lg p-3">
-          <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
-
-          <div className="mb-3">
-            <div className="bg-white border rounded-lg p-3">
-              <div className="text-xs text-gray-500">Total m<sup>3</sup> del día</div>
-              <div className="font-medium">{showNum(totalM3)}</div>
-            </div>
-          </div>
-
-          {Array.isArray(boletas) && boletas.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-3 py-2">#</th>
-                    <th className="text-left px-3 py-2">Tipo material</th>
-                    <th className="text-left px-3 py-2">Fuente</th>
-                    {showSubfuenteCol && <th className="text-left px-3 py-2">Subfuente</th>}
-                    {showBoletaCol    && <th className="text-left px-3 py-2">Boleta</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {boletas.map((b, i) => {
-                    const rioOTajo = isRioOTajo(b?.fuente);
-                    return (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2">{i + 1}</td>
-                        <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
-                        <td className="px-3 py-2">{showText(b?.fuente)}</td>
-                        {showSubfuenteCol && (
-                          <td className="px-3 py-2">{rioOTajo ? showText(b?.subFuente) : "—"}</td>
-                        )}
-                        {showBoletaCol && (
-                          <td className="px-3 py-2">{rioOTajo ? "—" : showText(b?.boleta)}</td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-500">Sin boletas registradas.</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-})()}
-
+                      {Array.isArray(boletas) && boletas.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-3 py-2">#</th>
+                                <th className="text-left px-3 py-2">Tipo material</th>
+                                <th className="text-left px-3 py-2">Fuente</th>
+                                {showSubfuenteCol && (
+                                  <th className="text-left px-3 py-2">Subfuente</th>
+                                )}
+                                {showBoletaCol && (
+                                  <th className="text-left px-3 py-2">Boleta</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {boletas.map((b, i) => {
+                                const rioOTajo = isRioOTajo(b?.fuente);
+                                return (
+                                  <tr key={i} className="border-t">
+                                    <td className="px-3 py-2">{i + 1}</td>
+                                    <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
+                                    <td className="px-3 py-2">{showText(b?.fuente)}</td>
+                                    {showSubfuenteCol && (
+                                      <td className="px-3 py-2">
+                                        {rioOTajo ? showText(b?.subFuente) : "—"}
+                                      </td>
+                                    )}
+                                    {showBoletaCol && (
+                                      <td className="px-3 py-2">
+                                        {rioOTajo ? "—" : showText(b?.boleta)}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-500">Sin boletas registradas.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
         </DialogContent>
       </Dialog>
 
@@ -1216,9 +1271,7 @@ export default function ReportsTable({
             <DialogTitle>
               Reportes eliminados ({isMunicipal ? "Municipales" : "Alquiler"})
             </DialogTitle>
-            <DialogDescription>
-              Motivo, fecha de eliminación y quién lo realizó.
-            </DialogDescription>
+            <DialogDescription>Motivo, fecha de eliminación y quién lo realizó.</DialogDescription>
           </DialogHeader>
           {loadingDeleted ? (
             <div className="p-6 text-center text-sm text-gray-500">Cargando…</div>
@@ -1242,9 +1295,7 @@ export default function ReportsTable({
                       <td className="px-3 py-2">
                         {r.deletedAt ? new Date(r.deletedAt).toLocaleString() : "—"}
                       </td>
-                      <td className="px-3 py-2 whitespace-pre-wrap">
-                        {r.deleteReason ?? "—"}
-                      </td>
+                      <td className="px-3 py-2 whitespace-pre-wrap">{r.deleteReason ?? "—"}</td>
                       <td className="px-3 py-2 text-right">
                         <Button
                           variant="secondary"
@@ -1253,14 +1304,16 @@ export default function ReportsTable({
                               let restored;
                               if (isMunicipal) {
                                 restored = await machineryService.restoreReport(r.id);
-                                setRowsMunicipal((prev) =>
-                                  [restored, ...prev.filter((x) => x.id !== restored.id)]
-                                );
+                                setRowsMunicipal((prev) => [
+                                  restored,
+                                  ...prev.filter((x) => x.id !== restored.id),
+                                ]);
                               } else {
                                 restored = await machineryService.restoreRentalReport(r.id);
-                                setRowsRental((prev) =>
-                                  [restored, ...prev.filter((x) => x.id !== restored.id)]
-                                );
+                                setRowsRental((prev) => [
+                                  restored,
+                                  ...prev.filter((x) => x.id !== restored.id),
+                                ]);
                               }
                               setDeletedRows((prev) => prev.filter((x) => x.id !== r.id));
                             } catch {
