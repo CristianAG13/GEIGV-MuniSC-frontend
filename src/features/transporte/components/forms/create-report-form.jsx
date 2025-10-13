@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -11,22 +9,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
 import { machineryFields } from "@/utils/machinery-fields";
-import {
-  districts,
-  materialTypes,
-  activityTypes,
-  cargoTypes,
-  activityOptions,
-  sourceOptions,
-  rivers,
-  tajosBase,
-} from "@/utils/districts";
+import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions } from "@/utils/districts";
+import sourceService from "@/services/sourceService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLogger } from "@/hooks/useAuditLogger";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
+import { todayLocalISO, toISODateOnly } from "@/utils/date";
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+// Agrupa y suma m³ por tipo de material a partir de las boletas del formulario.
+function getMaterialBreakdownFromForm(boletas = []) {
+  const map = new Map();
+  for (const b of boletas) {
+    const mat = (b?.tipoMaterial || "").trim();
+    // admite distintos nombres por si tu UI usa "m3" o "cantidad"
+    const qtyRaw = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen ?? 0;
+    const qty = Number(qtyRaw);
+    if (!mat || !Number.isFinite(qty) || qty <= 0) continue;
+    map.set(mat, (map.get(mat) || 0) + qty);
+  }
+  return Object.fromEntries(map); // { "Tierra": 19, "Arena": 8 }
+}
+
+// Para imprimirlo bonito (multilínea)
+function breakdownToMultiline(breakdown) {
+  const entries = Object.entries(breakdown);
+  return entries.length ? entries.map(([k, v]) => `${k}: ${v} m³`).join("\n") : "";
+}
 
 export default function CreateReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
@@ -38,7 +49,19 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const [operatorsList, setOperatorsList] = useState([]);
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
+
+  // 👇 definir aquí
+const isMaterialFlow = useMemo(() => {
+  const t = (selectedMachineryType || "").toLowerCase();
+  const v = (selectedVariant || "").toLowerCase();
+  return ["cabezal", "vagoneta"].includes(t) && v === "material";
+}, [selectedMachineryType, selectedVariant]);
+
   const [totalHours, setTotalHours] = useState("");
+
+  // Catálogos dinámicos
+  const [riosList, setRiosList] = useState([]);
+  const [tajosList, setTajosList] = useState([]);
 
   const normKey = (s = "") =>
     String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -48,7 +71,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
     kilometraje: null,
     estacionHasta: null,
     estacionUpdatedAt: null,
-    // opcionales si tu API los devuelve:
     estacionDesde: null,
     estacionAvance: null,
   });
@@ -56,7 +78,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const INITIAL_FORM = {
     operadorId: "",
     maquinariaId: 0,
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: todayLocalISO(),
     horasOrd: "",
     horasExt: "",
     diesel: "",
@@ -75,6 +97,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
     subFuente: "",
     boleta: "",
     cantidadLiquido: "",
+    placaCisterna: "", //NUEVO
     placaCarreta: "",
     destino: "",
     tipoCarga: "",
@@ -85,12 +108,9 @@ export default function CreateReportForm({ onGoToCatalog }) {
     horaFin: "",
     placaMaquinariaLlevada: "",
 
-    _tajos: tajosBase,
-    _nuevoTajo: "",
-
     // flujo material
     totalCantidadMaterial: "",
-    boletas: [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
+    boletas: [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" }],
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
 
@@ -110,13 +130,12 @@ export default function CreateReportForm({ onGoToCatalog }) {
   };
 
   // Mostrar boleta global solo en vagoneta/cabezal material y cuando la fuente NO sea Río/Tajo
+
   const showBoletaField = useCallback(() => {
-    const t = (selectedMachineryType || "").toLowerCase();
-    const v = (selectedVariant || "").toLowerCase();
-    const byType = (t === "vagoneta" && v === "material") || (t === "cabezal" && v === "material");
-    const hideByFuente = formData.fuente === "Ríos" || formData.fuente === "Tajo";
-    return byType && !hideByFuente;
-  }, [selectedMachineryType, selectedVariant, formData.fuente]);
+  const t = (selectedMachineryType || "").toLowerCase();
+  const v = (selectedVariant || "").toLowerCase();
+  return (t === "vagoneta" || t === "cabezal") && v === "material";
+}, [selectedMachineryType, selectedVariant]);
 
   // ====== DERIVADOS / CALLBACKS ======
   const getPlacaById = useCallback(
@@ -169,6 +188,17 @@ export default function CreateReportForm({ onGoToCatalog }) {
     return sourceOptions.default;
   }, [selectedMachineryType, selectedVariant]);
 
+
+  // Suma por material a partir de boletas (re-usa tu helper)
+  const materialBreakdown = useMemo(
+    () => getMaterialBreakdownFromForm(formData.boletas || []),
+    [formData.boletas]
+  );
+
+  const totalFromBoletas = useMemo(
+    () => Object.values(materialBreakdown).reduce((a, b) => a + b, 0),
+    [materialBreakdown]
+  );
   // ====== EFECTOS ======
   useEffect(() => {
     (async () => {
@@ -202,7 +232,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
     })();
   }, [toast]);
 
-  // Si la fuente cambia a una que no está disponible, limpiar
+  // limpiar fuente si ya no es válida para el tipo/variante
   useEffect(() => {
     const opts = getFuenteOptions();
     if (formData.fuente && !opts.includes(formData.fuente)) {
@@ -220,11 +250,34 @@ export default function CreateReportForm({ onGoToCatalog }) {
     });
   }, [getTrailerOptions]);
 
+  // Prefetch catálogos de ríos y tajos
+  useEffect(() => {
+    (async () => {
+      try {
+        const [{ items: rios }, { items: tajos }] = await Promise.all([
+          sourceService.list({ tipo: "rio", take: 500 }),
+          sourceService.list({ tipo: "tajo", take: 500 }),
+        ]);
+        setRiosList((rios || []).map((x) => x.nombre));
+        setTajosList((tajos || []).map((x) => x.nombre));
+      } catch (e) {
+        console.error("[CreateReportForm] load sources:", e);
+      }
+    })();
+  }, []);
+
+  // OPCIONAL: autollenar el “Total m³ del día” con lo calculado
+   useEffect(() => {
+   if (!isMaterialFlow) return;
+   const next = totalFromBoletas ? String(totalFromBoletas) : "";
+   setFormData(p => (p.totalCantidadMaterial === next ? p : { ...p, totalCantidadMaterial: next }));
+ }, [isMaterialFlow, totalFromBoletas]);
+
   // ====== BOLETAS HELPERS ======
   const addBoleta = () => {
     setFormData((p) => ({
       ...p,
-      boletas: [...(p.boletas || []), { boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
+      boletas: [...(p.boletas || []), { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" }],
     }));
   };
 
@@ -242,19 +295,11 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const updateBoleta = (idx, patch) => {
     setFormData((p) => {
       const next = [...(p.boletas || [])];
-      const cur = next[idx] || { boleta: "", tipoMaterial: "", fuente: "", subFuente: "" };
+      const cur = next[idx] || { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" };
       next[idx] = { ...cur, ...patch };
       return { ...p, boletas: next };
     });
   };
-
-  // Útil para saber si estamos en material (vagoneta/cabezal)
- function isMaterialFlow() {
-  const t = (selectedMachineryType || "").toLowerCase();
-  const v = (selectedVariant || "").toLowerCase();
-  return ["vagoneta", "cabezal"].includes(t) && v === "material";
-}
-
 
   // ====== HANDLERS ======
   const handleTotalHoursChange = (e) => {
@@ -270,19 +315,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
     const ext = clamp(h - ord, 0, 10);
     setFormData((p) => ({ ...p, horasOrd: ord, horasExt: ext }));
   };
-
-  const handleEditMunicipal = async (row) => {
-  try {
-    const data = await machineryService.getReportById(row.id);
-    // normaliza detalles
-    if (!data.detalles) data.detalles = {};
-    if (!Array.isArray(data.detalles.boletas)) data.detalles.boletas = [];
-    setEditingRow({ ...data, _kind: "municipal" });
-    setEditOpen(true);
-  } catch (err) {
-    console.error("GET /machinery/report/:id ->", err?.response || err);
-  }
-};
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
@@ -313,7 +345,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
                   : String(c.estacionHasta)
                 : p.estacionDesde,
           }));
-        } catch {}
+        } catch { }
       }
       return;
     }
@@ -368,7 +400,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
 
     if (name === "placaId") {
       const id = Number(value);
-      // 1) guarda id y placa
       setFormData((prev) => ({
         ...prev,
         maquinariaId: id,
@@ -376,7 +407,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
       }));
 
       try {
-        // 2) counters (pasando código si existe)
         const c = await machineryService.getLastCounters(id, formData.codigoCamino || undefined);
 
         setLastCounters({
@@ -392,7 +422,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
           c?.estacionUpdatedAt &&
           Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
 
-        // 3) precarga estaciónDesde si aplica
         setFormData((p) => ({
           ...p,
           estacionDesde:
@@ -417,7 +446,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
     }
   };
 
-  function getDynamicFields () {
+  function getDynamicFields() {
     if (!selectedMachineryType) return [];
     const mach = machineryFields[selectedMachineryType];
     if (!mach) return [];
@@ -427,11 +456,14 @@ export default function CreateReportForm({ onGoToCatalog }) {
     else fields = [...(mach.campos || [])];
 
     // En flujo material quitamos Boleta y Cantidad material (se manejan en boletas dinámicas)
-    if (["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
-        (selectedVariant || "").toLowerCase() === "material") {
+    if (
+      ["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
+      (selectedVariant || "").toLowerCase() === "material"
+    ) {
       fields = fields.filter((f) => {
         const k = normKey(f);
-        return k !== "boleta" && k !== "cantidad material";
+        // En flujo material solo se muestran las boletas dinámicas.
+        return k !== "boleta" && k !== "cantidad material" && k !== "tipo material";
       });
     }
 
@@ -439,12 +471,17 @@ export default function CreateReportForm({ onGoToCatalog }) {
     const v = (selectedVariant || "").toLowerCase();
     const needsTrailer = !!TRAILER_PLATES[t]?.[v];
 
-    if (needsTrailer && !fields.some((f) => f?.toLowerCase().trim() === "placa carreta"))
-      fields.push("Placa carreta");
+    if (needsTrailer && !fields.some((f) => f?.toLowerCase().trim() === "placa carreta")) fields.push("Placa carreta");
     if (v === "carreta" && !fields.some((f) => f?.toLowerCase().includes("placa maquinaria llevada")))
       fields.push("Placa maquinaria llevada");
 
-    // dedupe
+    // 👇 NUEVO: si es cisterna en vagoneta/cabezal, agregamos el campo
+    if (["vagoneta", "cabezal"].includes(t) && v === "cisterna") {
+      if (!fields.some((f) => normKey(f) === "placa cisterna")) {
+        fields.push("Placa cisterna");
+      }
+    }
+
     const seen = new Set();
     fields = fields.filter((f) => {
       const k = normKey(f);
@@ -454,7 +491,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
     });
 
     return fields;
-  };
+  }
 
   const requiresField = (name) => getDynamicFields().some((f) => normKey(f) === normKey(name));
 
@@ -511,6 +548,20 @@ export default function CreateReportForm({ onGoToCatalog }) {
               />
               <span className="text-sm text-muted-foreground">L</span>
             </div>
+          </div>
+        );
+
+      case "placa cisterna":
+        return (
+          <div className="space-y-2" key={fieldName}>
+            <Label htmlFor="placaCisterna">Placa cisterna</Label>
+            <Input
+              id="placaCisterna"
+              name="placaCisterna"
+              placeholder="Ej: SM 8678"
+              value={formData.placaCisterna || ""}
+              onChange={handleInputChange}
+            />
           </div>
         );
 
@@ -648,9 +699,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
             </div>
 
             {ultimoHasta !== null && (
-              <p className="text-xs text-muted-foreground">
-                Continuidad: el “Desde” de hoy debe ser ≥ {ultimoHasta}.
-              </p>
+              <p className="text-xs text-muted-foreground">Continuidad: el “Desde” de hoy debe ser ≥ {ultimoHasta}.</p>
             )}
           </div>
         );
@@ -716,6 +765,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
         );
 
       case "tipo material":
+        if (isMaterialFlow) return null; // <- evita el duplicado
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Material</Label>
@@ -831,9 +881,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
         );
 
       case "fuente": {
-        // ocultar fuente global en flujo material
-        if (isMaterialFlow()) return null;
-
+        if (isMaterialFlow) return null;
         const opciones = getFuenteOptions();
         if (!opciones.length) return null;
 
@@ -842,7 +890,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
             ...p,
             fuente: value,
             subFuente: "",
-            boleta: value === "Ríos" || value === "Tajo" ? "" : p.boleta,
             tipoMaterial: value === "Ríos" ? "" : p.tipoMaterial,
           }));
         };
@@ -874,13 +921,16 @@ export default function CreateReportForm({ onGoToCatalog }) {
                     <SelectValue placeholder="Seleccionar río" />
                   </SelectTrigger>
                   <SelectContent>
-                    {rivers.map((r) => (
+                    {riosList.map((r) => (
                       <SelectItem key={r} value={r}>
                         {r}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                  Administrar ríos en Catálogo
+                </button>
               </>
             )}
 
@@ -895,39 +945,16 @@ export default function CreateReportForm({ onGoToCatalog }) {
                     <SelectValue placeholder="Seleccionar tajo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(formData._tajos || []).map((t) => (
+                    {tajosList.map((t) => (
                       <SelectItem key={t} value={t}>
                         {t}
                       </SelectItem>
                     ))}
-                    <SelectItem value="__add__">+ Agregar nuevo tajo…</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {formData.subFuente === "__add__" && (
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      placeholder="Nombre del tajo"
-                      value={formData._nuevoTajo || ""}
-                      onChange={(e) => setFormData((p) => ({ ...p, _nuevoTajo: e.target.value }))}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        if (!formData._nuevoTajo?.trim()) return;
-                        const nuevo = formData._nuevoTajo.trim();
-                        setFormData((p) => ({
-                          ...p,
-                          _tajos: [...(p._tajos || []), nuevo],
-                          subFuente: nuevo,
-                          _nuevoTajo: "",
-                        }));
-                      }}
-                    >
-                      Agregar
-                    </Button>
-                  </div>
-                )}
+                <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                  Administrar tajos en Catálogo
+                </button>
               </>
             )}
           </div>
@@ -948,7 +975,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
     e.preventDefault();
     if (loading) return;
 
-    // validaciones rápidas
     if (!formData.operadorId) {
       await showError("Operador requerido", "Debe seleccionar un operador.");
       return;
@@ -958,7 +984,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
       return;
     }
 
-    // Confirmación
     const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
     const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
     const res = await confirmAction("¿Crear reporte?", "", {
@@ -976,7 +1001,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
     showLoading("Guardando...", "Por favor, espere");
 
     try {
-      // Horímetro / Kilometraje ≥ último
       if (requiresField("Horimetro") && lastCounters.horimetro != null) {
         if (Number(formData.horimetro) < Number(lastCounters.horimetro)) {
           closeLoading();
@@ -994,7 +1018,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
         }
       }
 
-      // Continuidad estación
       if (requiresField("Estacion")) {
         const d = Number(formData.estacionDesde || 0);
         const h = Number(formData.estacionHasta || 0);
@@ -1029,8 +1052,7 @@ export default function CreateReportForm({ onGoToCatalog }) {
         }
       }
 
-      // === Validaciones específicas para MATERIAL (vagoneta/cabezal)
-      if (isMaterialFlow()) {
+      if (isMaterialFlow) {
         const totalM3 = Number(formData.totalCantidadMaterial || 0);
         if (!(Number.isFinite(totalM3) && totalM3 > 0)) {
           closeLoading();
@@ -1039,11 +1061,12 @@ export default function CreateReportForm({ onGoToCatalog }) {
           return;
         }
 
-        const needsBoletaIfFuel = Number(formData.combustible || 0) > 0;
         for (const [i, b] of (formData.boletas || []).entries()) {
-          const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
 
+          // si es Ríos/Tajo, sigue pidiendo subfuente:
+          const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
           if (isRiverOrTajo && !b.subFuente) {
+
             closeLoading();
             await showError(
               `Seleccione el ${b.fuente === "Ríos" ? "Río" : "Tajo"} en boleta #${i + 1}`,
@@ -1053,109 +1076,109 @@ export default function CreateReportForm({ onGoToCatalog }) {
             return;
           }
 
-          if (!isRiverOrTajo && needsBoletaIfFuel) {
-            if (!/^\d{6}$/.test(String(b.boleta || ""))) {
-              closeLoading();
-              await showError(`Boleta #${i + 1} inválida`, "Ingrese exactamente 6 dígitos.");
-              setLoading(false);
-              return;
-            }
+          if (!(b.tipoMaterial && Number(b.m3) > 0)) {
+            closeLoading();
+            await showError(
+              `Boleta #${i + 1} incompleta`,
+              "Debe seleccionar el tipo de material e ingresar m³ del viaje (> 0)."
+            );
+            setLoading(false);
+            return;
+          }
+
+          // Coherencia: suma de boletas vs total
+          const sumBoletas = (formData.boletas || [])
+            .map(b => Number(b.m3) || 0)
+            .reduce((a, b) => a + b, 0);
+          if (sumBoletas !== totalM3) {
+            closeLoading();
+            await showError(
+              "Total inconsistente",
+              `La suma de boletas (${sumBoletas} m³) no coincide con el Total m³ del día (${totalM3}).`
+            );
+            setLoading(false);
+            return;
+          }
+          // NUEVO: boleta requerida SIEMPRE (6 dígitos), sin importar la fuente
+          if (!/^\d{6}$/.test(String(b.boleta || ""))) {
+            closeLoading();
+            await showError(`Boleta #${i + 1} inválida`, "Ingrese exactamente 6 dígitos.");
+            setLoading(false);
+            return;
           }
         }
       }
 
-// === Construir payload limpio ===
-const isMat =
-  ["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
-  (selectedVariant || "").toLowerCase() === "material";
+      const isMat =
+        ["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
+        (selectedVariant || "").toLowerCase() === "material";
 
-// —— RAÍZ: SOLO campos permitidos por CreateReportDto ——
-const base = {
-  operadorId: Number(formData.operadorId),
-  maquinariaId: Number(formData.maquinariaId),
-  fecha: formData.fecha,
-  horasOrd: formData.horasOrd === "" ? null : Number(formData.horasOrd),
-  horasExt: formData.horasExt === "" ? null : Number(formData.horasExt),
-  diesel: formData.combustible === "" ? null : Number(formData.combustible),
-  codigoCamino: formData.codigoCamino || null,
-  distrito: formData.distrito || null,
-  viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
-  tipoActividad: formData.tipoActividad || null,
-  horaInicio: formData.horaInicio || null,
-  horaFin: formData.horaFin || null,
+      const base = {
+        operadorId: Number(formData.operadorId),
+        maquinariaId: Number(formData.maquinariaId),
+        fecha: toISODateOnly(formData.fecha),
+        horasOrd: formData.horasOrd === "" ? null : Number(formData.horasOrd),
+        horasExt: formData.horasExt === "" ? null : Number(formData.horasExt),
+        diesel: formData.combustible === "" ? null : Number(formData.combustible),
+        codigoCamino: formData.codigoCamino || null,
+        distrito: formData.distrito || null,
+        viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
+        tipoActividad: formData.tipoActividad || null,
+        horaInicio: formData.horaInicio || null,
+        horaFin: formData.horaFin || null,
+        horimetro: formData.horimetro === "" ? null : Number(formData.horimetro),
+        kilometraje: formData.kilometraje === "" ? null : Number(formData.kilometraje),
+      };
 
-  // Si manejas horímetro/kilometraje en raíz (DTO los acepta):
-  horimetro: formData.horimetro === "" ? null : Number(formData.horimetro),
-  kilometraje: formData.kilometraje === "" ? null : Number(formData.kilometraje),
+      const detalles = {
+        variante: selectedVariant || formData.variant || null,
+        tipoMaquinaria: selectedMachineryType || formData.tipoMaquinaria || null,
+        placa: formData.placa || null,
+        ...(formData.estacionDesde || formData.estacionHasta
+          ? { estacionDesde: formData.estacionDesde || "", estacionHasta: formData.estacionHasta || "" }
+          : {}),
+        placaCarreta: formData.placaCarreta || "",
+        tipoCarga: formData.tipoCarga || "",
+        destino: formData.destino || "",
+        placaMaquinariaLlevada: formData.placaMaquinariaLlevada || "",
+        cantidadLiquido: formData.cantidadLiquido || "",
+        placaCisterna: formData.placaCisterna || "",//NUEVO
+        tipoMaterial: formData.tipoMaterial || "",
+        cantidadMaterial: formData.cantidadMaterial || "",
+        boleta: formData.boleta || "",
+        fuente: formData.fuente || "",
+        subFuente: formData.subFuente || "",
+        ...(isMat
+          ? {
+            totalCantidadMaterial:
+              formData.totalCantidadMaterial === "" ? null : Number(formData.totalCantidadMaterial),
+            boletas: Array.isArray(formData.boletas)
+              ? formData.boletas.map(b => ({
+                boleta: b.boleta || "",
+                tipoMaterial: b.tipoMaterial || "",
+                fuente: b.fuente || "",
+                subFuente: b.subFuente || "",
+                m3: b.m3 === "" ? null : Number(b.m3),
+              }))
+              : [],
+          }
+          : {}),
+      };
 
-  // Si usas estación “N+M”, puedes armarla aquí (opcional):
-  // estacion: formData.estacionDesde && formData.estacionHasta
-  //   ? `${Number(formData.estacionDesde)}+${Number(formData.estacionHasta)}`
-  //   : null,
-};
+      const payload = { ...base, detalles };
+      const result = await machineryService.createReport(payload);
 
-// —— DETALLES: aquí sí puedes mandar tipo/variante/placa y todo lo específico ——
-const detalles = {
-  variante: selectedVariant || formData.variant || null,
-  tipoMaquinaria: selectedMachineryType || formData.tipoMaquinaria || null,
-  placa: formData.placa || null,
-
-  // métrica estación desglosada (si la usas en UI)
-  ...(formData.estacionDesde || formData.estacionHasta
-    ? { estacionDesde: formData.estacionDesde || "", estacionHasta: formData.estacionHasta || "" }
-    : {}),
-
-  placaCarreta: formData.placaCarreta || "",
-  tipoCarga: formData.tipoCarga || "",
-  destino: formData.destino || "",
-  placaMaquinariaLlevada: formData.placaMaquinariaLlevada || "",
-  cantidadLiquido: formData.cantidadLiquido || "",
-
-  // flujo “no material”
-  tipoMaterial: formData.tipoMaterial || "",
-  cantidadMaterial: formData.cantidadMaterial || "",
-  boleta: formData.boleta || "",
-  fuente: formData.fuente || "",
-  subFuente: formData.subFuente || "",
-
-  // flujo MATERIAL
-  ...(isMat
-    ? {
-        totalCantidadMaterial:
-          formData.totalCantidadMaterial === "" ? null : Number(formData.totalCantidadMaterial),
-        boletas: Array.isArray(formData.boletas) ? formData.boletas : [],
-      }
-    : {}),
-};
-
-const payload = { ...base, detalles };
-
-// ¡y solo una vez!
-const result = await machineryService.createReport(payload);
-
-      // ✅ REGISTRAR EN AUDITORÍA
-      console.log('🔍 Verificando resultado para logging:', result);
       if (result && result.success) {
-        console.log('📝 Iniciando logging de auditoría para reporte...');
-        console.log('🔧 Datos para logging:', {
-          entity: 'reportes',
-          data: result.data,
-          description: `Se creó reporte de ${selectedMachineryType || formData.tipoMaquinaria} - Placa: ${formData.placa} - Operador: ${operatorName}`
-        });
-        
-        const auditResult = await logCreate('reportes', result.data,
+        await logCreate(
+          "reportes",
+          result.data,
           `Se creó reporte de ${selectedMachineryType || formData.tipoMaquinaria} - Placa: ${formData.placa} - Operador: ${operatorName}`
         );
-        
-        console.log('✅ Resultado del logging de auditoría:', auditResult);
-      } else {
-        console.log('❌ No se realizó logging - resultado:', result);
       }
 
       closeLoading();
       await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
-
-      setFormData({ ...INITIAL_FORM, fecha: new Date().toISOString().split("T")[0] });
+      setFormData({ ...INITIAL_FORM, fecha: todayLocalISO() });
       setSelectedMachineryType("");
       setSelectedVariant("");
       setTotalHours("");
@@ -1309,7 +1332,7 @@ const result = await machineryService.createReport(payload);
           )}
 
           {/* Sección BOLETAS (solo material) */}
-          {isMaterialFlow() && (
+          {isMaterialFlow && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Boletas del día</h3>
@@ -1319,7 +1342,6 @@ const result = await machineryService.createReport(payload);
               </div>
 
               {(formData.boletas || []).map((b, idx) => {
-                const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
                 return (
                   <div key={idx} className="border rounded-xl p-3 space-y-3 bg-white">
                     <div className="flex items-center justify-between">
@@ -1330,23 +1352,21 @@ const result = await machineryService.createReport(payload);
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {!isRiverOrTajo && (
-                        <div>
-                          <Label>Boleta (6 dígitos)</Label>
-                          <Input
-                            inputMode="numeric"
-                            pattern="\d{6}"
-                            maxLength={6}
-                            value={b.boleta || ""}
-                            onChange={(e) =>
-                              updateBoleta(idx, {
-                                boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6),
-                              })
-                            }
-                            placeholder="000000"
-                          />
-                        </div>
-                      )}
+                      <div>
+                        <Label>Boleta (6 dígitos)</Label>
+                        <Input
+                          inputMode="numeric"
+                          pattern="\d{6}"
+                          maxLength={6}
+                          value={b.boleta || ""}
+                          onChange={(e) =>
+                            updateBoleta(idx, {
+                              boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6),
+                            })
+                          }
+                          placeholder="000000"
+                        />
+                      </div>
 
                       <div>
                         <Label>Tipo de material</Label>
@@ -1362,6 +1382,18 @@ const result = await machineryService.createReport(payload);
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div>
+                        <Label>m³ del viaje</Label>
+                        <Input
+                          inputMode="numeric"
+                          pattern="\d*"
+                          maxLength={4}
+                          placeholder="00"
+                          value={b.m3 || ""}
+                          onChange={(e) => updateBoleta(idx, { m3: (e.target.value || "").replace(/\D/g, "").slice(0, 4) })
+                          }
+                        />
                       </div>
                     </div>
 
@@ -1399,13 +1431,16 @@ const result = await machineryService.createReport(payload);
                               <SelectValue placeholder="Seleccionar río" />
                             </SelectTrigger>
                             <SelectContent>
-                              {rivers.map((r) => (
+                              {riosList.map((r) => (
                                 <SelectItem key={r} value={r}>
                                   {r}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
+                          <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                            Administrar ríos en Catálogo
+                          </button>
                         </div>
                       )}
 
@@ -1417,39 +1452,16 @@ const result = await machineryService.createReport(payload);
                               <SelectValue placeholder="Seleccionar tajo" />
                             </SelectTrigger>
                             <SelectContent>
-                              {(formData._tajos || []).map((t) => (
+                              {tajosList.map((t) => (
                                 <SelectItem key={t} value={t}>
                                   {t}
                                 </SelectItem>
                               ))}
-                              <SelectItem value="__add__">+ Agregar nuevo tajo…</SelectItem>
                             </SelectContent>
                           </Select>
-
-                          {b.subFuente === "__add__" && (
-                            <div className="flex gap-2 mt-2">
-                              <Input
-                                placeholder="Nombre del tajo"
-                                value={formData._nuevoTajo || ""}
-                                onChange={(e) => setFormData((p) => ({ ...p, _nuevoTajo: e.target.value }))}
-                              />
-                              <Button
-                                type="button"
-                                onClick={() => {
-                                  if (!formData._nuevoTajo?.trim()) return;
-                                  const nuevo = formData._nuevoTajo.trim();
-                                  setFormData((p) => ({
-                                    ...p,
-                                    _tajos: [...(p._tajos || []), nuevo],
-                                    _nuevoTajo: "",
-                                    boletas: (p.boletas || []).map((x, i) => (i === idx ? { ...x, subFuente: nuevo } : x)),
-                                  }));
-                                }}
-                              >
-                                Agregar
-                              </Button>
-                            </div>
-                          )}
+                          <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                            Administrar tajos en Catálogo
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1459,7 +1471,30 @@ const result = await machineryService.createReport(payload);
             </div>
           )}
 
-          {isMaterialFlow() && (
+          {isMaterialFlow && (
+            <div className="mt-3 p-3 border rounded-lg bg-gray-50">
+              <div className="text-sm font-semibold mb-2">Totales por material</div>
+
+              {Object.keys(materialBreakdown).length === 0 ? (
+                <div className="text-sm text-gray-500">Aún sin cantidades.</div>
+              ) : (
+                <>
+                  {Object.entries(materialBreakdown).map(([mat, qty]) => (
+                    <div key={mat} className="flex justify-between text-sm py-0.5">
+                      <span>{mat}</span>
+                      <span>{qty} m³</span>
+                    </div>
+                  ))}
+                  <div className="border-t mt-2 pt-2 flex justify-between text-sm font-medium">
+                    <span>Total m³</span>
+                    <span>{totalFromBoletas} m³</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* {isMaterialFlow && (
             <div className="space-y-2">
               <Label htmlFor="totalCantidadMaterial">Total m³ del día</Label>
               <div className="flex gap-2 items-center">
@@ -1481,7 +1516,7 @@ const result = await machineryService.createReport(payload);
                 <span className="text-sm text-muted-foreground">m³</span>
               </div>
             </div>
-          )}
+          )} */}
 
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Enviando..." : "Crear Reporte"}
@@ -1491,4 +1526,3 @@ const result = await machineryService.createReport(payload);
     </Card>
   );
 }
-
