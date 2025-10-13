@@ -4,7 +4,7 @@ import machineryService from "@/services/machineryService";
 import CreateReportForm from "@/features/transporte/components/forms/create-report-form.jsx";
 import CreateRentalReportForm from "./components/forms/create-rental-report-form";
 import ReportsTable from "@/features/transporte/components/ReportsTable.jsx";
-import MachineryAdmin from "@/features/transporte/components/MachineryAdmin.jsx"; // ⬅️ nueva vista
+import CatalogTabs from "@/features/transporte/components/CatalogTabs";
 import ProtectedRoute from "@/components/ProtectedRoute.jsx";
 import { useAuth } from "@/context/AuthContext.jsx";
 
@@ -131,7 +131,7 @@ export function TransporteModule() {
 
         {activeTab === "catalogo" && (
           <ProtectedRoute roles={["superadmin", "ingeniero", "inspector"]}>
-            <MachineryAdmin />
+            <CatalogTabs />
           </ProtectedRoute>
         )}
       </div>

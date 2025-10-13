@@ -11,7 +11,7 @@ import machineryService from "@/services/machineryService";
 import { machineryFields } from "@/utils/machinery-fields";
 import MultiSelect from "@/features/transporte/components/MultiSelect";
 import { confirmDelete, confirmAction, showSuccess, showError } from "@/utils/sweetAlert";
-import { Edit, Trash2, Check, X } from "lucide-react";
+import { Edit, Trash2, Check, X, Filter as FilterIcon, RefreshCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuditLogger } from "@/hooks/useAuditLogger";
 
 export default function MachineryAdmin() {
@@ -33,6 +33,7 @@ export default function MachineryAdmin() {
   const [viewTipo, setViewTipo] = useState("");
   const [viewRol, setViewRol] = useState("");
   const [searchPlaca, setSearchPlaca] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   // edición
   const [editingId, setEditingId] = useState(null);
@@ -376,57 +377,107 @@ export default function MachineryAdmin() {
 
 
         {/* Filtros */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-40">
-            <Label>Tipo (vista)</Label>
-            <Select
-              value={viewTipo}
-              onValueChange={(v) => {
-                setViewTipo(v);
-                setViewRol("");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIPOS.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* ---------- ENCABEZADO DE FILTROS (plegable) ---------- */}
+<div className="rounded-2xl border bg-white/60 backdrop-blur px-4 py-3 flex items-center justify-between">
+  <div className="flex items-center gap-2">
+    <FilterIcon className="h-5 w-5 text-gray-500" />
+    <div className="font-medium">
+      Filtros del catálogo
+      <span className="ml-2 text-sm text-gray-500">
+        ({filtered.length} {filtered.length === 1 ? "registro" : "registros"})
+      </span>
+    </div>
+  </div>
 
-          {viewTipo && rolOptionsFilter.length > 0 && (
-            <div className="w-40">
-              <Label>Variante</Label>
-              <Select value={viewRol ? viewRol : ALL_ROLES} onValueChange={(v) => setViewRol(v === ALL_ROLES ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_ROLES}>Todas</SelectItem>
-                  {rolOptionsFilter.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+  <div className="flex items-center gap-2">
+    <Button
+      variant="secondary"
+      onClick={() => setShowFilters((v) => !v)}
+      className="bg-gray-100 hover:bg-gray-200 text-gray-900"
+    >
+      {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+      {showFilters ? (
+        <ChevronUp className="ml-2 h-4 w-4" />
+      ) : (
+        <ChevronDown className="ml-2 h-4 w-4" />
+      )}
+    </Button>
 
-          <div className="w-48">
-            <Label>Buscar placa</Label>
-            <Input value={searchPlaca} onChange={(e) => setSearchPlaca(e.target.value)} placeholder="SM 8772…" />
-          </div>
+    <Button
+      type="button"
+      variant="secondary"
+      onClick={load}
+      title="Recargar catálogo"
+      className="p-2 h-9 w-9 rounded-xl bg-gray-100 hover:bg-gray-200"
+    >
+      <RefreshCcw className="h-4 w-4" />
+    </Button>
+  </div>
+</div>
 
-          <Button variant="ghost" onClick={resetFilters}>
-            Limpiar filtros
-          </Button>
+{/* ---------- CUERPO DE FILTROS (se pliega) ---------- */}
+{showFilters && (
+  <div className="mt-4 rounded-2xl border bg-white p-4">
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-40">
+        <Label>Tipo (vista)</Label>
+        <Select
+          value={viewTipo}
+          onValueChange={(v) => {
+            setViewTipo(v);
+            setViewRol("");
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            {TIPOS.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {viewTipo && rolOptionsFilter.length > 0 && (
+        <div className="w-40">
+          <Label>Variante</Label>
+          <Select
+            value={viewRol ? viewRol : ALL_ROLES}
+            onValueChange={(v) => setViewRol(v === ALL_ROLES ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_ROLES}>Todas</SelectItem>
+              {rolOptionsFilter.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+      )}
+
+      <div className="w-48">
+        <Label>Buscar placa</Label>
+        <Input
+          value={searchPlaca}
+          onChange={(e) => setSearchPlaca(e.target.value)}
+          placeholder="SM 8772…"
+        />
+      </div>
+
+      <Button variant="ghost" onClick={resetFilters}>
+        Limpiar filtros
+      </Button>
+    </div>
+  </div>
+)}
 
         {/* Tabla */}
         <div className="overflow-x-auto">
@@ -570,3 +621,5 @@ export default function MachineryAdmin() {
     </Card>
   );
 }
+
+

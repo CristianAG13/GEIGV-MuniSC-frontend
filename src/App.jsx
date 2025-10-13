@@ -18,6 +18,7 @@ import CreateMaterialReportForm from "./features/transporte/components/forms/cre
 import CreateRentalReportForm from "./features/transporte/components/forms/create-rental-report-form.jsx";
 import CreateReportForm from "./features/transporte/components/forms/create-report-form.jsx";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
+import CatalogTabs from "@/features/transporte/components/CatalogTabs";
 
 import { Toaster } from "@/components/ui/sonner";
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/register" element={<AuthPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="catalogo" element={<CatalogTabs />} />
         <Route 
   path="/maquinaria" 
   element={
