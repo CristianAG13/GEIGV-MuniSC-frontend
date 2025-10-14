@@ -1140,6 +1140,9 @@ export default function ReportsTable({
     let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
     headers = pruneEmptyColumns(rows, headers);
 
+    // 👉 Ocultar columnas clásicas de material (siempre)
+    headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
+
     // 4) AOA -> XLSX
     const aoa = [
       headers.map(pretty),
@@ -1156,99 +1159,211 @@ export default function ReportsTable({
   };
 
 
-  const exportPDF = () => {
-    // 1) Aplana reportes
-    let rows = isMunicipal
-      ? filtered.map(buildFlatRowMunicipal)
-      : filtered.map(buildFlatRowRental);
+ const exportPDF = () => {
+  // 1) Aplana reportes
+  let rows = isMunicipal
+    ? filtered.map(buildFlatRowMunicipal)
+    : filtered.map(buildFlatRowRental);
 
-    // 2) Normalización global de boletas (mismo criterio que Excel)
-    const maxBoletas = rows.reduce((m, r) => {
-      const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
-      return Math.max(m, n);
-    }, 0);
+  // 2) Normalización global de boletas (idéntico a Excel)
+  const maxBoletas = rows.reduce((m, r) => {
+    const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
+    return Math.max(m, n);
+  }, 0);
 
-    if (maxBoletas > 0) {
-      rows = rows.map(r => {
-        const { Boletas, ...rest } = r; // quita "Boletas"
-        return rest;
+  if (maxBoletas > 0) {
+    rows = rows.map(r => {
+      const { Boletas, ...rest } = r; // quita "Boletas"
+      return rest;
+    });
+  } else {
+    rows = rows.map(r => {
+      const clean = { ...r };
+      Object.keys(clean).forEach(k => {
+        if (/^Boleta \d+$/.test(k)) delete clean[k];
       });
-    } else {
-      rows = rows.map(r => {
-        const clean = { ...r };
-        Object.keys(clean).forEach(k => {
-          if (/^Boleta \d+$/.test(k)) delete clean[k];
-        });
-        return clean;
-      });
-    }
+      return clean;
+    });
+  }
 
-    // 3) Headers y prune
-    let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
-    headers = pruneEmptyColumns(rows, headers);
+  // 3) Headers visibles y prune de columnas 100% vacías
+  let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+  headers = pruneEmptyColumns(rows, headers);
 
-    // 4) helper para saltos de línea
-    const toHTML = (v) => (isEmptyVal(v) ? "—" : String(v).replace(/\n/g, "<br>"));
+  // Ocultar columnas clásicas de material (siempre)
+  headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
 
-    // 5) Tabla
-    const thead = `<tr>${headers.map(h => `<th><div class="th">${pretty(h)}</div></th>`).join("")}</tr>`;
-    const tbody = rows
-      .map(row => `<tr>${headers.map(h => `<td>${toHTML(row[h])}</td>`).join("")}</tr>`)
-      .join("");
+  // 4) Helpers
+  const toHTML = (v) => (isEmptyVal(v) ? "—" : String(v).replace(/\n/g, "<br>"));
+  const headerAbs = new URL(HEADER_URL , window.location.origin).toString();
+  const footerAbs = new URL(FOOTER_URL , window.location.origin).toString();
 
-    // 6) Rutas absolutas de header/footer
-    const headerAbs = new URL(HEADER_URL, window.location.origin).toString();
-    const footerAbs = new URL(FOOTER_URL, window.location.origin).toString();
+  // 5) CSS (defínelo ANTES de usarlo en el HTML)
+const head = `
+<style>
+  :root{
+    --footer-h: 24px;     /* ← tamaño del pie (ajústalo si quieres) */
+    --gap-bottom: 8px;    /* colchón entre contenido y pie */
+    --margin-x: 18mm;     /* márgenes izq/der de página */
+  }
 
-    // 7) HTML y estilos
-    const head = `
-  <style>
-    @page { size: A4 landscape; margin: 100px 22px 70px 22px; }
-    html, body { margin:0; padding:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
-    header { height:72px; position:fixed; top:0; left:0; right:0; display:flex; align-items:center; justify-content:center; }
-    footer { position:fixed; bottom:0; left:0; right:0; height:40px; display:flex; align-items:center; justify-content:center; }
-    header img, footer img { max-height:100%; width:auto; object-fit:contain; }
-    main { padding-top:60px; }
-    h1 { font-size:16px; margin:0 0 10px; }
-    table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
-    thead { display:table-header-group; }
-    thead th { background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 5px; vertical-align:bottom; }
-    thead .th { line-height:1.1; hyphens:auto; word-break:break-word; }
-    tbody td { border:1px solid #f1f5f9; padding:5px 6px; vertical-align:top; word-break:break-word; hyphens:auto; }
-    tbody tr:nth-child(even) td { background:#fafafa; }
-    tr { page-break-inside: avoid; }
-    .meta { margin:6px 0 12px; font-size:11px; color:#374151; }
-  </style>`;
+  @page{
+    size: A4 landscape;
+    /* margen inferior = altura del pie + gap */
+    margin: 16mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
+  }
 
-    const html = `
-  <html>
-    <head><title>Reportes completos</title>${head}</head>
-    <body>
-      <header><img src="${headerAbs}" alt="Encabezado" /></header>
-      <footer><img src="${footerAbs}" alt="Pie de página" /></footer>
-      <main>
-        <h1>Reportes completos</h1>
-        <div class="meta">${isMunicipal ? "Municipales" : "Alquiler"} — ${rows.length} registro(s)</div>
-        <table>
-          <thead>${thead}</thead>
-          <tbody>${tbody}</tbody>
-        </table>
-      </main>
-    </body>
-  </html>`;
+  html, body{
+    margin:0; padding:0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    position: relative; /* ayuda a Chrome con el fixed en la 1ª página */
+  }
 
-    const win = window.open("", "_blank");
-    win.document.open(); win.document.write(html); win.document.close();
+  .report-title{
+  margin: 0 0 6px;
+  break-after: avoid-page;   /* moderno */
+  page-break-after: avoid;   /* legacy */
+}
+  /* ===== Footer fijo (todas las páginas) ===== */
+  footer{
+    position: fixed;
+    left: var(--margin-x);
+    right: var(--margin-x);
+    bottom: 0;
+    height: var(--footer-h);
+    display: flex;
+    align-items: center;
+    justify-content: center; /* ← centrado */
+    background: #fff;        /* evita que el contenido “trasluzca” */
+    z-index: 9999;           /* asegura que se vea sobre la tabla */
+    transform: translateZ(0); /* workaround de impresión en Chrome */
+  }
+  footer img{
+    height: calc(var(--footer-h) - 2px); /* que no toque bordes */
+    width: auto;
+    object-fit: contain;
+    display: block;
+  }
 
-    const waitImages = () =>
-      Promise.all(Array.from(win.document.images).map(img => new Promise(res => {
-        if (img.complete) return res(); img.onload = res; img.onerror = res;
-      })));
+  /* deja espacio para el pie para que la tabla nunca lo tape */
+  main{
+    padding-bottom: calc(var(--footer-h) + var(--gap-bottom));
+    transform: translateZ(0); /* mismo workaround */
+  }
 
-    waitImages().then(() => { win.focus(); win.print(); });
-    win.onafterprint = () => { try { win.close(); } catch { } };
-  };
+  /* ===== TU estilo de encabezado y tabla ===== */
+  .logo-row td{ border:none; padding:0; background:#fff; }
+  .logo-wrap{ display:flex; justify-content:center; }
+.logo-wrap img{ height:20px; object-fit:contain; } 
 
+  .title-row td{ border:none; padding:0 0 6px; background:#fff; }
+  .title-wrap{ display:flex; flex-direction:column; align-items:flex-start; }
+  .title-wrap h1{ margin:0; font-size:16px; }
+  .meta{ font-size:11px; color:#374151; margin-top:2px; }
+
+  table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
+  thead{ display: table-header-group; }  /* encabezado se repite */
+  /* ¡NO usar tfoot aquí! el pie ya es fixed */
+
+  thead .cols th{
+    background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 5px; vertical-align:bottom;
+  }
+  thead .cols .th{ line-height:1.1; hyphens:auto; word-break:break-word; }
+
+  tbody td{
+    border:1px solid #f1f5f9; padding:5px 6px; vertical-align:top;
+    word-break:break-word; hyphens:auto;
+  }
+  tbody tr:nth-child(even) td{ background:#fafafa; }
+
+  table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
+  tr{ page-break-before:auto; page-break-after:auto; }
+</style>`;
+
+const titleBlock = `
+  <div class="report-title">
+    <h1>Reportes completos</h1>
+    <div class="meta">${isMunicipal ? "Municipales" : "Alquiler"} — ${rows.length} registro(s)</div>
+  </div>
+`;
+
+  // 6) Partes de la tabla (thead/tfoot se repiten por page gracias al CSS)
+ const thead = `
+  <!-- fila con el/los logos centrados -->
+  <tr class="logo-row">
+    <td colspan="${headers.length}">
+      <div class="logo-wrap">
+        <img src="${headerAbs}" alt="Encabezado" />
+      </div>
+    </td>
+  </tr>
+  
+  <!-- fila con los nombres de columnas -->
+  <tr class="cols">
+    ${headers.map(h => `<th><div class="th">${pretty(h)}</div></th>`).join("")}
+  </tr>
+`;
+
+
+
+  // const tfoot = `
+  //   <tr class="footband">
+  //     <td colspan="${headers.length}">
+  //       <img src="${footerAbs}" alt="Pie de página" />
+  //     </td>
+  //   </tr>`;
+
+  const tbody = rows
+    .map(row => `<tr>${headers.map(h => `<td>${toHTML(row[h])}</td>`).join("")}</tr>`)
+    .join("");
+
+  // 7) HTML final (head va antes del body para que el navegador aplique los estilos antes del render)
+//   const html = `
+// <html>
+//   <head>${head}</head>
+//   <body>
+//     <table>
+//       <thead>${thead}</thead>
+//       <tbody>${tbody}</tbody>
+//       <tfoot>${tfoot}</tfoot>
+//     </table>
+//   </body>
+// </html>`;
+
+const html = `
+<html>
+  <head>${head}</head>
+  <body>
+    <main>
+      <table>
+        <thead>${thead}</thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </main>
+
+    <!-- Footer fijo en TODAS las páginas -->
+    <footer>
+      <img src="${footerAbs}" alt="Pie de página" />
+    </footer>
+  </body>
+</html>`;
+
+
+  // 8) Abrir/Imprimir
+  const win = window.open("", "_blank");
+  if (!win) { alert("Bloqueado por el navegador. Habilita pop-ups para exportar."); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+
+  const waitImages = () =>
+    Promise.all(Array.from(win.document.images).map(img => new Promise(res => {
+      if (img.complete) return res(); img.onload = res; img.onerror = res;
+    })));
+
+  waitImages().then(() => { win.focus(); win.print(); });
+  win.onafterprint = () => { try { win.close(); } catch {} };
+};
 
   const [filtersOpen, setFiltersOpen] = useState(false);
 
