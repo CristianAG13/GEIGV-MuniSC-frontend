@@ -1,5 +1,5 @@
 // hooks/useAuditLogger.js
-import { useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import auditService from '../services/auditService';
 
@@ -41,6 +41,9 @@ const getCostaRicaTimestamp = () => {
  */
 export const useAuditLogger = () => {
   const { user } = useAuth();
+  
+  // Cache para evitar logs duplicados
+  const recentLogs = React.useRef(new Map());
 
   /**
    * Registra un evento de auditoría de manera genérica
@@ -51,11 +54,49 @@ export const useAuditLogger = () => {
       return { success: false, error: 'No user logged in' };
     }
 
+    // Crear una clave única para identificar logs duplicados (más específica)
+    const logKey = `${auditData.action}-${auditData.entity}-${auditData.entityId}-${user.id}-${auditData.description}`;
+    const now = Date.now();
+    
+    // Verificar si ya se envió un log similar en los últimos 10 segundos
+    if (recentLogs.current.has(logKey)) {
+      const lastTime = recentLogs.current.get(logKey);
+      if (now - lastTime < 10000) { // 10 segundos
+        console.warn('🚫 Preventing duplicate audit log:', {
+          key: logKey,
+          timeSince: now - lastTime,
+          user: user.email
+        });
+        return { success: true, note: 'Duplicate prevented' };
+      }
+    }
+    
+    // Log para debug temporal
+    console.log('📤 Sending audit log:', {
+      action: auditData.action,
+      entity: auditData.entity,
+      entityId: auditData.entityId,
+      user: user.email,
+      userName: `${user.name} ${user.lastname}`,
+      description: auditData.description
+    });
+    
+    // Actualizar el cache
+    recentLogs.current.set(logKey, now);
+    
+    // Limpiar logs antiguos del cache
+    for (const [key, time] of recentLogs.current.entries()) {
+      if (now - time > 30000) { // 30 segundos
+        recentLogs.current.delete(key);
+      }
+    }
+
     try {
       const result = await auditService.logEvent({
         ...auditData,
         userId: user.id,
         userEmail: user.email,
+        userName: `${user.name} ${user.lastname}`,
         userRoles: user.roles || []
       });
       
@@ -74,23 +115,13 @@ export const useAuditLogger = () => {
    * Registra la creación de una entidad
    */
   const logCreate = useCallback(async (entity, entityData, customDescription = null) => {
-    console.log('🎯 useAuditLogger.logCreate llamado con:', { entity, entityData, customDescription });
-    
     const entityId = entityData?.id || entityData?._id || 'unknown';
     const entityName = entityData?.nombre || entityData?.name || entityData?.titulo || '';
     
     const description = customDescription || auditService.formatChangeDescription('CREATE', entity, entityName);
     
-    console.log('📋 Datos preparados para auditoría:', {
-      action: 'CREATE',
-      entity,
-      entityId: entityId.toString(),
-      description,
-      user: user?.email
-    });
-    
     const result = await logAuditEvent({
-      action: 'CREATE',
+      action: 'CREAR',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -105,7 +136,6 @@ export const useAuditLogger = () => {
       }
     });
     
-    console.log('🔄 Resultado de logAuditEvent:', result);
     return result;
   }, [logAuditEvent, user]);
 
@@ -118,7 +148,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('UPDATE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'UPDATE',
+      action: 'ACTUALIZAR',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -143,7 +173,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('DELETE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'DELETE',
+      action: 'ELIMINAR',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -168,7 +198,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('RESTORE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'RESTORE',
+      action: 'RESTAURAR',
       entity,
       entityId: entityId.toString(),
       changes: {

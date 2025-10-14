@@ -12,10 +12,12 @@ import AuditTable from './components/AuditTable';
 import AuditFilters from './components/AuditFilters';
 import AuditStats from './components/AuditStats';
 import ActiveUsers from './components/ActiveUsers';
+import { useAuditLogger } from '@/hooks/useAuditLogger';
 import { toast } from '@/hooks/use-toast';
 
 const AuditoriaModule = () => {
   const { user } = useAuth();
+  const { logCreate } = useAuditLogger();
   
   // Estados principales
   const [logs, setLogs] = useState([]);
@@ -66,45 +68,95 @@ const AuditoriaModule = () => {
         // El backend puede devolver los datos en result.data.data o result.data.logs
         const logsData = result.data.data || result.data.logs || [];
         
-        // Debug específico para nombres
-        console.log('👤 Debug de nombres en los logs:', logsData.map(log => ({
-          id: log.id,
-          name: log.name,
-          lastname: log.lastname,
-          userFullName: log.userFullName,
-          userName: log.userName,
-          hasNameLastname: !!(log.name && log.lastname)
-        })));
+        // Debug básico
+        console.log('✅ Datos recibidos:', logsData.length, 'logs');
+        if (logsData.length > 0) {
+          console.log('🔍 Primer log:', logsData[0]);
+        }
         
-        // Transformar los datos para asegurar que tengan name y lastname
-        const transformedLogs = logsData.map(log => {
+        // Filtrar y transformar los datos para evitar duplicados
+        const filteredLogs = [];
+        const seenLogs = new Map();
+        
+        for (const log of logsData) {
+          // Crear clave única para detectar duplicados
+          const logKey = `${log.action}-${log.entity}-${log.entityId}-${log.timestamp}`;
+          
+          // Si ya existe un log similar
+          if (seenLogs.has(logKey)) {
+            const existingLog = seenLogs.get(logKey);
+            
+            // Si el log actual tiene más información (nombre, email), usar ese
+            if ((log.name && log.lastname && log.userEmail) && 
+                (!existingLog.name || !existingLog.lastname || !existingLog.userEmail)) {
+              seenLogs.set(logKey, log);
+              // Reemplazar en filteredLogs
+              const index = filteredLogs.findIndex(l => 
+                `${l.action}-${l.entity}-${l.entityId}-${l.timestamp}` === logKey
+              );
+              if (index >= 0) {
+                filteredLogs[index] = log;
+              }
+            }
+            // Si el log existente tiene más información, mantener ese
+            continue;
+          }
+          
+          // Agregar el log si no es duplicado
+          seenLogs.set(logKey, log);
+          filteredLogs.push(log);
+        }
+        
+        // Transformar los logs filtrados para asegurar que tengan name y lastname
+        const transformedLogs = filteredLogs.map(log => {
           // Si ya tiene name y lastname, usar esos
           if (log.name && log.lastname) {
             return log;
           }
           
-          // Si no, intentar extraer de otros campos
-          if (log.userFullName) {
+          let transformedLog = { ...log };
+          
+          // Intentar extraer de userFullName
+          if (log.userFullName && !transformedLog.name) {
             const nameParts = log.userFullName.split(' ');
             if (nameParts.length >= 2) {
-              return {
-                ...log,
-                name: nameParts.slice(0, Math.ceil(nameParts.length / 2)).join(' '),
-                lastname: nameParts.slice(Math.ceil(nameParts.length / 2)).join(' ')
-              };
-            }
-          } else if (log.userName) {
-            const nameParts = log.userName.split(' ');
-            if (nameParts.length >= 2) {
-              return {
-                ...log,
-                name: nameParts.slice(0, Math.ceil(nameParts.length / 2)).join(' '),
-                lastname: nameParts.slice(Math.ceil(nameParts.length / 2)).join(' ')
-              };
+              transformedLog.name = nameParts.slice(0, Math.ceil(nameParts.length / 2)).join(' ');
+              transformedLog.lastname = nameParts.slice(Math.ceil(nameParts.length / 2)).join(' ');
             }
           }
           
-          return log;
+          // Intentar extraer de userName
+          if (log.userName && !transformedLog.name) {
+            const nameParts = log.userName.split(' ');
+            if (nameParts.length >= 2) {
+              transformedLog.name = nameParts.slice(0, Math.ceil(nameParts.length / 2)).join(' ');
+              transformedLog.lastname = nameParts.slice(Math.ceil(nameParts.length / 2)).join(' ');
+            }
+          }
+          
+          // Intentar desde objetos anidados
+          if (log.User && !transformedLog.name) {
+            if (log.User.name && log.User.lastname) {
+              transformedLog.name = log.User.name;
+              transformedLog.lastname = log.User.lastname;
+              transformedLog.userEmail = transformedLog.userEmail || log.User.email;
+            }
+          }
+          
+          if (log.user && !transformedLog.name) {
+            if (log.user.name && log.user.lastname) {
+              transformedLog.name = log.user.name;
+              transformedLog.lastname = log.user.lastname;
+              transformedLog.userEmail = transformedLog.userEmail || log.user.email;
+            }
+          }
+          
+          // Asegurar que tiene userEmail
+          if (!transformedLog.userEmail) {
+            transformedLog.userEmail = log.email || log.user_email || (log.User && log.User.email) || (log.user && log.user.email);
+          }
+          
+          return transformedLog;
         });
         
         console.log('🔄 Logs transformados:', transformedLogs.map(log => ({
@@ -133,15 +185,16 @@ const AuditoriaModule = () => {
         }
         
         // Detectar si son datos simulados
-        const isSimulated = logsData.length > 0 && 
-                           logsData[0].id === '1' && 
-                           logsData[0].userName === 'Juan Pérez';
+        const isSimulated = logsData.length > 0 && (
+          (logsData[0].id === '1' && logsData[0].userName === 'Juan Pérez') ||
+          logsData.some(log => log.userCedula && log.userCedula.length === 9) // Los datos simulados tienen cédula
+        );
         setIsUsingSimulatedData(isSimulated);
         
         if (isSimulated) {
-          setError('⚠️ Mostrando datos de demostración. El servidor backend no está disponible.');
+          console.log('⚠️ Usando datos simulados - backend no disponible');
         } else {
-          setError(null);
+          console.log('✅ Usando datos reales del backend');
         }
       } else {
         throw new Error(result.error || 'Error al cargar logs');
@@ -191,7 +244,11 @@ const AuditoriaModule = () => {
   const handleFiltersChange = useCallback((newFilters) => {
     console.log('🔄 AuditoriaModule - Cambio de filtros:', { 
       oldFilters: currentFilters, 
-      newFilters 
+      newFilters,
+      hasFullNameFilter: !!(newFilters.fullName || newFilters.userName),
+      fullNameValue: newFilters.fullName,
+      userNameValue: newFilters.userName,
+      emailValue: newFilters.email
     });
     
     setCurrentFilters(newFilters);
@@ -226,6 +283,8 @@ const AuditoriaModule = () => {
         : {}
     );
   }, [currentFilters, loadAuditLogs, loadAuditStats]);
+
+
 
   // Efecto inicial - cargar datos cuando el componente se monta
   useEffect(() => {
@@ -285,6 +344,17 @@ const AuditoriaModule = () => {
      
    
 
+      {/* Indicador de datos simulados */}
+      {isUsingSimulatedData && (
+        <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            <strong>⚠️ Modo Demo:</strong> Se están mostrando datos de demostración porque el backend no está disponible. 
+            Los cambios nuevos no se guardarán hasta que se restablezca la conexión.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Error general */}
       {error && !isUsingSimulatedData && (
         <Alert className="mb-6 border-red-200 bg-red-50">
@@ -321,6 +391,7 @@ const AuditoriaModule = () => {
             totalRecords={pagination.total}
           />
           
+
           <AuditTable
             logs={logs}
             isLoading={isLoading}

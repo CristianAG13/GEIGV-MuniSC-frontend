@@ -27,7 +27,11 @@ class UsersService {
         name: userData.name,
         lastname: userData.lastname,
       }, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Skip-Audit': 'true',
+          'X-Frontend-Request': 'true'
+        },
       });
       console.log('Usuario creado exitosamente:', response.data);
       return response.data;
@@ -57,7 +61,11 @@ class UsersService {
       const response = await apiClient.post(`/users/${userId}/roles`, { 
         roleIds: roleIds // tu backend espera { roleIds: [1, 2, 3] }
       }, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Skip-Audit': 'true',
+          'X-Frontend-Request': 'true'
+        },
       });
       return response.data;
     } catch (error) {
@@ -70,7 +78,11 @@ class UsersService {
     try {
       const token = localStorage.getItem('access_token');
       const response = await apiClient.patch(`/users/${userId}`, userData, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Skip-Audit': 'true',
+          'X-Frontend-Request': 'true'
+        },
       });
       return response.data;
     } catch (error) {
@@ -83,7 +95,9 @@ class UsersService {
     try {
       const token = localStorage.getItem('access_token');
       await apiClient.delete(`/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`
+        },
       });
       return { success: true };
     } catch (error) {

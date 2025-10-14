@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import roleRequestService from '../services/roleRequestService';
+import { useAuditLogger } from '../hooks/useAuditLogger';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import { clearNavigationCache } from '@/utils/refreshNavigation';
 import TransporteModule from '../features/transporte/TransporteModule';
@@ -31,6 +32,7 @@ import logo from '../assets/logo.png';
 
 export default function Dashboard() {
   const { user, logout, loading: authLoading, refreshUser } = useAuth();
+  const { logCreate, logUpdate, logDelete } = useAuditLogger();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [users, setUsers] = useState([]);
@@ -204,7 +206,7 @@ export default function Dashboard() {
       }
 
       // Crear el usuario usando el endpoint de administración
-      await usersService.createUser({
+      const createdUser = await usersService.createUser({
         name: newUser.name.trim(),
         lastname: newUser.lastname.trim(),
         email: newUser.email.trim(),
@@ -227,11 +229,13 @@ export default function Dashboard() {
 
   const handleSaveUser = async () => {
     try {
-      await usersService.updateUser(editingUser.id, {
+      const originalUser = { ...editingUser };
+      const updatedUser = await usersService.updateUser(editingUser.id, {
         email: editingUser.email,
         name: editingUser.nombre,
         lastname: editingUser.apellido,
       });
+
       await loadData();
       setShowEditModal(false);
       setEditingUser(null);
@@ -245,7 +249,11 @@ export default function Dashboard() {
     const result = await confirmDelete('este usuario');
     if (result.isConfirmed) {
       try {
+        // Obtener datos del usuario antes de eliminarlo
+        const userToDelete = users.find(u => u.id === userId);
+        
         await usersService.deleteUser(userId);
+
         await loadData();
         showSuccess('Usuario eliminado', 'El usuario ha sido eliminado exitosamente');
       } catch (error) {
@@ -256,12 +264,19 @@ export default function Dashboard() {
 
   const handleRoleChange = async (userId, roleName) => {
     try {
+      // Obtener datos del usuario antes del cambio
+      const targetUser = users.find(u => u.id === userId);
+      const oldRoles = targetUser?.roles || [];
+      
       if (roleName === '') {
         await usersService.assignRoles(userId, []);
+        
+     
       } else {
         const role = roles.find(r => r.name === roleName);
         if (role) {
           await usersService.assignRoles(userId, [role.id]);
+          
         }
       }
       await loadData();
