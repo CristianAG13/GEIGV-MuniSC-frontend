@@ -18,8 +18,8 @@ const AuditFilters = ({
     entity: 'all',
     action: 'all',
     search: '',
-    userId: '',
-    userName: '',
+    email: '',
+    fullName: '',
     startDate: '',
     endDate: ''
   });
@@ -78,12 +78,14 @@ const AuditFilters = ({
         filtersToSend.search = filters.search.trim();
       }
       
-      if (filters.userId && filters.userId.trim() !== '') {
-        filtersToSend.userId = filters.userId.trim();
+      if (filters.email && filters.email.trim() !== '') {
+        filtersToSend.email = filters.email.trim();
       }
       
-      if (filters.userName && filters.userName.trim() !== '') {
-        filtersToSend.userName = filters.userName.trim();
+      if (filters.fullName && filters.fullName.trim() !== '') {
+        filtersToSend.fullName = filters.fullName.trim();
+        // También enviar como userName para compatibilidad con el backend
+        filtersToSend.userName = filters.fullName.trim();
       }
       
       // Filtros de fecha - validar formato y que sean fechas válidas
@@ -120,6 +122,10 @@ const AuditFilters = ({
       console.log('🔧 AuditFilters - Enviando filtros:', {
         original: filters,
         cleaned: filtersToSend,
+        hasFullNameFilter: !!(filtersToSend.fullName || filtersToSend.userName),
+        fullNameValue: filtersToSend.fullName,
+        userNameValue: filtersToSend.userName,
+        emailValue: filtersToSend.email,
         dateDetails: {
           startDate: filtersToSend.startDate,
           endDate: filtersToSend.endDate,
@@ -215,8 +221,8 @@ const AuditFilters = ({
       entity: 'all',
       action: 'all',
       search: '',
-      userId: '',
-      userName: '',
+      email: '',
+      fullName: '',
       startDate: '',
       endDate: ''
     };
@@ -234,7 +240,7 @@ const AuditFilters = ({
   const hasDateFilters = (filters.startDate && filters.startDate !== '') || 
                         (filters.endDate && filters.endDate !== '');
   
-  const hasNameFilter = filters.userName && filters.userName.trim() !== '';
+  const hasNameFilter = filters.fullName && filters.fullName.trim() !== '';
 
   return (
     <Card className="mb-6">
@@ -250,7 +256,7 @@ const AuditFilters = ({
             )}
             {hasNameFilter && (
               <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full ml-2">
-                👤 Filtro por nombre: {filters.userName}
+                👤 Filtro por nombre: {filters.fullName}
               </span>
             )}
             {totalRecords > 0 && (
@@ -434,11 +440,11 @@ const AuditFilters = ({
           <div className="border-t pt-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">ID de Usuario (opcional)</label>
+                <label className="text-sm font-medium mb-2 block">Email</label>
                 <Input
-                  placeholder="Filtrar por ID de usuario específico"
-                  value={filters.userId || ''}
-                  onChange={(e) => handleFilterChange('userId', e.target.value)}
+                  placeholder="Filtrar por email de usuario"
+                  value={filters.email || ''}
+                  onChange={(e) => handleFilterChange('email', e.target.value)}
                   className="w-full"
                 />
               </div>
@@ -449,8 +455,8 @@ const AuditFilters = ({
                 </label>
                 <Input
                   placeholder="Filtrar por nombre o apellido (ej: Juan, Pérez, Juan Pérez)"
-                  value={filters.userName || ''}
-                  onChange={(e) => handleFilterChange('userName', e.target.value)}
+                  value={filters.fullName || ''}
+                  onChange={(e) => handleFilterChange('fullName', e.target.value)}
                   className="w-full"
                   maxLength="100"
                 />

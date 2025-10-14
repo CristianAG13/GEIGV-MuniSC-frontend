@@ -91,20 +91,7 @@ const handleDelete = async (id) => {
     // Realizar la eliminación
     await miService.delete(id);
     
-    // Registrar en auditoría
-    await logDelete(
-      'usuarios', 
-      id, 
-      userData,
-      `Se eliminó el usuario ${userData.email}`
-    );
-    
-    toast.success('Usuario eliminado exitosamente');
-  } catch (error) {
-    console.error('Error deleting user:', error);
-  }
-};
-```
+ 
 
 ### 5. Registrar Eventos del Sistema
 

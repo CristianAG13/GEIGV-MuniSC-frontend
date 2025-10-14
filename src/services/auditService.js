@@ -45,7 +45,7 @@ const auditService = {
    * 
    * Los logs deben contener tanto name/lastname como campos de compatibilidad
    */
-  getSimulatedAuditLogs: () => {
+  getSimulatedAuditLogs: (filters = {}) => {
     const simulatedLogs = [
       {
         id: '1',
@@ -160,20 +160,63 @@ const auditService = {
       }
     ];
 
-    console.log('📋 Datos simulados generados con name/lastname:', simulatedLogs.map(log => ({
-      id: log.id,
-      name: log.name,
-      lastname: log.lastname,
-      hasNames: !!(log.name && log.lastname)
-    })));
+    // Aplicar filtros a los datos simulados
+    let filteredLogs = simulatedLogs;
+    
+    // Filtro por nombre/apellido
+    if (filters.fullName || filters.userName) {
+      const searchTerm = (filters.fullName || filters.userName).toLowerCase();
+      console.log('� Aplicando filtro de nombre simulado:', searchTerm);
+      
+      filteredLogs = filteredLogs.filter(log => {
+        const fullName = `${log.name} ${log.lastname}`.toLowerCase();
+        const userName = (log.userName || '').toLowerCase();
+        const match = fullName.includes(searchTerm) || userName.includes(searchTerm);
+        
+        console.log(`Comparando "${searchTerm}" con "${fullName}" (${log.id}):`, match);
+        return match;
+      });
+    }
+    
+    // Filtro por email
+    if (filters.email) {
+      const emailSearch = filters.email.toLowerCase();
+      filteredLogs = filteredLogs.filter(log => {
+        const userEmail = (log.userEmail || log.email || '').toLowerCase();
+        return userEmail.includes(emailSearch);
+      });
+    }
+    
+    // Filtro por entidad
+    if (filters.entity && filters.entity !== 'all') {
+      filteredLogs = filteredLogs.filter(log => log.entity === filters.entity);
+    }
+    
+    // Filtro por acción
+    if (filters.action && filters.action !== 'all') {
+      filteredLogs = filteredLogs.filter(log => log.action === filters.action);
+    }
+
+    console.log('📋 Datos simulados filtrados:', {
+      total: simulatedLogs.length,
+      filtered: filteredLogs.length,
+      filters: filters,
+      logs: filteredLogs.map(log => ({
+        id: log.id,
+        name: log.name,
+        lastname: log.lastname,
+        fullName: `${log.name} ${log.lastname}`,
+        hasNames: !!(log.name && log.lastname)
+      }))
+    });
 
     return {
       success: true,
       data: {
-        logs: simulatedLogs,
+        logs: filteredLogs,
         currentPage: 1,
         totalPages: 1,
-        total: simulatedLogs.length,
+        total: filteredLogs.length,
         limit: 50
       }
     };
@@ -229,16 +272,30 @@ const auditService = {
    * @param {Object} auditData.metadata - Metadatos adicionales
    */
   logEvent: async (auditData) => {
-    console.log('🚀 auditService.logEvent llamado con:', auditData);
+    console.log('🚀 auditService.logEvent llamado con:', {
+      action: auditData.action,
+      entity: auditData.entity,
+      entityId: auditData.entityId,
+      userEmail: auditData.userEmail,
+      userName: auditData.userName,
+      description: auditData.description
+    });
     
     try {
       const token = localStorage.getItem('token');
-      console.log('🔑 Token disponible:', !!token);
+      
+      // Agregar timestamp único para evitar duplicados en el backend
+      const enrichedData = {
+        ...auditData,
+        clientTimestamp: Date.now(),
+        source: 'frontend'
+      };
       
       console.log('📤 Enviando petición POST a /audit/log...');
-      const response = await apiClient.post('/audit/log', auditData, {
+      const response = await apiClient.post('/audit/log', enrichedData, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'X-Audit-Source': 'frontend'
         }
       });
       
@@ -392,7 +449,7 @@ const auditService = {
       // Detectar si es un error de conexión (backend no disponible)
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         console.warn('🚨 Backend no disponible. Mostrando datos simulados para demostración.');
-        const simulatedData = auditService.getSimulatedAuditLogs();
+        const simulatedData = auditService.getSimulatedAuditLogs(cleanFilters);
         console.log('📊 Datos simulados generados:', simulatedData);
         return simulatedData;
       }
@@ -530,7 +587,13 @@ const auditService = {
       CREATE: 'creó',
       UPDATE: 'actualizó',
       DELETE: 'eliminó',
-      RESTORE: 'restauró'
+      RESTORE: 'restauró',
+      CREAR: 'creó',
+      ACTUALIZAR: 'actualizó',
+      ELIMINAR: 'eliminó',
+      RESTAURAR: 'restauró',
+      AUTENTICACION: 'autenticó',
+      AUTH: 'autenticó'
     };
     
     const entities = {
@@ -557,7 +620,13 @@ const auditService = {
       CREATE: 'text-green-600 bg-green-50',
       UPDATE: 'text-blue-600 bg-blue-50',
       DELETE: 'text-red-600 bg-red-50',
-      RESTORE: 'text-yellow-600 bg-yellow-50'
+      RESTORE: 'text-yellow-600 bg-yellow-50',
+      CREAR: 'text-green-600 bg-green-50',
+      ACTUALIZAR: 'text-blue-600 bg-blue-50',
+      ELIMINAR: 'text-red-600 bg-red-50',
+      RESTAURAR: 'text-yellow-600 bg-yellow-50',
+      AUTENTICACION: 'text-purple-600 bg-purple-50',
+      AUTH: 'text-purple-600 bg-purple-50'
     };
     return colors[action] || 'text-gray-600 bg-gray-50';
   },
@@ -570,7 +639,13 @@ const auditService = {
       CREATE: 'plus-circle',
       UPDATE: 'edit-3',
       DELETE: 'trash-2',
-      RESTORE: 'refresh-cw'
+      RESTORE: 'refresh-cw',
+      CREAR: 'plus-circle',
+      ACTUALIZAR: 'edit-3',
+      ELIMINAR: 'trash-2',
+      RESTAURAR: 'refresh-cw',
+      AUTENTICACION: 'log-in',
+      AUTH: 'log-in'
     };
     return icons[action] || 'activity';
   },

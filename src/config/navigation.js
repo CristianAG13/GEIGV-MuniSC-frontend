@@ -1,8 +1,7 @@
 
 // config/navigation.js
 import { 
-  Home, Users, Truck, FileText, BarChart3, Settings,
-  UserCheck, HardHat, Wrench, ClipboardList, Shield
+  Home, Users, Truck, UserCheck, HardHat, Shield
 } from 'lucide-react';
 
 // ========================
@@ -10,27 +9,20 @@ import {
 // ========================
 export const rolePermissions = {
   user: ['dashboard'], // usuario normal solo ve su dashboard
-  operator: ['dashboard', 'reportes-maquinaria'], // operadores solo reportes
+  operator: ['dashboard'], // operadores solo dashboard
   ingeniero: [
     'dashboard', 
     'usuarios', 
     'transporte', 
-    'proyectos-cuadrilla', 
-    'reportes', 
     'solicitudes-rol', 
-    'operadores',
-    'reportes-maquinaria'
+    'operadores'
   ],
   superadmin: [
     'dashboard', 
     'usuarios', 
     'transporte', 
-    'proyectos-cuadrilla', 
-    'reportes', 
-    'configuracion', 
     'solicitudes-rol', 
     'operadores',
-    'reportes-maquinaria',
     'auditoria'
   ],
   guest: ['dashboard'],
@@ -38,24 +30,17 @@ export const rolePermissions = {
   inspector: [
     'dashboard', 
     'transporte', 
-    'proyectos-cuadrilla', 
-    'reportes', 
-    'operadores',
-    'reportes-maquinaria'
+    'operadores'
   ],
   operario: [
     'dashboard',
-    'reportes-maquinaria',
     'transporte'
   ],
   manager: [
     'dashboard', 
     'usuarios', 
     'transporte', 
-    'proyectos-cuadrilla', 
-    'reportes', 
-    'operadores',
-    'reportes-maquinaria'
+    'operadores'
   ]
 };
 
@@ -107,43 +92,7 @@ export const sidebarData = {
       category: 'management'
     }
   ],
-  projects: [
-    { 
-      id: 'proyectos-cuadrilla', 
-      name: 'Proyectos Cuadrilla', 
-      icon: FileText, 
-      permission: 'proyectos-cuadrilla',
-      description: 'Gestión de proyectos con personal manual',
-      category: 'projects'
-    }
-  ],
-  reports: [
-    { 
-      id: 'reportes', 
-      name: 'Reportes y Análisis', 
-      icon: BarChart3, 
-      permission: 'reportes',
-      description: 'Generación de reportes y estadísticas',
-      category: 'reports'
-    },
-    { 
-      id: 'reportes-maquinaria', 
-      name: 'Reportes de Maquinaria', 
-      icon: ClipboardList, 
-      permission: 'reportes-maquinaria',
-      description: 'Reportes creados por operadores sobre maquinaria',
-      category: 'reports'
-    }
-  ],
   system: [
-    { 
-      id: 'configuracion', 
-      name: 'Configuración', 
-      icon: Settings, 
-      permission: 'configuracion',
-      description: 'Configuración del sistema',
-      category: 'system'
-    },
     { 
       id: 'auditoria', 
       name: 'Auditoría del Sistema', 
@@ -161,8 +110,6 @@ export const sidebarData = {
 export const categoryLabels = {
   main: 'Panel Principal',
   management: 'Gestión',
-  projects: 'Proyectos',
-  reports: 'Reportes',
   system: 'Sistema'
 };
 
@@ -178,8 +125,6 @@ export const getAllSidebarItems = () => {
   return [
     ...sidebarData.main,
     ...sidebarData.management,
-    ...sidebarData.projects,
-    ...sidebarData.reports,
     ...sidebarData.system
   ];
 };
