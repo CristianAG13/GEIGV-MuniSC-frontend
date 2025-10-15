@@ -15,6 +15,10 @@ import ActiveUsers from './components/ActiveUsers';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
 import { toast } from '@/hooks/use-toast';
 
+// Importar las imágenes para el PDF
+import headerUrl from '@/assets/header.png';
+import footerUrl from '@/assets/footer.png';
+
 const AuditoriaModule = () => {
   const { user } = useAuth();
   const { logCreate } = useAuditLogger();
@@ -241,6 +245,335 @@ const AuditoriaModule = () => {
     );
   }, [currentFilters, loadAuditLogs, loadAuditStats]);
 
+  // Funciones auxiliares para la exportación a PDF
+  const getUserFullName = (log) => {
+    if (log.name && log.lastname) {
+      return `${log.name} ${log.lastname}`;
+    }
+    
+    if (log.userFullName) return log.userFullName;
+    if (log.fullName) return log.fullName;
+    if (log.user_full_name) return log.user_full_name;
+    
+    if (log.userName) return log.userName;
+    if (log.user_name) return log.user_name;
+    if (log.username) return log.username;
+    
+    if (log.User) {
+      const user = log.User;
+      if (user.name && user.lastname) return `${user.name} ${user.lastname}`;
+      if (user.fullName) return user.fullName;
+      if (user.userName) return user.userName;
+    }
+    
+    if (log.user) {
+      const user = log.user;
+      if (user.name && user.lastname) return `${user.name} ${user.lastname}`;
+      if (user.fullName) return user.fullName;
+      if (user.userName) return user.userName;
+      if (user.full_name) return user.full_name;
+    }
+    
+    return 'Sin nombre';
+  };
+
+  const getUserEmail = (log) => {
+    if (log.userEmail) return log.userEmail;
+    if (log.email) return log.email;
+    if (log.user_email) return log.user_email;
+    
+    if (log.User && log.User.email) return log.User.email;
+    if (log.user && log.user.email) return log.user.email;
+    
+    return 'No email';
+  };
+
+  const getActionText = (action) => {
+    const translations = {
+      CREATE: 'CREAR',
+      UPDATE: 'ACTUALIZAR', 
+      DELETE: 'ELIMINAR',
+      RESTORE: 'RESTAURAR',
+      AUTH: 'AUTENTICACIÓN',
+      ROLE_CHANGE: 'CAMBIO DE ROL',
+      LOGIN: 'INICIO SESIÓN',
+      LOGOUT: 'CIERRE SESIÓN',
+      VIEW: 'VER',
+      EXPORT: 'EXPORTAR',
+      SYSTEM: 'SISTEMA',
+      CREAR: 'CREAR',
+      ACTUALIZAR: 'ACTUALIZAR',
+      ELIMINAR: 'ELIMINAR',
+      RESTAURAR: 'RESTAURAR',
+      AUTENTICACIÓN: 'AUTENTICACIÓN',
+      'INICIO SESIÓN': 'INICIO SESIÓN',
+      'CIERRE SESIÓN': 'CIERRE SESIÓN',
+      VER: 'VER',
+      EXPORTAR: 'EXPORTAR'
+    };
+    return translations[action] || action;
+  };
+
+  const formatCostaRicaTime = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString('es-CR', {
+        timeZone: 'America/Costa_Rica',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formateando fecha:', error);
+      return 'Fecha inválida';
+    }
+  };
+
+  const isEmptyVal = (v) => {
+    return v === undefined || v === null || v === "" || (typeof v === "number" && Number.isNaN(v));
+  };
+
+  const toHTML = (v) => {
+    if (isEmptyVal(v)) return "—";
+    return String(v).replace(/\n/g, "<br>").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+
+  const buildFlatAuditRow = (log) => {
+    return {
+      Fecha: formatCostaRicaTime(log.timestamp || log.createdAt),
+      Acción: getActionText(log.action),
+      Email: getUserEmail(log),
+      'Nombre Completo': getUserFullName(log),
+      Descripción: log.description || 'Sin descripción',
+      Entidad: log.entity || '—'
+    };
+  };
+
+  // Función principal de exportación a PDF
+  const handleExportPDF = useCallback(() => {
+    if (!logs || logs.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "No hay logs de auditoría para exportar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // 1) Convertir logs a filas planas
+      const rows = logs.map(buildFlatAuditRow);
+
+      // 2) Headers dinámicos 
+      const headers = ['Fecha', 'Acción', 'Email', 'Nombre Completo', 'Descripción', 'Entidad'];
+
+      // 3) URLs absolutas para las imágenes
+      const headerAbs = new URL(headerUrl, window.location.origin).toString();
+      const footerAbs = new URL(footerUrl, window.location.origin).toString();
+
+      // 4) CSS (mismo estilo que en transporte)
+      const head = `
+      <style>
+        :root{
+          --footer-h: 50px;
+          --gap-bottom: 8px;
+          --margin-x: 18mm;
+        }
+
+        @page{
+          size: A4 landscape;
+          margin: 16mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
+        }
+
+        html, body{
+          margin:0; padding:0;
+          font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          position: relative;
+        }
+
+        .report-title{
+          margin: 0 0 6px;
+          break-after: avoid-page;
+          page-break-after: avoid;
+        }
+
+        footer{
+          position: fixed;
+          left: var(--margin-x);
+          right: var(--margin-x);
+          bottom: 0;
+          height: var(--footer-h);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          z-index: 9999;
+          transform: translateZ(0);
+        }
+
+        footer img{
+          height: 40px;
+          max-width: 100%;
+          width: auto;
+          object-fit: contain;
+          object-position: center;
+          display: block;
+        }
+
+        main{
+          padding-bottom: calc(var(--footer-h) + var(--gap-bottom));
+          transform: translateZ(0);
+        }
+
+        .logo-row td{ border:none; padding:8px 0; background:#fff; }
+        .logo-wrap{ display:flex; justify-content:center; }
+        .logo-wrap img{ 
+          height: 60px; 
+          max-width: 100%; 
+          object-fit: contain; 
+          object-position: center;
+        }
+
+        .title-row td{ border:none; padding:0 0 6px; background:#fff; }
+        .title-wrap{ display:flex; flex-direction:column; align-items:flex-start; }
+        .title-wrap h1{ margin:0; font-size:16px; }
+        .meta{ font-size:11px; color:#374151; margin-top:2px; }
+
+        table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
+        thead{ display: table-header-group; }
+
+        thead .cols th{
+          background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 5px; vertical-align:bottom;
+        }
+
+        thead .cols .th{ line-height:1.1; hyphens:auto; word-break:break-word; }
+
+        tbody td{
+          border:1px solid #f1f5f9; padding:5px 6px; vertical-align:top;
+          word-break:break-word; hyphens:auto;
+        }
+
+        tbody tr:nth-child(even) td{ background:#fafafa; }
+
+        /* Control de paginación: máximo 10 filas por página */
+        tbody tr:nth-child(10n) {
+          page-break-after: always;
+        }
+        
+        table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
+        tr{ page-break-before:auto; page-break-after:auto; }
+      </style>`;
+
+      // 5) Título del reporte
+      const titleBlock = `
+        <div class="report-title">
+          <h1>Logs de Auditoría del Sistema</h1>
+          <div class="meta">Registros de auditoría — ${rows.length} registro(s) — Generado el ${new Date().toLocaleDateString('es-CR')}</div>
+        </div>
+      `;
+
+      // 6) Encabezado de la tabla
+      const thead = `
+        <tr class="logo-row">
+          <td colspan="${headers.length}">
+            <div class="logo-wrap">
+              <img src="${headerAbs}" alt="Encabezado" />
+            </div>
+          </td>
+        </tr>
+        
+        <tr class="cols">
+          ${headers.map(h => `<th><div class="th">${h}</div></th>`).join("")}
+        </tr>
+      `;
+
+      // 7) Cuerpo de la tabla
+      const tbody = rows
+        .map(row => `<tr>${headers.map(h => `<td>${toHTML(row[h])}</td>`).join("")}</tr>`)
+        .join("");
+
+      // 8) HTML final
+      const html = `
+      <html>
+        <head>${head}</head>
+        <body>
+          <main>
+            <table>
+              <thead>${thead}</thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </main>
+
+          <footer>
+            <img src="${footerAbs}" alt="Pie de página" />
+          </footer>
+        </body>
+      </html>`;
+
+      // 9) Abrir ventana e imprimir
+      const win = window.open("", "_blank");
+      if (!win) {
+        toast({
+          title: "Error",
+          description: "Bloqueado por el navegador. Habilita pop-ups para exportar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+
+      // Esperar que las imágenes carguen antes de imprimir
+      const waitImages = () =>
+        Promise.all(
+          Array.from(win.document.images).map(
+            img =>
+              new Promise(res => {
+                if (img.complete) return res();
+                img.onload = res;
+                img.onerror = res;
+              })
+          )
+        );
+
+      waitImages().then(() => {
+        win.focus();
+        win.print();
+      });
+
+      win.onafterprint = () => {
+        try {
+          win.close();
+        } catch {}
+      };
+
+      // Log de auditoría para la exportación
+      logCreate('EXPORT', 'audit_logs', null, 'Exportación de logs de auditoría a PDF');
+
+      toast({
+        title: "Exportación iniciada",
+        description: `Se está generando el PDF con ${rows.length} registros de auditoría`,
+      });
+
+    } catch (error) {
+      console.error('Error exportando PDF:', error);
+      toast({
+        title: "Error en exportación",
+        description: "No se pudo generar el PDF. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    }
+  }, [logs, logCreate]);
+
 
 
   // Efecto inicial - cargar datos cuando el componente se monta
@@ -343,6 +676,19 @@ const AuditoriaModule = () => {
           <AuditFilters
             onFiltersChange={handleFiltersChange}
             onRefresh={handleRefresh}
+            onExportPDF={() => {
+              // Crear una referencia temporal al AuditTable para acceder a su función de exportación
+              if (logs && logs.length > 0) {
+                // Llamar directamente a la función de exportación con los logs actuales
+                handleExportPDF();
+              } else {
+                toast({
+                  title: "Sin datos",
+                  description: "No hay logs de auditoría para exportar",
+                  variant: "destructive",
+                });
+              }
+            }}
             isLoading={isLoading}
             totalRecords={pagination.total}
           />
@@ -357,6 +703,7 @@ const AuditoriaModule = () => {
                                  (currentFilters.entity && currentFilters.entity !== 'all') ||
                                  (currentFilters.action && currentFilters.action !== 'all') ||
                                  currentFilters.search || currentFilters.userId || currentFilters.userName)}
+            onExportPDF={() => handleExportPDF()}
           />
         </TabsContent>
 
