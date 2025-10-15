@@ -4,14 +4,10 @@ class AuthService {
   // Iniciar sesión
   async login(email, password) {
     try {
-      console.log('Intentando login con:', { email, url: apiClient.defaults.baseURL + '/auth/login' });
-      
       const response = await apiClient.post('/auth/login', {
         email,
         password,
       });
-
-      console.log('Respuesta del servidor:', response.data);
 
       // El backend puede devolver diferentes estructuras de datos
       // Necesitamos verificar qué estructura está devolviendo
@@ -35,20 +31,15 @@ class AuthService {
       if (user && user.roles && Array.isArray(user.roles) && user.roles.length > 0) {
         // Si tiene un array de roles, tomar el primero
         user.rol = user.roles[0].name || user.roles[0];
-        console.log('Rol extraído de array de roles:', user.rol);
       } else if (user && user.role) {
         // Si tiene un campo role
         user.rol = user.role;
-        console.log('Rol extraído de campo role:', user.rol);
       } else if (user && user.rol) {
         // Si ya tiene rol
-        console.log('Rol ya presente:', user.rol);
-      } else {
-        console.warn('No se encontró rol en los datos del usuario:', user);
+        // Rol already present
       }
 
       if (!token) {
-        console.error('No se encontró token en la respuesta:', responseData);
         return {
           success: false,
           error: 'Respuesta del servidor inválida: no se encontró token',
@@ -65,13 +56,12 @@ class AuthService {
       try {
         const profileResult = await this.getUserProfile();
         if (profileResult.success && profileResult.data) {
-          console.log('Perfil completo obtenido:', profileResult.data);
           // Actualizar con los datos completos del perfil (incluye roles)
           localStorage.setItem('user', JSON.stringify(profileResult.data));
           user = profileResult.data;
         }
       } catch (profileError) {
-        console.warn('No se pudo obtener el perfil completo, usando datos básicos:', profileError);
+        // Continue with basic user data if profile fetch fails
       }
 
       return {
@@ -122,7 +112,6 @@ class AuthService {
     
     // Verificar si el token ha expirado
     if (this.isTokenExpired()) {
-      console.log('Token expirado, cerrando sesión');
       // Guardamos un indicador para saber que se cerró por expiración
       localStorage.setItem('sessionExpiredReason', 'token_expired');
       this.logout(); // Limpiar datos si el token expiró
@@ -164,7 +153,6 @@ class AuthService {
   // Limpiar datos de autenticación si el token ha expirado
   checkTokenExpiration() {
     if (this.isTokenExpired()) {
-      console.log('Token expirado, limpiando datos de autenticación');
       this.logout();
       return false;
     }
@@ -191,11 +179,6 @@ class AuthService {
   // Registrar nuevo usuario
   async register(userData) {
     try {
-      console.log('Intentando registro con:', { 
-        email: userData.email, 
-        url: apiClient.defaults.baseURL + '/auth/register' 
-      });
-
       const response = await apiClient.post('/auth/register', {
         email: userData.email,
         password: userData.password,
@@ -203,8 +186,6 @@ class AuthService {
         lastname: userData.lastname,
         // Puedes añadir más campos según tu backend
       });
-
-      console.log('Respuesta del registro:', response.data);
 
       return {
         success: true,
@@ -240,14 +221,9 @@ class AuthService {
   // Recuperar contraseña
   async forgotPassword(email) {
     try {
-      console.log('Solicitud de recuperación de contraseña para:', email);
-      console.log('URL del endpoint:', apiClient.defaults.baseURL + '/auth/forgot-password');
-      
       const response = await apiClient.post('/auth/forgot-password', {
         email,
       });
-
-      console.log('Respuesta de forgot password:', response.data);
 
       return {
         success: true,
@@ -260,9 +236,6 @@ class AuthService {
       
       // Verificar si hay respuesta del servidor
       if (error.response) {
-        console.log('Error response status:', error.response.status);
-        console.log('Error response data:', error.response.data);
-        
         // Intentar extraer el mensaje de diferentes formas
         if (error.response.data) {
           if (typeof error.response.data === 'string') {
@@ -365,36 +338,13 @@ class AuthService {
         throw new Error('No hay token de autenticación');
       }
 
-      console.log('=== OBTENIENDO PERFIL DEL USUARIO ===');
-      console.log('Token:', token ? 'Presente' : 'Ausente');
-      console.log('URL:', apiClient.defaults.baseURL + '/auth/profile');
-
       const response = await apiClient.get('/auth/profile');
-      console.log('=== RESPUESTA DEL PERFIL ===');
-      console.log('Status:', response.status);
-      console.log('Data completa:', response.data);
-      console.log('Estructura de data:', Object.keys(response.data));
-      
-      // Verificar si tiene roles en diferentes formatos
-      if (response.data.roles) {
-        console.log('Roles encontrados:', response.data.roles);
-      }
-      if (response.data.role) {
-        console.log('Role encontrado:', response.data.role);
-      }
-      if (response.data.rol) {
-        console.log('Rol encontrado:', response.data.rol);
-      }
 
       return {
         success: true,
         data: response.data,
       };
     } catch (error) {
-      console.error('=== ERROR OBTENIENDO PERFIL ===');
-      console.error('Error:', error);
-      console.error('Response status:', error.response?.status);
-      console.error('Response data:', error.response?.data);
       return {
         success: false,
         error: error.response?.data?.message || 'Error al obtener perfil',
@@ -405,7 +355,6 @@ class AuthService {
   // Función para refrescar datos del usuario
   async refreshUserData() {
     try {
-      console.log('=== INICIANDO REFRESH DE DATOS DEL USUARIO ===');
       const profileResult = await this.getUserProfile();
 
       if (profileResult.success) {
@@ -421,7 +370,6 @@ class AuthService {
         return profileResult;
       }
     } catch (error) {
-      console.error('❌ Error refrescando datos del usuario:', error);
       return { success: false, error: 'Error al actualizar datos del usuario' };
     }
   }

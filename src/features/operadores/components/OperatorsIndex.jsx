@@ -32,25 +32,17 @@ const OperatorsIndex = () => {
   useEffect(() => {
     if (searchTerm) {
       const lowercasedSearch = searchTerm.toLowerCase();
-      console.log('Buscando:', lowercasedSearch);
-      console.log('Operadores a filtrar:', operators);
       
       const filtered = operators.filter(operator => {
-        console.log('Operador:', operator);
         const nameMatch = operator.name && operator.name.toLowerCase().includes(lowercasedSearch);
         const lastMatch = operator.last && operator.last.toLowerCase().includes(lowercasedSearch);
         const idMatch = operator.identification && operator.identification.toLowerCase().includes(lowercasedSearch);
         const phoneMatch = operator.phoneNumber && operator.phoneNumber.toLowerCase().includes(lowercasedSearch);
         const emailMatch = operator.email && operator.email.toLowerCase().includes(lowercasedSearch);
         
-        console.log(`Matches para ${operator.name} ${operator.last}:`, {
-          nameMatch, lastMatch, idMatch, phoneMatch, emailMatch
-        });
-        
         return nameMatch || lastMatch || idMatch || phoneMatch || emailMatch;
       });
       
-      console.log('Resultados filtrados:', filtered);
       setFilteredOperators(filtered);
     } else {
       setFilteredOperators(operators);
@@ -61,8 +53,6 @@ const OperatorsIndex = () => {
     try {
       setLoading(true);
       const data = await operatorsService.getAllOperators();
-      console.log('Datos de operadores recibidos:', data);
-      console.log('Primer operador:', data[0]);
       setOperators(data);
       setFilteredOperators(data);
     } catch (error) {

@@ -57,13 +57,21 @@ const AuditTable = ({
       DELETE: Trash2,
       RESTORE: RefreshCw,
       AUTH: Shield,
+      LOGIN: Shield,
+      LOGOUT: Shield,
+      VIEW: Eye,
+      EXPORT: Activity,
       ROLE_CHANGE: User,
       SYSTEM: Settings,
       CREAR: Plus,
       ACTUALIZAR: Edit3,
       ELIMINAR: Trash2,
       RESTAURAR: RefreshCw,
-      AUTENTICACION: Shield
+      AUTENTICACIÓN: Shield,
+      'INICIO SESIÓN': Shield,
+      'CIERRE SESIÓN': Shield,
+      VER: Eye,
+      EXPORTAR: Activity
     };
     const IconComponent = icons[action] || Activity;
     return <IconComponent className="h-4 w-4" />;
@@ -77,13 +85,21 @@ const AuditTable = ({
       DELETE: 'bg-red-100 text-red-800 border-red-200',
       RESTORE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       AUTH: 'bg-purple-100 text-purple-800 border-purple-200',
+      LOGIN: 'bg-purple-100 text-purple-800 border-purple-200',
+      LOGOUT: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      VIEW: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      EXPORT: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       ROLE_CHANGE: 'bg-orange-100 text-orange-800 border-orange-200',
       SYSTEM: 'bg-gray-100 text-gray-800 border-gray-200',
       CREAR: 'bg-green-100 text-green-800 border-green-200',
       ACTUALIZAR: 'bg-blue-100 text-blue-800 border-blue-200',
       ELIMINAR: 'bg-red-100 text-red-800 border-red-200',
       RESTAURAR: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      AUTENTICACION: 'bg-purple-100 text-purple-800 border-purple-200'
+      AUTENTICACIÓN: 'bg-purple-100 text-purple-800 border-purple-200',
+      'INICIO SESIÓN': 'bg-purple-100 text-purple-800 border-purple-200',
+      'CIERRE SESIÓN': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      VER: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      EXPORTAR: 'bg-emerald-100 text-emerald-800 border-emerald-200'
     };
     return colors[action] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
@@ -92,18 +108,17 @@ const AuditTable = ({
   const getActionText = (action) => {
     const translations = {
       CREATE: 'CREAR',
-      UPDATE: 'ACTUALIZAR',
+      UPDATE: 'ACTUALIZAR', 
       DELETE: 'ELIMINAR',
       RESTORE: 'RESTAURAR',
-      AUTH: 'AUTENTICACION',
+      AUTH: 'AUTENTICACIÓN',
       ROLE_CHANGE: 'CAMBIO DE ROL',
-      SYSTEM: 'SISTEMA',
       // Las acciones ya en español se mantienen igual
       CREAR: 'CREAR',
       ACTUALIZAR: 'ACTUALIZAR',
       ELIMINAR: 'ELIMINAR',
       RESTAURAR: 'RESTAURAR',
-      AUTENTICACION: 'AUTENTICACION'
+      AUTENTICACIÓN: 'AUTENTICACIÓN'
     };
     return translations[action] || action;
   };

@@ -41,7 +41,6 @@ const refreshUserFromBackend = async () => {
         roles: result.data.roles?.map(r => r.name || r) || []
       };
       setUser(normalizedUser);
-      console.log('Usuario actualizado:', normalizedUser); // Para debug
     }
   } catch (error) {
     console.error('Error refreshing user data:', error);
@@ -64,7 +63,7 @@ const refreshUserFromBackend = async () => {
       // ✅ REGISTRAR LOGIN EN AUDITORÍA
       try {
         await auditService.logEvent({
-          action: 'AUTENTICACION',
+          action: 'AUTH',
           entity: 'authentication',
           entityId: normalizedUser.id?.toString() || 'unknown',
           userId: normalizedUser.id,
@@ -91,7 +90,7 @@ const refreshUserFromBackend = async () => {
       // ✅ REGISTRAR INTENTO FALLIDO EN AUDITORÍA
       try {
         await auditService.logEvent({
-          action: 'AUTENTICACION',
+          action: 'AUTH',
           entity: 'authentication',
           entityId: 'unknown',
           description: `Intento de login fallido para ${email}`,
@@ -124,7 +123,7 @@ const refreshUserFromBackend = async () => {
   if (user) {
     try {
       auditService.logEvent({
-        action: 'AUTENTICACION',
+        action: 'AUTH',
         entity: 'authentication',
         entityId: user.id?.toString() || 'unknown',
         userId: user.id,

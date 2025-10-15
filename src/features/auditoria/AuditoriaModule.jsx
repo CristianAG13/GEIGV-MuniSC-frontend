@@ -53,26 +53,16 @@ const AuditoriaModule = () => {
       return;
     }
     
-    console.log('🔄 Iniciando carga de logs con filtros:', filters);
     setIsLoading(true);
     setError(null);
     
     try {
       const filtersToUse = filters || currentFilters;
-      console.log('📋 Filtros finales a usar:', filtersToUse);
       const result = await auditService.getAuditLogs(filtersToUse);
       
       if (result.success) {
-        console.log('✅ Datos recibidos exitosamente:', result.data);
-        
         // El backend puede devolver los datos en result.data.data o result.data.logs
         const logsData = result.data.data || result.data.logs || [];
-        
-        // Debug básico
-        console.log('✅ Datos recibidos:', logsData.length, 'logs');
-        if (logsData.length > 0) {
-          console.log('🔍 Primer log:', logsData[0]);
-        }
         
         // Filtrar y transformar los datos para evitar duplicados
         const filteredLogs = [];
@@ -159,13 +149,6 @@ const AuditoriaModule = () => {
           return transformedLog;
         });
         
-        console.log('🔄 Logs transformados:', transformedLogs.map(log => ({
-          id: log.id,
-          name: log.name,
-          lastname: log.lastname,
-          transformed: !!(log.name && log.lastname)
-        })));
-        
         setLogs(transformedLogs);
         setPagination({
           currentPage: result.data.page || result.data.currentPage || 1,
@@ -174,15 +157,7 @@ const AuditoriaModule = () => {
           limit: filtersToUse.limit || 50
         });
 
-        // Log para debugging cuando no hay resultados
-        if (logsData.length === 0) {
-          console.log('⚠️ No se encontraron registros con los filtros aplicados:', {
-            filters: filtersToUse,
-            hasDateFilters: !!(filtersToUse.startDate || filtersToUse.endDate),
-            dateRange: filtersToUse.startDate && filtersToUse.endDate ? 
-              `${filtersToUse.startDate} a ${filtersToUse.endDate}` : null
-          });
-        }
+
         
         // Detectar si son datos simulados
         const isSimulated = logsData.length > 0 && (
@@ -191,17 +166,11 @@ const AuditoriaModule = () => {
         );
         setIsUsingSimulatedData(isSimulated);
         
-        if (isSimulated) {
-          console.log('⚠️ Usando datos simulados - backend no disponible');
-        } else {
-          console.log('✅ Usando datos reales del backend');
-        }
+        setIsUsingSimulatedData(isSimulated);
       } else {
         throw new Error(result.error || 'Error al cargar logs');
       }
     } catch (error) {
-      console.error('❌ Error loading audit logs:', error);
-      console.error('📋 Filtros que causaron error:', filtersToUse);
       setError(error.message);
       setIsUsingSimulatedData(false);
       
@@ -229,11 +198,8 @@ const AuditoriaModule = () => {
       
       if (result.success) {
         setStats(result.data);
-      } else {
-        console.warn('Error loading stats:', result.error);
       }
     } catch (error) {
-      console.error('Error loading audit stats:', error);
       // No mostramos toast para stats para no ser muy intrusivos
     } finally {
       setIsLoadingStats(false);
@@ -242,15 +208,6 @@ const AuditoriaModule = () => {
 
   // Manejar cambios en los filtros
   const handleFiltersChange = useCallback((newFilters) => {
-    console.log('🔄 AuditoriaModule - Cambio de filtros:', { 
-      oldFilters: currentFilters, 
-      newFilters,
-      hasFullNameFilter: !!(newFilters.fullName || newFilters.userName),
-      fullNameValue: newFilters.fullName,
-      userNameValue: newFilters.userName,
-      emailValue: newFilters.email
-    });
-    
     setCurrentFilters(newFilters);
     loadAuditLogs(newFilters);
     
@@ -289,7 +246,6 @@ const AuditoriaModule = () => {
   // Efecto inicial - cargar datos cuando el componente se monta
   useEffect(() => {
     if (isSuperAdmin) {
-      console.log('🚀 Cargando datos iniciales de auditoría...');
       loadAuditLogs({ page: 1, limit: 50 });
       loadAuditStats();
     }
