@@ -1202,15 +1202,15 @@ export default function ReportsTable({
 const head = `
 <style>
   :root{
-    --footer-h: 24px;     /* ← tamaño del pie (ajústalo si quieres) */
-    --gap-bottom: 8px;    /* colchón entre contenido y pie */
-    --margin-x: 18mm;     /* márgenes izq/der de página */
+    --footer-h: 23px;
+    --gap-bottom: -5px;
+    --margin-x: 18mm;
   }
 
   @page{
     size: A4 landscape;
-    /* margen inferior = altura del pie + gap */
-    margin: 16mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
+    /* margen superior normal; el pie ya está reservado abajo */
+    margin: 14mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
   }
 
   html, body{
@@ -1218,69 +1218,68 @@ const head = `
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    position: relative; /* ayuda a Chrome con el fixed en la 1ª página */
   }
 
-  .report-title{
-  margin: 0 0 6px;
-  break-after: avoid-page;   /* moderno */
-  page-break-after: avoid;   /* legacy */
-}
-  /* ===== Footer fijo (todas las páginas) ===== */
+  /* ===== Footer fijo en TODAS las páginas ===== */
   footer{
     position: fixed;
     left: var(--margin-x);
     right: var(--margin-x);
     bottom: 0;
     height: var(--footer-h);
-    display: flex;
-    align-items: center;
-    justify-content: center; /* ← centrado */
-    background: #fff;        /* evita que el contenido “trasluzca” */
-    z-index: 9999;           /* asegura que se vea sobre la tabla */
-    transform: translateZ(0); /* workaround de impresión en Chrome */
+    display:flex; align-items:center; justify-content:center;
+    background:#fff; z-index:5; transform: translateZ(0);
   }
-  footer img{
-    height: calc(var(--footer-h) - 2px); /* que no toque bordes */
-    width: auto;
-    object-fit: contain;
-    display: block;
-  }
+  footer img{ height: calc(var(--footer-h) - 2px); width:auto; object-fit:contain; display:block; }
 
-  /* deja espacio para el pie para que la tabla nunca lo tape */
-  main{
-    padding-bottom: calc(var(--footer-h) + var(--gap-bottom));
-    transform: translateZ(0); /* mismo workaround */
-  }
+  /* deja espacio para el pie */
+  main{ padding-bottom: calc(var(--footer-h) + var(--gap-bottom)); }
 
-  /* ===== TU estilo de encabezado y tabla ===== */
-  .logo-row td{ border:none; padding:0; background:#fff; }
-  .logo-wrap{ display:flex; justify-content:center; }
-.logo-wrap img{ height:20px; object-fit:contain; } 
-
-  .title-row td{ border:none; padding:0 0 6px; background:#fff; }
-  .title-wrap{ display:flex; flex-direction:column; align-items:flex-start; }
-  .title-wrap h1{ margin:0; font-size:16px; }
-  .meta{ font-size:11px; color:#374151; margin-top:2px; }
-
+  /* ===== Tabla / encabezado repetido ===== */
   table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
-  thead{ display: table-header-group; }  /* encabezado se repite */
-  /* ¡NO usar tfoot aquí! el pie ya es fixed */
+  thead{ display: table-header-group; }  /* ← REPITE en todas las páginas */
 
+  /* Fila de LOGOS dentro del THEAD (repetido) */
+  .logo-row td{ border:none; padding:0 0 6px; background:#fff; }
+  .logo-wrap{ display:flex; align-items:center; justify-content:center; }
+  .logo-wrap img{
+    height: 40px;     /* ← AJUSTA AQUÍ el tamaño del header (por ej. 28–40px) */
+    object-fit: contain;
+  }
+
+  /* Cabeceras de columnas */
   thead .cols th{
     background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 5px; vertical-align:bottom;
   }
   thead .cols .th{ line-height:1.1; hyphens:auto; word-break:break-word; }
 
+  /* Título (caption) encima de la tabla – aparece solo una vez */
+  table caption{
+    caption-side: top; text-align:left; margin: 0 0 -6px;
+  }
+/* Fila de título (solo una vez, debajo de los logos) */
+.title-row td{
+  border: none;
+  padding: 4px 0 8px;   /* separa del header y de la tabla */
+  background: #fff;
+}
+.title-row .title{ font-size: 18px; font-weight: 800; margin: 0; }
+.title-row .meta{ font-size: 11px; color: #374151; margin-top: 2px; }
+/* evita que se corte justo después del título */
+.title-row{ break-after: avoid-page; page-break-after: avoid; }
+
+  /* Celdas */
   tbody td{
     border:1px solid #f1f5f9; padding:5px 6px; vertical-align:top;
     word-break:break-word; hyphens:auto;
   }
   tbody tr:nth-child(even) td{ background:#fafafa; }
 
-  table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
-  tr{ page-break-before:auto; page-break-after:auto; }
+  /* Cortes limpios */
+  tbody tr{ break-inside:auto; page-break-inside:auto; }
+  thead tr, thead th{ break-inside:avoid; page-break-inside:avoid; }
 </style>`;
+
 
 const titleBlock = `
   <div class="report-title">
@@ -1290,48 +1289,27 @@ const titleBlock = `
 `;
 
   // 6) Partes de la tabla (thead/tfoot se repiten por page gracias al CSS)
- const thead = `
-  <!-- fila con el/los logos centrados -->
+const thead = `
+  <!-- LOGOS (se repiten en cada página) -->
   <tr class="logo-row">
     <td colspan="${headers.length}">
       <div class="logo-wrap">
-        <img src="${headerAbs}" alt="Encabezado" />
+        <img src="${headerAbs}" alt="Header">
       </div>
     </td>
   </tr>
-  
-  <!-- fila con los nombres de columnas -->
+
+  <!-- Cabecera de columnas -->
   <tr class="cols">
     ${headers.map(h => `<th><div class="th">${pretty(h)}</div></th>`).join("")}
   </tr>
 `;
-
-
-
-  // const tfoot = `
-  //   <tr class="footband">
-  //     <td colspan="${headers.length}">
-  //       <img src="${footerAbs}" alt="Pie de página" />
-  //     </td>
-  //   </tr>`;
 
   const tbody = rows
     .map(row => `<tr>${headers.map(h => `<td>${toHTML(row[h])}</td>`).join("")}</tr>`)
     .join("");
 
   // 7) HTML final (head va antes del body para que el navegador aplique los estilos antes del render)
-//   const html = `
-// <html>
-//   <head>${head}</head>
-//   <body>
-//     <table>
-//       <thead>${thead}</thead>
-//       <tbody>${tbody}</tbody>
-//       <tfoot>${tfoot}</tfoot>
-//     </table>
-//   </body>
-// </html>`;
-
 const html = `
 <html>
   <head>${head}</head>
@@ -1343,13 +1321,11 @@ const html = `
       </table>
     </main>
 
-    <!-- Footer fijo en TODAS las páginas -->
     <footer>
       <img src="${footerAbs}" alt="Pie de página" />
     </footer>
   </body>
 </html>`;
-
 
   // 8) Abrir/Imprimir
   const win = window.open("", "_blank");
