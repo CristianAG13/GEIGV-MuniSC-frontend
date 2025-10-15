@@ -1,6 +1,6 @@
 // features/auditoria/components/AuditFilters.jsx
 import React, { useState, useEffect } from 'react';
-import { Filter, RefreshCw, Search, X } from 'lucide-react';
+import { Filter, RefreshCw, Search, X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 const AuditFilters = ({ 
   onFiltersChange, 
   onRefresh, 
+  onExportPDF,
   isLoading = false,
   totalRecords = 0 
 }) => {
@@ -144,6 +145,16 @@ const AuditFilters = ({
               onClick={() => setIsExpanded(!isExpanded)}
             >
               {isExpanded ? 'Ocultar' : 'Mostrar'} filtros
+            </Button>
+            <Button
+              className="bg-red-500 hover:bg-red-600 text-white"
+              size="sm"
+              onClick={onExportPDF}
+              disabled={isLoading || totalRecords === 0}
+              title={totalRecords === 0 ? 'No hay datos para exportar' : 'Exportar a PDF'}
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              Exportar PDF
             </Button>
             <Button
               variant="outline"
