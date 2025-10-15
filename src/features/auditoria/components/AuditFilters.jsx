@@ -18,6 +18,7 @@ const AuditFilters = ({
     limit: 50,
     userEmail: '',
     action: 'all',
+    entity: 'all',
     startDate: '',
     endDate: ''
   });
@@ -32,6 +33,18 @@ const AuditFilters = ({
     { value: 'AUTH', label: 'Autenticación' },
     { value: 'RESTORE', label: 'Restaurar' },
     { value: 'ROLE_CHANGE', label: 'Cambio de rol' }
+  ];
+
+  // Opciones de entidades disponibles
+  const entityOptions = [
+    { value: 'all', label: 'Todas las entidades' },
+    { value: 'fuentes', label: 'Ríos y Tajos' },
+    { value: 'maquinaria', label: 'Maquinaria' },
+    { value: 'operadores', label: 'Operadores' },
+    { value: 'transporte', label: 'Transporte' },
+    { value: 'authentication', label: 'Autenticación' },
+    { value: 'user_roles', label: 'Roles de Usuario' },
+    { value: 'system', label: 'Sistema' }
   ];
 
 
@@ -64,6 +77,11 @@ const AuditFilters = ({
         filtersToSend.action = filters.action;
       }
       
+      // Filtro por entidad: GET /audit/logs?entity=fuentes
+      if (filters.entity && filters.entity !== 'all') {
+        filtersToSend.entity = filters.entity;
+      }
+      
       // Filtros de fecha: GET /audit/logs?userName=Cristian&startDate=2025-10-15&action=CREATE
       if (filters.startDate) {
         filtersToSend.startDate = filters.startDate;
@@ -94,6 +112,7 @@ const AuditFilters = ({
       limit: 50,
       userEmail: '',
       action: 'all',
+      entity: 'all',
       startDate: '',
       endDate: ''
     };
@@ -102,7 +121,7 @@ const AuditFilters = ({
 
   const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
     if (key === 'page' || key === 'limit') return false;
-    if (key === 'action') return value !== 'all';
+    if (key === 'action' || key === 'entity') return value !== 'all';
     return value !== '' && value !== null && value !== undefined;
   });
 
@@ -120,6 +139,11 @@ const AuditFilters = ({
             {hasActionFilter && (
               <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full ml-2">
                 ⚡ Acción: {filters.action}
+              </span>
+            )}
+            {filters.entity && filters.entity !== 'all' && (
+              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-2">
+                📋 Entidad: {entityOptions.find(e => e.value === filters.entity)?.label}
               </span>
             )}
             {hasEmailFilter && (
@@ -172,8 +196,8 @@ const AuditFilters = ({
         <CardContent className="space-y-4">
           <div className="space-y-4">
             
-            {/* Filtro principal por acción */}
-            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+            {/* Filtros principales por acción y entidad */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Tipo de acción
@@ -188,6 +212,28 @@ const AuditFilters = ({
                   </SelectTrigger>
                   <SelectContent>
                     {actionOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Entidad/Módulo
+                  <span className="text-xs text-gray-500 ml-1">(Fuentes, Maquinaria, etc.)</span>
+                </label>
+                <Select
+                  value={filters.entity || 'all'}
+                  onValueChange={(value) => handleFilterChange('entity', value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar entidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {entityOptions.map(option => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>

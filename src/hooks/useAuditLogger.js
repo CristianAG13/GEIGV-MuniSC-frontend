@@ -121,7 +121,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('CREATE', entity, entityName);
     
     const result = await logAuditEvent({
-      action: 'CREAR',
+      action: 'CREATE',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -148,7 +148,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('UPDATE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'ACTUALIZAR',
+      action: 'UPDATE',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -173,7 +173,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('DELETE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'ELIMINAR',
+      action: 'DELETE',
       entity,
       entityId: entityId.toString(),
       changes: {
@@ -198,7 +198,7 @@ export const useAuditLogger = () => {
     const description = customDescription || auditService.formatChangeDescription('RESTORE', entity, entityName);
     
     return await logAuditEvent({
-      action: 'RESTAURAR',
+      action: 'RESTORE',
       entity,
       entityId: entityId.toString(),
       changes: {
