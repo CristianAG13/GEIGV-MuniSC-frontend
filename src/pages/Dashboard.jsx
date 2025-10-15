@@ -88,15 +88,9 @@ export default function Dashboard() {
         }
       }
       
-      console.log('Usuario cargado:', user);
-      console.log('Rol detectado:', userRole);
-      
       // Actualizar permisos y sidebar con el rol determinado
       const permissions = getUserPermissions(userRole);
       const sidebarItems = getFilteredSidebarByCategory(userRole);
-      
-      console.log('Permisos:', permissions);
-      console.log('Sidebar data:', sidebarItems);
       
       setUserPermissions(permissions);
       setFilteredSidebarData(sidebarItems);

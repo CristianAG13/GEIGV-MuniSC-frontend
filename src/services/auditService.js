@@ -24,12 +24,6 @@ const getCostaRicaTimestamp = () => {
   
   const costaRicaISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}Z`;
   
-  console.log('🇨🇷 Timestamp Costa Rica generado (auditService):', {
-    horaUTC: now.toISOString(),
-    horaCostaRica: costaRicaISO,
-    horaLegible: `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`
-  });
-  
   return costaRicaISO;
 };
 
@@ -163,24 +157,9 @@ const auditService = {
     // Aplicar filtros a los datos simulados
     let filteredLogs = simulatedLogs;
     
-    // Filtro por nombre/apellido
-    if (filters.fullName || filters.userName) {
-      const searchTerm = (filters.fullName || filters.userName).toLowerCase();
-      console.log('� Aplicando filtro de nombre simulado:', searchTerm);
-      
-      filteredLogs = filteredLogs.filter(log => {
-        const fullName = `${log.name} ${log.lastname}`.toLowerCase();
-        const userName = (log.userName || '').toLowerCase();
-        const match = fullName.includes(searchTerm) || userName.includes(searchTerm);
-        
-        console.log(`Comparando "${searchTerm}" con "${fullName}" (${log.id}):`, match);
-        return match;
-      });
-    }
-    
     // Filtro por email
-    if (filters.email) {
-      const emailSearch = filters.email.toLowerCase();
+    if (filters.userEmail || filters.email) {
+      const emailSearch = (filters.userEmail || filters.email).toLowerCase();
       filteredLogs = filteredLogs.filter(log => {
         const userEmail = (log.userEmail || log.email || '').toLowerCase();
         return userEmail.includes(emailSearch);
@@ -196,19 +175,6 @@ const auditService = {
     if (filters.action && filters.action !== 'all') {
       filteredLogs = filteredLogs.filter(log => log.action === filters.action);
     }
-
-    console.log('📋 Datos simulados filtrados:', {
-      total: simulatedLogs.length,
-      filtered: filteredLogs.length,
-      filters: filters,
-      logs: filteredLogs.map(log => ({
-        id: log.id,
-        name: log.name,
-        lastname: log.lastname,
-        fullName: `${log.name} ${log.lastname}`,
-        hasNames: !!(log.name && log.lastname)
-      }))
-    });
 
     return {
       success: true,
@@ -272,15 +238,6 @@ const auditService = {
    * @param {Object} auditData.metadata - Metadatos adicionales
    */
   logEvent: async (auditData) => {
-    console.log('🚀 auditService.logEvent llamado con:', {
-      action: auditData.action,
-      entity: auditData.entity,
-      entityId: auditData.entityId,
-      userEmail: auditData.userEmail,
-      userName: auditData.userName,
-      description: auditData.description
-    });
-    
     try {
       const token = localStorage.getItem('token');
       
@@ -291,7 +248,6 @@ const auditService = {
         source: 'frontend'
       };
       
-      console.log('📤 Enviando petición POST a /audit/log...');
       const response = await apiClient.post('/audit/log', enrichedData, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -299,7 +255,6 @@ const auditService = {
         }
       });
       
-      console.log('✅ Respuesta del backend:', response.data);
       return { success: true, data: response.data };
     } catch (error) {
       console.error('❌ Error logging audit event:', error);
@@ -390,12 +345,16 @@ const auditService = {
     try {
       const token = localStorage.getItem('token');
       
+      // Determinar qué endpoint usar según los filtros disponibles
+      let endpoint = '/audit/logs';
+      let cleanFilters = {};
+      let useSpecialEndpoint = false;
+      
       // Filtrar parámetros vacíos para evitar errores de validación del backend
-      const cleanFilters = {};
       Object.entries(filters).forEach(([key, value]) => {
         // Siempre incluir page y limit para paginación
         if (key === 'page' || key === 'limit') {
-          cleanFilters[key] = value || (key === 'page' ? 1 : 50);
+          cleanFilters[key] = parseInt(value) || (key === 'page' ? 1 : 50);
           return;
         }
         
@@ -408,13 +367,6 @@ const auditService = {
               const dateValue = new Date(stringValue);
               if (!isNaN(dateValue.getTime())) {
                 cleanFilters[key] = stringValue;
-                console.log(`✅ Fecha ${key} válida:`, {
-                  value: stringValue,
-                  parsed: dateValue.toISOString(),
-                  readable: dateValue.toLocaleString('es-CR')
-                });
-              } else {
-                console.warn(`❌ Fecha ${key} inválida:`, stringValue);
               }
             } else {
               cleanFilters[key] = stringValue;
@@ -423,38 +375,61 @@ const auditService = {
         }
       });
       
-      // Logs de debug detallados
-      console.log('🔍 AuditService - Filtros procesados:', {
-        original: filters,
-        cleaned: cleanFilters,
-        params: new URLSearchParams(cleanFilters).toString(),
-        url: `/audit/logs?${new URLSearchParams(cleanFilters).toString()}`
-      });
+      // Usar endpoint base para todos los filtros
+      endpoint = '/audit/logs';
       
-      const response = await apiClient.get('/audit/logs', {
+      const response = await apiClient.get(endpoint, {
         params: cleanFilters,
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      console.log('🎯 Respuesta del backend recibida:', {
-        data: response.data,
-        logs: response.data.data || response.data.logs || [],
-        firstLog: (response.data.data || response.data.logs || [])[0]
-      });
+      
+
+      
       return { success: true, data: response.data };
     } catch (error) {
       console.error('Error fetching audit logs:', error);
       
       // Detectar si es un error de conexión (backend no disponible)
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        console.warn('🚨 Backend no disponible. Mostrando datos simulados para demostración.');
-        const simulatedData = auditService.getSimulatedAuditLogs(cleanFilters);
-        console.log('📊 Datos simulados generados:', simulatedData);
+        console.warn('🚨 Backend no disponible. Mostrando datos simulados.');
+        const simulatedData = auditService.getSimulatedAuditLogs(filters);
         return simulatedData;
       }
       
+
+      
       throw new Error(error.response?.data?.message || 'Error al obtener logs de auditoría');
+    }
+  },
+
+  /**
+   * Obtiene resumen de actividad de usuarios
+   * GET /audit/users/activity-summary
+   */
+  getUsersActivitySummary: async (filters = {}) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Filtrar parámetros vacíos
+      const cleanFilters = {};
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== '' && value !== null && value !== undefined && String(value).trim() !== '') {
+          cleanFilters[key] = value;
+        }
+      });
+
+      const response = await apiClient.get('/audit/users/activity-summary', {
+        params: cleanFilters,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error fetching users activity summary:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener resumen de actividad de usuarios');
     }
   },
 
@@ -592,7 +567,7 @@ const auditService = {
       ACTUALIZAR: 'actualizó',
       ELIMINAR: 'eliminó',
       RESTAURAR: 'restauró',
-      AUTENTICACION: 'autenticó',
+      AUTH: 'autenticó',
       AUTH: 'autenticó'
     };
     
@@ -625,7 +600,7 @@ const auditService = {
       ACTUALIZAR: 'text-blue-600 bg-blue-50',
       ELIMINAR: 'text-red-600 bg-red-50',
       RESTAURAR: 'text-yellow-600 bg-yellow-50',
-      AUTENTICACION: 'text-purple-600 bg-purple-50',
+      AUTH: 'text-purple-600 bg-purple-50',
       AUTH: 'text-purple-600 bg-purple-50'
     };
     return colors[action] || 'text-gray-600 bg-gray-50';
@@ -644,7 +619,7 @@ const auditService = {
       ACTUALIZAR: 'edit-3',
       ELIMINAR: 'trash-2',
       RESTAURAR: 'refresh-cw',
-      AUTENTICACION: 'log-in',
+      AUTH: 'log-in',
       AUTH: 'log-in'
     };
     return icons[action] || 'activity';
