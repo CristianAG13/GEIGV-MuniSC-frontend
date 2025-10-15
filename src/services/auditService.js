@@ -51,6 +51,7 @@ const auditService = {
         name: 'Juan Carlos',
         lastname: 'Pérez González',
         userFullName: 'Juan Carlos Pérez González',
+        userEmail: 'juan.perez@municipalidad.go.cr',
         userCedula: '123456789',
         description: 'Usuario inició sesión en el sistema',
         timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
@@ -67,6 +68,7 @@ const auditService = {
         name: 'María Elena',
         lastname: 'García Rodríguez',
         userFullName: 'María Elena García Rodríguez',
+        userEmail: 'maria.garcia@municipalidad.go.cr',
         userCedula: '987654321',
         description: 'Se creó un nuevo vehículo de transporte',
         timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
@@ -86,17 +88,38 @@ const auditService = {
         name: 'Carlos Antonio',
         lastname: 'López Vargas',
         userFullName: 'Carlos Antonio López Vargas',
+        userEmail: 'carlos.lopez@municipalidad.go.cr',
         userCedula: '456789123',
-        description: 'Se actualizó información del operador',
+        description: 'Se actualizó información del operador Carlos López',
         timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
         changes: { 
-          before: { nombre: 'Carlos Lopez', telefono: '123456789' }, 
-          after: { nombre: 'Carlos López', telefono: '987654321' } 
+          before: { nombre: 'Carlos Lopez', telefono: '123456789', licencia: 'B1' }, 
+          after: { nombre: 'Carlos López', telefono: '987654321', licencia: 'B2' } 
         },
         metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.102' }
       },
       {
         id: '4',
+        action: 'UPDATE',
+        entity: 'maquinaria',
+        entityId: 'maq-101',
+        userId: 'user456',
+        userName: 'María García',
+        name: 'María Elena',
+        lastname: 'García Rodríguez',
+        userFullName: 'María Elena García Rodríguez',
+        userEmail: 'maria.garcia@municipalidad.go.cr',
+        userCedula: '987654321',
+        description: 'Se actualizó el estado de la maquinaria',
+        timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+        changes: { 
+          before: { estado: 'Mantenimiento', ubicacion: 'Taller A' }, 
+          after: { estado: 'Disponible', ubicacion: 'Bodega Principal' } 
+        },
+        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.101' }
+      },
+      {
+        id: '5',
         action: 'DELETE',
         entity: 'reportes',
         entityId: 'report-456',
@@ -105,6 +128,7 @@ const auditService = {
         name: 'Juan Carlos',
         lastname: 'Pérez González',
         userFullName: 'Juan Carlos Pérez González',
+        userEmail: 'juan.perez@municipalidad.go.cr',
         userCedula: '123456789',
         description: 'Se eliminó un reporte de actividades',
         timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
@@ -115,7 +139,27 @@ const auditService = {
         metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.103' }
       },
       {
-        id: '5',
+        id: '6',
+        action: 'UPDATE',
+        entity: 'fuentes',
+        entityId: 'rio-12',
+        userId: 'user890',
+        userName: 'Ana Rodríguez',
+        name: 'Ana Patricia',
+        lastname: 'Rodríguez Morales',
+        userFullName: 'Ana Patricia Rodríguez Morales',
+        userEmail: 'ana.rodriguez@municipalidad.go.cr',
+        userCedula: '789123456',
+        description: 'Se actualizó información del río',
+        timestamp: new Date(Date.now() - 1000 * 60 * 150).toISOString(),
+        changes: { 
+          before: { nombre: 'Río Amarillo', activo: false }, 
+          after: { nombre: 'Río Amarillo Renovado', activo: true } 
+        },
+        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.104' }
+      },
+      {
+        id: '7',
         action: 'RESTORE',
         entity: 'reportes',
         entityId: 'report-789',
@@ -124,6 +168,7 @@ const auditService = {
         name: 'Ana Patricia',
         lastname: 'Rodríguez Morales',
         userFullName: 'Ana Patricia Rodríguez Morales',
+        userEmail: 'ana.rodriguez@municipalidad.go.cr',
         userCedula: '789123456',
         description: 'Se restauró un reporte eliminado',
         timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
@@ -134,7 +179,7 @@ const auditService = {
         metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.104' }
       },
       {
-        id: '6',
+        id: '8',
         action: 'CREATE',
         entity: 'operadores',
         entityId: 'op-456',
@@ -143,6 +188,7 @@ const auditService = {
         name: 'Luis Fernando',
         lastname: 'Ramírez Jiménez',
         userFullName: 'Luis Fernando Ramírez Jiménez',
+        userEmail: 'luis.ramirez@municipalidad.go.cr',
         userCedula: '234567890',
         description: 'Se registró un nuevo operador',
         timestamp: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
@@ -151,6 +197,46 @@ const auditService = {
           after: { nombre: 'Luis Fernando', licencia: 'B2', estado: 'Activo' } 
         },
         metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.105' }
+      },
+      {
+        id: '9',
+        action: 'UPDATE',
+        entity: 'transporte',
+        entityId: 'vehicle-002',
+        userId: 'user234',
+        userName: 'Luis Ramírez',
+        name: 'Luis Fernando',
+        lastname: 'Ramírez Jiménez',
+        userFullName: 'Luis Fernando Ramírez Jiménez',
+        userEmail: 'luis.ramirez@municipalidad.go.cr',
+        userCedula: '234567890',
+        description: 'Se actualizó el kilometraje del vehículo',
+        timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+        changes: { 
+          before: { kilometraje: 25000, mantenimiento_proximo: '2025-11-01' }, 
+          after: { kilometraje: 25150, mantenimiento_proximo: '2025-10-28' } 
+        },
+        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.105' }
+      },
+      {
+        id: '10',
+        action: 'UPDATE',
+        entity: 'user_roles',
+        entityId: 'user-999',
+        userId: 'user123',
+        userName: 'Juan Pérez',
+        name: 'Juan Carlos',
+        lastname: 'Pérez González',
+        userFullName: 'Juan Carlos Pérez González',
+        userEmail: 'juan.perez@municipalidad.go.cr',
+        userCedula: '123456789',
+        description: 'Se cambió el rol del usuario de operador a supervisor',
+        timestamp: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
+        changes: { 
+          before: { rol: 'operador', permisos: ['read'] }, 
+          after: { rol: 'supervisor', permisos: ['read', 'write'] } 
+        },
+        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.100' }
       }
     ];
 
@@ -195,31 +281,34 @@ const auditService = {
     return {
       success: true,
       data: {
-        totalEvents: 67,
+        totalEvents: 87,
         eventsByAction: {
-          CREATE: 18,
-          UPDATE: 25,
-          DELETE: 9,
-          AUTH: 12,
+          CREATE: 22,
+          UPDATE: 35,
+          DELETE: 12,
+          AUTH: 15,
           ROLE_CHANGE: 3
         },
         eventsByEntity: {
-          usuarios: 12,
-          transporte: 15,
-          operadores: 18,
+          operadores: 25,
+          transporte: 20,
+          fuentes: 18,
+          maquinaria: 15,
           reportes: 14,
-          roles: 3,
-          authentication: 5
+          user_roles: 8,
+          authentication: 15
         },
         recentActivity: {
-          last24Hours: 8,
-          last7Days: 34,
-          last30Days: 67
+          last24Hours: 12,
+          last7Days: 45,
+          last30Days: 87
         },
         topUsers: [
-          { userId: 'user123', userName: 'Juan Pérez', eventCount: 12 },
-          { userId: 'user456', userName: 'María García', eventCount: 9 },
-          { userId: 'user789', userName: 'Carlos López', eventCount: 7 }
+          { userId: 'user456', userName: 'María García', eventCount: 18, userEmail: 'maria.garcia@municipalidad.go.cr' },
+          { userId: 'user123', userName: 'Juan Pérez', eventCount: 15, userEmail: 'juan.perez@municipalidad.go.cr' },
+          { userId: 'user789', userName: 'Carlos López', eventCount: 12, userEmail: 'carlos.lopez@municipalidad.go.cr' },
+          { userId: 'user890', userName: 'Ana Rodríguez', eventCount: 10, userEmail: 'ana.rodriguez@municipalidad.go.cr' },
+          { userId: 'user234', userName: 'Luis Ramírez', eventCount: 8, userEmail: 'luis.ramirez@municipalidad.go.cr' }
         ]
       }
     };
@@ -385,7 +474,13 @@ const auditService = {
         }
       });
       
-
+      // Verificar si el backend devuelve "PRO FEATURE ONLY" (modo demo)
+      if (response.data === 'PRO FEATURE ONLY' || 
+          (typeof response.data === 'string' && response.data.includes('PRO FEATURE'))) {
+        console.warn('🚨 Backend en modo PRO FEATURE ONLY. Mostrando datos simulados.');
+        const simulatedData = auditService.getSimulatedAuditLogs(filters);
+        return simulatedData;
+      }
       
       return { success: true, data: response.data };
     } catch (error) {
@@ -456,6 +551,14 @@ const auditService = {
           'Authorization': `Bearer ${token}`
         }
       });
+      
+      // Verificar si el backend devuelve "PRO FEATURE ONLY" (modo demo)
+      if (response.data === 'PRO FEATURE ONLY' || 
+          (typeof response.data === 'string' && response.data.includes('PRO FEATURE'))) {
+        console.warn('🚨 Backend en modo PRO FEATURE ONLY para stats. Mostrando estadísticas simuladas.');
+        return auditService.getSimulatedAuditStats();
+      }
+      
       return { success: true, data: response.data };
     } catch (error) {
       console.error('Error fetching audit stats:', error);

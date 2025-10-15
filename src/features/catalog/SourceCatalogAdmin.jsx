@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Edit, Trash2, Check, X, Filter as FilterIcon, RefreshCcw, ChevronDown, ChevronUp } from "lucide-react";
 import sourceService from "@/services/sourceService";
 import { confirmDelete, confirmAction, showSuccess, showError } from "@/utils/sweetAlert";
+import { useAuditLogger } from "@/hooks/useAuditLogger";
 
 /* ---------- pequeño hook de debounce ---------- */
 function useDebounced(value, delay = 350) {
@@ -22,6 +23,7 @@ function useDebounced(value, delay = 350) {
 
 export default function SourceCatalogAdmin({ tipo, title }) {
   const TAKE = 15;
+  const { logCreate, logUpdate, logDelete } = useAuditLogger();
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
@@ -79,7 +81,14 @@ export default function SourceCatalogAdmin({ tipo, title }) {
     if (!nombre.trim()) return;
     try {
       setLoading(true);
-      await sourceService.create({ tipo, nombre: nombre.trim() });
+      const created = await sourceService.create({ tipo, nombre: nombre.trim() });
+      
+      // ✅ REGISTRAR EN AUDITORÍA - CREAR FUENTE
+      console.log('📝 Registrando creación de fuente en auditoría:', created);
+      await logCreate('fuentes', created, 
+        `Se creó ${tipo === 'rio' ? 'río' : 'tajo'} "${nombre.trim()}"`
+      );
+      
       setNombre("");
       setSkip(0);
       await load();
@@ -112,7 +121,41 @@ export default function SourceCatalogAdmin({ tipo, title }) {
     if (!res.isConfirmed) return;
     try {
       setLoading(true);
+      
+      // Obtener datos anteriores para auditoría
+      const previousData = rows.find(item => item.id === editingId);
+      
       await sourceService.update(editingId, { nombre: editNombre.trim() });
+      
+      // Construir los datos actualizados manualmente
+      const updatedData = {
+        ...previousData,
+        nombre: editNombre.trim()
+      };
+      
+      // ✅ REGISTRAR EN AUDITORÍA - ACTUALIZAR FUENTE
+      console.log('📝 Registrando actualización de fuente en auditoría:', { 
+        entity: 'fuentes',
+        editingId, 
+        previousData, 
+        updatedData,
+        tipo,
+        message: `Se actualizó ${tipo === 'rio' ? 'río' : 'tajo'} de "${previousData?.nombre}" a "${editNombre.trim()}"` 
+      });
+      
+      try {
+        const auditResult = await logUpdate(
+          'fuentes',
+          String(editingId),
+          previousData,
+          updatedData,
+          `Se actualizó ${tipo === 'rio' ? 'río' : 'tajo'} de "${previousData?.nombre}" a "${editNombre.trim()}"`
+        );
+        console.log('✅ Resultado auditoría:', auditResult);
+      } catch (auditError) {
+        console.error('❌ Error en auditoría:', auditError);
+      }
+      
       cancelEdit();
       await load();
       await showSuccess("Actualizado", "Cambios guardados correctamente.");
@@ -130,7 +173,18 @@ export default function SourceCatalogAdmin({ tipo, title }) {
     if (!res.isConfirmed) return;
     try {
       setLoading(true);
+      
+      // Obtener datos antes de eliminar para auditoría
+      const dataToDelete = rows.find(item => item.id === row.id);
+      
       await sourceService.remove(row.id);
+      
+      // ✅ REGISTRAR EN AUDITORÍA - ELIMINAR FUENTE
+      console.log('📝 Registrando eliminación de fuente en auditoría:', dataToDelete);
+      await logDelete('fuentes', String(row.id), dataToDelete,
+        `Se eliminó ${tipo === 'rio' ? 'río' : 'tajo'} "${dataToDelete?.nombre || 'N/A'}"`
+      );
+      
       const willBeEmpty = rows.length === 1 && skip > 0;
       if (willBeEmpty) setSkip(Math.max(0, skip - TAKE));
       await load();
