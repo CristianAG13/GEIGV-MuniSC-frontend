@@ -21,14 +21,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar si hay un usuario autenticado al cargar la aplicación
-    const currentUser = authService.getCurrentUser();
-    if (currentUser && authService.isAuthenticated()) {
-      setUser(currentUser);
-      // Opcionalmente, refrescar datos del usuario desde el backend
-      refreshUserFromBackend();
-    }
-    setLoading(false);
+    const initializeAuth = async () => {
+      // Verificar si hay un usuario autenticado al cargar la aplicación
+      const currentUser = authService.getCurrentUser();
+      if (currentUser && authService.isAuthenticated()) {
+        setUser(currentUser);
+        // Refrescar datos del usuario desde el backend y esperar
+        await refreshUserFromBackend();
+      }
+      setLoading(false);
+    };
+    
+    initializeAuth();
   }, []);
 
 
@@ -41,9 +45,13 @@ const refreshUserFromBackend = async () => {
         roles: result.data.roles?.map(r => r.name || r) || []
       };
       setUser(normalizedUser);
+    } else {
+      // Si falla la actualización, mantener los datos del localStorage
+      console.warn('No se pudo actualizar datos del usuario:', result.error);
     }
   } catch (error) {
-    console.error('Error refreshing user data:', error);
+    // Si hay error de red, mantener los datos del localStorage
+    console.warn('Error de red al actualizar usuario, manteniendo datos locales:', error);
   }
 };
   
@@ -187,7 +195,7 @@ const refreshUserFromBackend = async () => {
     login,
     logout,
     loading,
-    isAuthenticated: authService.isAuthenticated(),
+    isAuthenticated: user !== null && authService.isAuthenticated(),
     refreshUser,
     updateProfile,
   };
