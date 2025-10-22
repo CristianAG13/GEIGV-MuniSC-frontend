@@ -20,7 +20,7 @@ export default function AuthPage() {
     if (isAuthenticated && !loading) {
      
       console.log('Usuario ya autenticado');
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, loading, navigate]);
 
