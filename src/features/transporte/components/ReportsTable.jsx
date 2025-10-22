@@ -1199,133 +1199,196 @@ export default function ReportsTable({
   const footerAbs = new URL(FOOTER_URL , window.location.origin).toString();
 
   // 5) CSS (defínelo ANTES de usarlo en el HTML)
+// === 1) Configurables ===
+const ROWS_PER_PAGE = 16; // ← filas por página
+
+// Anchuras por columna (usa los headers BONITOS)
+const COL_WIDTHS = {
+  "Tipo": "54px",
+  "ID": "34px",
+  "Operador": "80px",
+  "Maquinaria": "65px",
+  "Tipo Maquinaria": "65px",
+  "Variante": "50px",
+  "Kilometraje": "64px",
+  "Horímetro": "50px",
+  "Diesel": "42px",
+  "Horas Ord": "52px",
+  "Horas Ext": "52px",
+  "Tipo Actividad": "100px",
+  "Hora Inicio": "62px",
+  "Hora Fin": "62px",
+  "Distrito": "72px",
+  "Código Camino": "55px",
+  "Codigo Camino": "48px", // por si llega sin tilde
+  "Fecha": "70px",
+  "Total Día m³": "55px",
+  "Total Dia m³": "40px",
+  "Materiales m³": "70px",
+  "Placa cisterna": "86px",
+  "Boleta 1": "90px",
+  "Boleta 2": "90px",
+  "Boleta 3": "90px",
+  "Boleta 4": "90px",
+  "Cantidad Agua m³": "110px",   // ← dale aire a esta columna
+  "Fuente": "80",
+  "Total Día m³": "80px",        // ← opcional: un poco más ancha
+  // si usas esta etiqueta en otros reportes
+  "Materiales m³": "96px"
+};
+
+
+const NUMERIC_COLS = new Set([
+  "ID","Kilometraje","Horímetro","Horimetro","Diesel",
+  "Horas Ord","Horas Ext","Código Camino","Codigo Camino",
+  "Fecha","Total Día m³","Total Dia m³"
+]);
+
+// Crea el colgroup usando los anchos configurados
+const colgroup = `
+  <colgroup>
+    ${headers.map(h => {
+      // si usas pretty(h), puedes mirar COL_WIDTHS[pretty(h)]
+      const key = h;  // o const key = pretty(h);
+      const w = COL_WIDTHS[key] || "54px";   // ancho por defecto
+      return `<col style="width:${w}; min-width:${w}">`;
+    }).join("")}
+  </colgroup>
+`;
+
+
+// ======================= CSS (reemplaza tu const head) =======================
 const head = `
 <style>
   :root{
-    --footer-h: 23px;
-    --gap-bottom: -5px;
+    --footer-h: 30px;
+    --gap-bottom: 8px;
     --margin-x: 18mm;
   }
-
   @page{
     size: A4 landscape;
-    /* margen superior normal; el pie ya está reservado abajo */
     margin: 14mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
   }
-
-  html, body{
+  html,body{
     margin:0; padding:0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  /* ===== Footer fijo en TODAS las páginas ===== */
+  /* Footer fijo */
   footer{
-    position: fixed;
-    left: var(--margin-x);
-    right: var(--margin-x);
-    bottom: 0;
+    position: fixed; left: var(--margin-x); right: var(--margin-x); bottom: 0;
     height: var(--footer-h);
     display:flex; align-items:center; justify-content:center;
     background:#fff; z-index:5; transform: translateZ(0);
   }
   footer img{ height: calc(var(--footer-h) - 2px); width:auto; object-fit:contain; display:block; }
 
-  /* deja espacio para el pie */
   main{ padding-bottom: calc(var(--footer-h) + var(--gap-bottom)); }
 
-  /* ===== Tabla / encabezado repetido ===== */
+  /* ===== Tabla compacta ===== */
   table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
-  thead{ display: table-header-group; }  /* ← REPITE en todas las páginas */
+  thead{ display: table-header-group; } /* se repite */
 
-  /* Fila de LOGOS dentro del THEAD (repetido) */
-  .logo-row td{ border:none; padding:0 0 6px; background:#fff; }
+  /* logos header */
+  .logo-row td{ border:none; padding:0 0 10px; background:#fff; }
   .logo-wrap{ display:flex; align-items:center; justify-content:center; }
-  .logo-wrap img{
-    height: 40px;     /* ← AJUSTA AQUÍ el tamaño del header (por ej. 28–40px) */
-    object-fit: contain;
-  }
+  .logo-wrap img{ height:80px; object-fit:contain; } /* ← tamaño del header */
 
-  /* Cabeceras de columnas */
+  /* encabezados */
   thead .cols th{
-    background:#f3f4f6; border:1px solid #e5e7eb; padding:6px 5px; vertical-align:bottom;
+    background:#f3f4f6; border:1px solid #e5e7eb; padding:4px 4px; line-height:1.1; vertical-align:bottom;
   }
-  thead .cols .th{ line-height:1.1; hyphens:auto; word-break:break-word; }
-
-  /* Título (caption) encima de la tabla – aparece solo una vez */
-  table caption{
-    caption-side: top; text-align:left; margin: 0 0 -6px;
+  thead .cols .th{
+    white-space:normal; word-break:normal; overflow-wrap:break-word; hyphens:auto;
   }
-/* Fila de título (solo una vez, debajo de los logos) */
-.title-row td{
-  border: none;
-  padding: 4px 0 8px;   /* separa del header y de la tabla */
-  background: #fff;
-}
-.title-row .title{ font-size: 18px; font-weight: 800; margin: 0; }
-.title-row .meta{ font-size: 11px; color: #374151; margin-top: 2px; }
-/* evita que se corte justo después del título */
-.title-row{ break-after: avoid-page; page-break-after: avoid; }
 
-  /* Celdas */
+  /* celdas */
   tbody td{
-    border:1px solid #f1f5f9; padding:5px 6px; vertical-align:top;
-    word-break:break-word; hyphens:auto;
+    border:1px solid #eef2f7; padding:4px 4px; line-height:1.80; vertical-align:top;
+    word-break:break-word; white-space:normal; hyphens:auto;
   }
   tbody tr:nth-child(even) td{ background:#fafafa; }
 
-  /* Cortes limpios */
-  tbody tr{ break-inside:auto; page-break-inside:auto; }
+  /* numéricas centradas */
+  .num{ text-align:center; }
+
+  /* salto cada N filas */
+  .break-row{ page-break-after: always; }
+  .break-row td{ border:none; padding:0; height:0; }
+
+  /* cortes limpios */
   thead tr, thead th{ break-inside:avoid; page-break-inside:avoid; }
+  tbody tr{ break-inside:auto; page-break-inside:auto; }
 </style>`;
 
+// ======================= Construcción de headers =======================
+// OJO: 'headers' aquí son tus claves RAW (sin pretty). Creamos dos arrays:
+const headersRaw = headers.slice();              // para leer datos
+const headersPretty = headersRaw.map(h => pretty(h)); // para mostrar y medir ancho
 
-const titleBlock = `
-  <div class="report-title">
-    <h1>Reportes completos</h1>
-    <div class="meta">${isMunicipal ? "Municipales" : "Alquiler"} — ${rows.length} registro(s)</div>
-  </div>
-`;
+// colgroup por header BONITO (así aplican tus anchos)
+const colgroupHTML = `<colgroup>${
+  headersPretty.map(hNice => {
+    const w = COL_WIDTHS[hNice] || "auto";
+    return `<col style="width:${w}">`;
+  }).join("")
+}</colgroup>`;
 
-  // 6) Partes de la tabla (thead/tfoot se repiten por page gracias al CSS)
+// THEAD: texto bonito, y clase numérica según el bonito
 const thead = `
-  <!-- LOGOS (se repiten en cada página) -->
   <tr class="logo-row">
-    <td colspan="${headers.length}">
-      <div class="logo-wrap">
-        <img src="${headerAbs}" alt="Header">
-      </div>
+    <td colspan="${headersRaw.length}">
+      <div class="logo-wrap"><img src="${headerAbs}" alt="Header"></div>
     </td>
   </tr>
-
-  <!-- Cabecera de columnas -->
   <tr class="cols">
-    ${headers.map(h => `<th><div class="th">${pretty(h)}</div></th>`).join("")}
-  </tr>
-`;
+    ${headersRaw.map((hRaw, i) => {
+      const hNice = headersPretty[i];
+      const cls = NUMERIC_COLS.has(hNice) || NUMERIC_COLS.has(hRaw) ? ' class="num"' : '';
+      return `<th${cls}><div class="th">${hNice}</div></th>`;
+    }).join("")}
+  </tr>`;
 
-  const tbody = rows
-    .map(row => `<tr>${headers.map(h => `<td>${toHTML(row[h])}</td>`).join("")}</tr>`)
-    .join("");
+// ======================= TBODY: usa tus 'rows' aplanados =======================
+// (ANTES lo había puesto sobre 'filtered' por error)
+const tbody = (() => {
+  const out = [];
+  rows.forEach((rowObj, idx) => {
+    out.push(
+      `<tr>${
+        headersRaw.map((hRaw, i) => {
+          const v = isEmptyVal(rowObj[hRaw]) ? "" : toHTML(rowObj[hRaw]);
+          const hNice = headersPretty[i];
+          const cls = NUMERIC_COLS.has(hNice) || NUMERIC_COLS.has(hRaw) ? ' class="num"' : '';
+          return `<td${cls}>${v}</td>`;
+        }).join("")
+      }</tr>`
+    );
+    if ((idx + 1) % ROWS_PER_PAGE === 0) {
+      out.push(`<tr class="break-row"><td colspan="${headersRaw.length}"></td></tr>`);
+    }
+  });
+  return out.join("");
+})();
 
-  // 7) HTML final (head va antes del body para que el navegador aplique los estilos antes del render)
+// ======================= HTML final =======================
 const html = `
 <html>
   <head>${head}</head>
   <body>
     <main>
       <table>
+        ${colgroupHTML}
+        ${colgroup} 
         <thead>${thead}</thead>
         <tbody>${tbody}</tbody>
       </table>
     </main>
-
-    <footer>
-      <img src="${footerAbs}" alt="Pie de página" />
-    </footer>
+    <footer><img src="${footerAbs}" alt="Pie de página"></footer>
   </body>
 </html>`;
+
 
   // 8) Abrir/Imprimir
   const win = window.open("", "_blank");
