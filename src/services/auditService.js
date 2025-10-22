@@ -166,7 +166,7 @@ const auditService = {
    */
   logEvent: async (auditData) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       
       // Agregar timestamp único para evitar duplicados en el backend
       const enrichedData = {
@@ -175,12 +175,7 @@ const auditService = {
         source: 'frontend'
       };
       
-      const response = await apiClient.post('/audit/log', enrichedData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Audit-Source': 'frontend'
-        }
-      });
+      const response = await apiClient.post('/audit/log', enrichedData);
       
       return { success: true, data: response.data };
     } catch (error) {
@@ -188,10 +183,23 @@ const auditService = {
       console.error('📋 Detalles del error:', {
         status: error.response?.status,
         message: error.response?.data?.message,
-        data: error.response?.data
+        data: error.response?.data,
+        code: error.code
       });
+      
+      // Detectar tipos específicos de errores
+      let errorMessage = 'Error al registrar evento de auditoría';
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        console.warn('🚨 Backend no disponible para auditoría. El evento no se registrará.');
+        errorMessage = 'Backend no disponible - evento de auditoría no registrado';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'No autorizado para registrar evento de auditoría';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       // No lanzamos error para que no afecte la operación principal
-      return { success: false, error: error.response?.data?.message || 'Error al registrar evento de auditoría' };
+      return { success: false, error: errorMessage };
     }
   },
 
@@ -270,7 +278,7 @@ const auditService = {
    */
   getAuditLogs: async (filters = {}) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       
       // Determinar qué endpoint usar según los filtros disponibles
       let endpoint = '/audit/logs';
@@ -306,10 +314,7 @@ const auditService = {
       endpoint = '/audit/logs';
       
       const response = await apiClient.get(endpoint, {
-        params: cleanFilters,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        params: cleanFilters
       });
       
       // Verificar si el backend devuelve "PRO FEATURE ONLY" (modo demo)
@@ -331,8 +336,14 @@ const auditService = {
         return simulatedData;
       }
       
-
+      // Detectar si es error 401 (no autorizado)
+      if (error.response?.status === 401) {
+        console.warn('🚨 No autorizado para acceder a logs de auditoría. Mostrando datos simulados.');
+        const simulatedData = auditService.getSimulatedAuditLogs(filters);
+        return simulatedData;
+      }
       
+      // Para otros errores, lanzar excepción
       throw new Error(error.response?.data?.message || 'Error al obtener logs de auditoría');
     }
   },
@@ -343,7 +354,7 @@ const auditService = {
    */
   getUsersActivitySummary: async (filters = {}) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       
       // Filtrar parámetros vacíos
       const cleanFilters = {};
@@ -354,10 +365,7 @@ const auditService = {
       });
 
       const response = await apiClient.get('/audit/users/activity-summary', {
-        params: cleanFilters,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        params: cleanFilters
       });
       return { success: true, data: response.data };
     } catch (error) {
@@ -371,7 +379,7 @@ const auditService = {
    */
   getAuditStats: async (dateRange = {}) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       
       // Filtrar parámetros vacíos para evitar errores de validación del backend
       const cleanFilters = {};
@@ -384,10 +392,7 @@ const auditService = {
 
       
       const response = await apiClient.get('/audit/stats', {
-        params: cleanFilters,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        params: cleanFilters
       });
       
       // Verificar si el backend devuelve "PRO FEATURE ONLY" (modo demo)
@@ -404,7 +409,12 @@ const auditService = {
       // Detectar si es un error de conexión (backend no disponible)
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         console.warn('🚨 Backend no disponible. Mostrando estadísticas simuladas para demostración.');
-        // Retornar estadísticas simuladas
+        return auditService.getSimulatedAuditStats();
+      }
+      
+      // Detectar si es error 401 (no autorizado)
+      if (error.response?.status === 401) {
+        console.warn('🚨 No autorizado para acceder a estadísticas de auditoría. Mostrando datos simulados.');
         return auditService.getSimulatedAuditStats();
       }
       
@@ -417,12 +427,9 @@ const auditService = {
    */
   getAuditLogsByEntity: async (entity, entityId, limit = 50) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const response = await apiClient.get(`/audit/logs/entity/${entity}/${entityId}`, {
-        params: { limit },
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        params: { limit }
       });
       return { success: true, data: response.data };
     } catch (error) {
@@ -436,12 +443,9 @@ const auditService = {
    */
   getAuditLogsByUser: async (userId, limit = 50) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const response = await apiClient.get(`/audit/logs/user/${userId}`, {
-        params: { limit },
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        params: { limit }
       });
       return { success: true, data: response.data };
     } catch (error) {
@@ -455,7 +459,7 @@ const auditService = {
    */
   exportAuditLogs: async (filters = {}) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       
       // Filtrar parámetros vacíos para evitar errores de validación del backend
       const cleanFilters = {};
@@ -469,9 +473,6 @@ const auditService = {
       
       const response = await apiClient.get('/audit/export', {
         params: { ...cleanFilters, format: 'csv' },
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         responseType: 'blob'
       });
       
