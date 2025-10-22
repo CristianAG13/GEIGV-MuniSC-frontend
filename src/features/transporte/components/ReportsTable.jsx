@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
-import { Eye, Trash2, Filter as FilterIcon, RefreshCcw } from "lucide-react";
+import { Eye, Trash2, Filter as FilterIcon, RefreshCcw, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1200,41 +1200,49 @@ export default function ReportsTable({
 
   // 5) CSS (defínelo ANTES de usarlo en el HTML)
 // === 1) Configurables ===
-const ROWS_PER_PAGE = 16; // ← filas por página
+const ROWS_PER_PAGE = 9; // ← filas por página
 
 // Anchuras por columna (usa los headers BONITOS)
 const COL_WIDTHS = {
   "Tipo": "54px",
-  "ID": "34px",
-  "Operador": "80px",
-  "Maquinaria": "65px",
-  "Tipo Maquinaria": "65px",
+  "ID": "30px",
+  "Operador": "70px",
+  "Maquinaria": "70px",
+  "Tipo Maquinaria": "75px",
   "Variante": "50px",
   "Kilometraje": "64px",
   "Horímetro": "50px",
   "Diesel": "42px",
-  "Horas Ord": "52px",
-  "Horas Ext": "52px",
-  "Tipo Actividad": "100px",
-  "Hora Inicio": "62px",
-  "Hora Fin": "62px",
-  "Distrito": "72px",
+  "Horas Ord": "46px",
+  "Horas Ext": "46px",
+  "Tipo Actividad": "98px",
+  "Hora Inicio": "55px",
+  "Hora Fin": "46px",
+  "Distrito": "65px",
   "Código Camino": "55px",
   "Codigo Camino": "48px", // por si llega sin tilde
-  "Fecha": "70px",
-  "Total Día m³": "55px",
+  "Fecha": "65px",
   "Total Dia m³": "40px",
-  "Materiales m³": "70px",
+  "Materiales m³": "83px",
   "Placa cisterna": "86px",
-  "Boleta 1": "90px",
-  "Boleta 2": "90px",
-  "Boleta 3": "90px",
-  "Boleta 4": "90px",
-  "Cantidad Agua m³": "110px",   // ← dale aire a esta columna
+  "Boleta 1": "88px",
+  "Boleta 2": "88px",
+  "Boleta 3": "88px",
+  "Boleta 4": "88px",
+  "Boleta 5": "88px",
+  "Cantidad Agua m³": "100px",   // ← dale aire a esta columna
   "Fuente": "80",
-  "Total Día m³": "80px",        // ← opcional: un poco más ancha
-  // si usas esta etiqueta en otros reportes
-  "Materiales m³": "96px"
+        // ← opcional: un poco más ancha
+  "Estacion": "50",
+  "Horimetro": "60",
+
+  "Placa Cisterna": "80",
+  "Placa Carreta": "60",
+  "Placa Maquinaria Llevada": "65",
+  "Tipo Carga": "60",
+  "Destino": "60"
+
+  
 };
 
 
@@ -1320,6 +1328,11 @@ const head = `
   /* cortes limpios */
   thead tr, thead th{ break-inside:avoid; page-break-inside:avoid; }
   tbody tr{ break-inside:auto; page-break-inside:auto; }
+
+  .pdf-wrap{ 
+  display: flex; 
+  justify-content: center;   /* centra horizontalmente */
+}
 </style>`;
 
 // ======================= Construcción de headers =======================
@@ -1380,7 +1393,6 @@ const html = `
     <main>
       <table>
         ${colgroupHTML}
-        ${colgroup} 
         <thead>${thead}</thead>
         <tbody>${tbody}</tbody>
       </table>
@@ -1503,13 +1515,15 @@ const html = `
                 className="bg-green-500 hover:bg-green-600 text-white whitespace-nowrap"
                 onClick={exportExcel}
               >
-                Exp a Excel
+              <Download className="w-4 h-4" />
+                 Excel
               </Button>
               <Button
                 className="bg-red-500 hover:bg-red-600 text-white whitespace-nowrap"
                 onClick={exportPDF}
               >
-                Exp a PDF
+              <Download className="w-4 h-4" />
+                PDF
               </Button>
               <Button
                 variant="secondary"

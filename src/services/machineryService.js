@@ -29,117 +29,134 @@ class MachineryService {
   }
 
   // Convierte el form plano a lo que espera el backend
-  // Convierte el form plano a lo que espera el backend
-buildReportPayload(formData = {}) {
-  const toNumOrNull = (v) => (v === "" || v == null ? null : Number(v));
-  const dIn = (formData && typeof formData.detalles === "object") ? formData.detalles : {};
-  const dCar = (dIn.carreta && typeof dIn.carreta === "object") ? dIn.carreta : {};
-  const dCis = (dIn.cisterna && typeof dIn.cisterna === "object") ? dIn.cisterna : {};
-  const dMat = (dIn.material && typeof dIn.material === "object") ? dIn.material : {};
+  buildReportPayload(formData = {}) {
+    const toNumOrNull = (v) => (v === "" || v == null ? null : Number(v));
+    const dIn = (formData && typeof formData.detalles === "object") ? formData.detalles : {};
+    const dCar = (dIn.carreta && typeof dIn.carreta === "object") ? dIn.carreta : {};
+    const dCis = (dIn.cisterna && typeof dIn.cisterna === "object") ? dIn.cisterna : {};
+    const dMat = (dIn.material && typeof dIn.material === "object") ? dIn.material : {};
 
-  const detallesFromForm = {
-    // comunes
-    observaciones: formData.observaciones ?? dIn.observaciones ?? "",
-    variante: formData.variant ?? formData.variante ?? dIn.variante ?? null,
-    tipoMaquinaria: formData.tipoMaquinaria ?? dIn.tipoMaquinaria ?? null,
-    placa: formData.placa ?? dIn.placa ?? null,
+    const detallesFromForm = {
+      // comunes
+      observaciones: formData.observaciones ?? dIn.observaciones ?? "",
+      variante: formData.variant ?? formData.variante ?? dIn.variante ?? null,
+      tipoMaquinaria: formData.tipoMaquinaria ?? dIn.tipoMaquinaria ?? null,
+      placa: formData.placa ?? dIn.placa ?? null,
 
-    // === MATERIAL === (plano o anidado en detalles/material)
-    tipoMaterial: formData.tipoMaterial ?? formData.materialTipo ?? dIn.tipoMaterial ?? dMat.tipoMaterial ?? null,
-    cantidadMaterial: toNumOrNull(
-      formData.cantidadMaterial ?? formData.materialCantidad ?? dIn.cantidadMaterial ?? dMat.cantidad
-    ),
-    fuente:
-      formData.fuente ??
-      formData.fuenteAgua ??
-      formData.origenAgua ??
-      formData.rio ??
-      dIn.fuente ?? dMat.fuente ?? null,
-    subFuente:
-      formData.subFuente ??
-      formData.subFuenteAgua ??
-      formData.subfuente ??
-      dIn.subFuente ?? dMat.subFuente ?? null,
-    boleta: formData.boleta ?? dIn.boleta ?? dMat.boleta ?? null,
+      // === MATERIAL === (plano o anidado en detalles/material)
+      tipoMaterial:
+        formData.tipoMaterial ?? formData.materialTipo ?? dIn.tipoMaterial ?? dMat.tipoMaterial ?? null,
+      cantidadMaterial: toNumOrNull(
+        formData.cantidadMaterial ?? formData.materialCantidad ?? dIn.cantidadMaterial ?? dMat.cantidad
+      ),
+      fuente:
+        formData.fuente ??
+        formData.fuenteAgua ??
+        formData.origenAgua ??
+        formData.rio ??
+        dIn.fuente ??
+        dMat.fuente ??
+        null,
+      subFuente:
+        formData.subFuente ??
+        formData.subFuenteAgua ??
+        formData.subfuente ??
+        dIn.subFuente ??
+        dMat.subFuente ??
+        null,
+      boleta: formData.boleta ?? dIn.boleta ?? dMat.boleta ?? null,
 
-    // === CISTERNA === (plano o anidado en detalles/cisterna)
-    cantidadLiquido: toNumOrNull(
-      formData.cantidadLiquido ??
-      formData.cantidadAgua ??
-      formData.cantidad_agua ??
-      dIn.cantidadLiquido ?? dCis.cantidadLiquido ?? dCis.cantidad
-    ),
+      // === CISTERNA === (plano o anidado en detalles/cisterna)
+      cantidadLiquido: toNumOrNull(
+        formData.cantidadLiquido ??
+          formData.cantidadAgua ??
+          formData.cantidad_agua ??
+          dIn.cantidadLiquido ??
+          dCis.cantidadLiquido ??
+          dCis.cantidad
+      ),
+      placaCisterna:
+        formData.placaCisterna ??
+        formData.cisternaPlaca ??
+        formData.placa_cisterna ??
+        dIn.placaCisterna ??
+        dCis.placa ??
+        null,
+      // OJO: la "fuente" ya se está mapeando arriba (sirve para material/cisterna)
 
-    placaCisterna:
-     formData.placaCisterna ??
-     formData.cisternaPlaca ??
-     formData.placa_cisterna ??
-     dIn.placaCisterna ??
-     dCis.placa ??
-     null,
-    // OJO: la "fuente" ya se está mapeando arriba (sirve para material/cisterna)
+      // === CARRETA === (plano o anidado en detalles/carreta)
+      placaCarreta:
+        formData.placaCarreta ??
+        formData.carretaPlaca ??
+        formData.placa_carreta ??
+        dIn.placaCarreta ??
+        dCar.placa ??
+        null,
+      destino:
+        formData.destino ??
+        formData.destino_carga ??
+        dIn.destino ??
+        dCar.destino ??
+        null,
+      tipoCarga:
+        formData.tipoCarga ??
+        formData.tipo_carga ??
+        dIn.tipoCarga ??
+        dCar.tipoCarga ??
+        null,
 
-    // === CARRETA === (plano o anidado en detalles/carreta)
-    placaCarreta:
-      formData.placaCarreta ??
-      formData.carretaPlaca ??
-      formData.placa_carreta ??
-      dIn.placaCarreta ?? dCar.placa ?? null,
-    destino:
-      formData.destino ??
-      formData.destino_carga ??
-      dIn.destino ?? dCar.destino ?? null,
-    tipoCarga:
-      formData.tipoCarga ??
-      formData.tipo_carga ??
-      dIn.tipoCarga ?? dCar.tipoCarga ?? null,
+      // comunes extra
+      placaMaquinariaLlevada:
+        formData.placaMaquinariaLlevada ?? dIn.placaMaquinariaLlevada ?? null,
+      horaInicio: formData.horaInicio ?? dIn.horaInicio ?? null,
+      horaFin: formData.horaFin ?? dIn.horaFin ?? null,
 
-    // comunes extra
-    placaMaquinariaLlevada: formData.placaMaquinariaLlevada ?? dIn.placaMaquinariaLlevada ?? null,
-    horaInicio: formData.horaInicio ?? dIn.horaInicio ?? null,
-    horaFin: formData.horaFin ?? dIn.horaFin ?? null,
-  };
+      // NUEVO: viáticos seleccionados (["desayuno","almuerzo","cena"])
+      viaticosSeleccionados: Array.isArray(formData.viaticosSeleccionados)
+        ? formData.viaticosSeleccionados
+        : dIn.viaticosSeleccionados ?? [],
+    };
 
-  // merge: preserva cualquier cosa que ya viniera en detalles
-  const detalles = {
-   ...dIn,
-   ...Object.fromEntries(
-     Object.entries(detallesFromForm).filter(([, v]) => v !== undefined && v !== "")
-   ),
- };
+    // merge: preserva cualquier cosa que ya viniera en detalles
+    const detalles = {
+      ...dIn,
+      ...Object.fromEntries(
+        Object.entries(detallesFromForm).filter(([, v]) => v !== undefined && v !== "")
+      ),
+    };
 
-  return {
-    // ROOT
-    fecha: formData.fecha ?? null,
-    actividad: formData.tipoActividad ?? formData.actividad ?? null,
-    codigoCamino: formData.codigoCamino ?? null,
-    distrito: formData.distrito ?? null,
+    return {
+      // ROOT
+      fecha: formData.fecha ?? null,
+      actividad: formData.tipoActividad ?? formData.actividad ?? null,
+      codigoCamino: formData.codigoCamino ?? null,
+      distrito: formData.distrito ?? null,
 
-    horimetro: toNumOrNull(formData.horimetro),
-    kilometraje: toNumOrNull(formData.kilometraje),
-    diesel: toNumOrNull(formData.combustible ?? formData.diesel),
-    horasOrd: toNumOrNull(formData.horasOrd),
-    horasExt: toNumOrNull(formData.horasExt),
-    viaticos: toNumOrNull(formData.viaticos),
+      horimetro: toNumOrNull(formData.horimetro),
+      kilometraje: toNumOrNull(formData.kilometraje),
+      diesel: toNumOrNull(formData.combustible ?? formData.diesel),
+      horasOrd: toNumOrNull(formData.horasOrd),
+      horasExt: toNumOrNull(formData.horasExt),
+      viaticos: toNumOrNull(formData.viaticos),
 
-    estacion:
-      normalizeEstacion(formData.estacion ?? formData.estacionStr) ??
-      coalesceEstacionFromPairs(formData),
+      estacion:
+        normalizeEstacion(formData.estacion ?? formData.estacionStr) ??
+        coalesceEstacionFromPairs(formData),
 
-    operadorId: toNumOrNull(formData.operadorId),
-    maquinariaId: toNumOrNull(formData.maquinariaId),
+      operadorId: toNumOrNull(formData.operadorId),
+      maquinariaId: toNumOrNull(formData.maquinariaId),
 
-    detalles,
-  };
-}
+      detalles,
+    };
+  }
 
   /* ============== Reports (Municipal) ============== */
-async createReport(formData) {
-  const data = this.buildReportPayload(formData);
-  MachineryService.log("POST /machinery/report payload", data);
-  const res = await apiClient.post("/machinery/report", data);
-  return res.data;
-}
+  async createReport(formData) {
+    const data = this.buildReportPayload(formData);
+    MachineryService.log("POST /machinery/report payload", data);
+    const res = await apiClient.post("/machinery/report", data);
+    return res.data;
+  }
 
   async updateReport(id, formData) {
     const data = this.buildReportPayload(formData);
@@ -213,7 +230,7 @@ async createReport(formData) {
       cantidad: formData.cantidad || null,
       horas: Number(formData.horas) || null,
       estacion: formData.estacion || null,
-      
+
       // boletas según fuente:
       boleta:
         !["Ríos", "Tajo"].includes(formData.fuente) &&

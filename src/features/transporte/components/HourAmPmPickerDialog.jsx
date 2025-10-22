@@ -27,7 +27,11 @@ const to12h = (str) => {
   const ampm = H >= 12 ? "PM" : "AM";
   H = H % 12;
   if (H === 0) H = 12;
-  return { h: String(H).padStart(2, "0"), m: String(parseInt(MM, 10)).padStart(2, "0"), ampm };
+  return {
+    h: String(H).padStart(2, "0"),
+    m: String(parseInt(MM, 10)).padStart(2, "0"),
+    ampm,
+  };
 };
 
 const to24h = (h, m, ampm) => {
@@ -48,7 +52,7 @@ const display12h = (str) => {
  * - value: string "HH:MM" 24h o ""
  * - onChange(newValue): callback con "HH:MM" 24h
  * - label: string
- * - confirmText / cancelText opcionales
+ * - confirmText / cancelText (opc.)
  */
 export default function HourAmPmPickerDialog({
   value,
@@ -103,7 +107,9 @@ export default function HourAmPmPickerDialog({
             <div className="text-xs text-muted-foreground mb-1">Hora</div>
             <Select value={tmpH} onValueChange={setTmpH}>
               <SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger>
-              <SelectContent>{hours.map((h) => (<SelectItem key={h} value={h}>{h}</SelectItem>))}</SelectContent>
+              <SelectContent>
+                {hours.map((h) => (<SelectItem key={h} value={h}>{h}</SelectItem>))}
+              </SelectContent>
             </Select>
           </div>
 
@@ -111,7 +117,9 @@ export default function HourAmPmPickerDialog({
             <div className="text-xs text-muted-foreground mb-1">Minutos</div>
             <Select value={tmpM} onValueChange={setTmpM}>
               <SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger>
-              <SelectContent>{minutes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}</SelectContent>
+              <SelectContent>
+                {minutes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+              </SelectContent>
             </Select>
           </div>
 
