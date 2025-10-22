@@ -28,217 +28,55 @@ const getCostaRicaTimestamp = () => {
 };
 
 const auditService = {
-  // ===== DATOS SIMULADOS PARA DEMO =====
 
-  /**
-   * Genera datos simulados para demostrar la funcionalidad cuando el backend no está disponible
-   * 
-   * Estructura esperada del backend para usuarios:
-   * - name: string (255 caracteres)
-   * - lastname: string (255 caracteres, nullable)
-   * 
-   * Los logs deben contener tanto name/lastname como campos de compatibilidad
-   */
   getSimulatedAuditLogs: (filters = {}) => {
-    const simulatedLogs = [
-      {
-        id: '1',
-        action: 'AUTH',
-        entity: 'authentication',
-        entityId: null,
-        userId: 'user123',
-        userName: 'Juan Pérez',
-        name: 'Juan Carlos',
-        lastname: 'Pérez González',
-        userFullName: 'Juan Carlos Pérez González',
-        userEmail: 'juan.perez@municipalidad.go.cr',
-        userCedula: '123456789',
-        description: 'Usuario inició sesión en el sistema',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        changes: { before: null, after: { status: 'logged_in' } },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.100' }
-      },
-      {
-        id: '2',
-        action: 'CREATE',
-        entity: 'transporte',
-        entityId: 'vehicle-001',
-        userId: 'user456',
-        userName: 'María García',
-        name: 'María Elena',
-        lastname: 'García Rodríguez',
-        userFullName: 'María Elena García Rodríguez',
-        userEmail: 'maria.garcia@municipalidad.go.cr',
-        userCedula: '987654321',
-        description: 'Se creó un nuevo vehículo de transporte',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-        changes: { 
-          before: null, 
-          after: { placa: 'ABC-123', tipo: 'Camión', estado: 'Activo' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.101' }
-      },
-      {
-        id: '3',
-        action: 'UPDATE',
-        entity: 'operadores',
-        entityId: 'op-789',
-        userId: 'user789',
-        userName: 'Carlos López',
-        name: 'Carlos Antonio',
-        lastname: 'López Vargas',
-        userFullName: 'Carlos Antonio López Vargas',
-        userEmail: 'carlos.lopez@municipalidad.go.cr',
-        userCedula: '456789123',
-        description: 'Se actualizó información del operador Carlos López',
-        timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-        changes: { 
-          before: { nombre: 'Carlos Lopez', telefono: '123456789', licencia: 'B1' }, 
-          after: { nombre: 'Carlos López', telefono: '987654321', licencia: 'B2' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.102' }
-      },
-      {
-        id: '4',
-        action: 'UPDATE',
-        entity: 'maquinaria',
-        entityId: 'maq-101',
-        userId: 'user456',
-        userName: 'María García',
-        name: 'María Elena',
-        lastname: 'García Rodríguez',
-        userFullName: 'María Elena García Rodríguez',
-        userEmail: 'maria.garcia@municipalidad.go.cr',
-        userCedula: '987654321',
-        description: 'Se actualizó el estado de la maquinaria',
-        timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-        changes: { 
-          before: { estado: 'Mantenimiento', ubicacion: 'Taller A' }, 
-          after: { estado: 'Disponible', ubicacion: 'Bodega Principal' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.101' }
-      },
-      {
-        id: '5',
-        action: 'DELETE',
-        entity: 'reportes',
-        entityId: 'report-456',
-        userId: 'user123',
-        userName: 'Juan Pérez',
-        name: 'Juan Carlos',
-        lastname: 'Pérez González',
-        userFullName: 'Juan Carlos Pérez González',
-        userEmail: 'juan.perez@municipalidad.go.cr',
-        userCedula: '123456789',
-        description: 'Se eliminó un reporte de actividades',
-        timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-        changes: { 
-          before: { id: 'report-456', tipo: 'Mantenimiento', estado: 'Completado' }, 
-          after: null 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.103' }
-      },
-      {
-        id: '6',
-        action: 'UPDATE',
-        entity: 'fuentes',
-        entityId: 'rio-12',
-        userId: 'user890',
-        userName: 'Ana Rodríguez',
-        name: 'Ana Patricia',
-        lastname: 'Rodríguez Morales',
-        userFullName: 'Ana Patricia Rodríguez Morales',
-        userEmail: 'ana.rodriguez@municipalidad.go.cr',
-        userCedula: '789123456',
-        description: 'Se actualizó información del río',
-        timestamp: new Date(Date.now() - 1000 * 60 * 150).toISOString(),
-        changes: { 
-          before: { nombre: 'Río Amarillo', activo: false }, 
-          after: { nombre: 'Río Amarillo Renovado', activo: true } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.104' }
-      },
-      {
-        id: '7',
-        action: 'RESTORE',
-        entity: 'reportes',
-        entityId: 'report-789',
-        userId: 'user890',
-        userName: 'Ana Rodríguez',
-        name: 'Ana Patricia',
-        lastname: 'Rodríguez Morales',
-        userFullName: 'Ana Patricia Rodríguez Morales',
-        userEmail: 'ana.rodriguez@municipalidad.go.cr',
-        userCedula: '789123456',
-        description: 'Se restauró un reporte eliminado',
-        timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-        changes: { 
-          before: null, 
-          after: { id: 'report-789', tipo: 'Inspección', estado: 'Pendiente' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.104' }
-      },
-      {
-        id: '8',
-        action: 'CREATE',
-        entity: 'operadores',
-        entityId: 'op-456',
-        userId: 'user234',
-        userName: 'Luis Ramírez',
-        name: 'Luis Fernando',
-        lastname: 'Ramírez Jiménez',
-        userFullName: 'Luis Fernando Ramírez Jiménez',
-        userEmail: 'luis.ramirez@municipalidad.go.cr',
-        userCedula: '234567890',
-        description: 'Se registró un nuevo operador',
-        timestamp: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
-        changes: { 
-          before: null, 
-          after: { nombre: 'Luis Fernando', licencia: 'B2', estado: 'Activo' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.105' }
-      },
-      {
-        id: '9',
-        action: 'UPDATE',
-        entity: 'transporte',
-        entityId: 'vehicle-002',
-        userId: 'user234',
-        userName: 'Luis Ramírez',
-        name: 'Luis Fernando',
-        lastname: 'Ramírez Jiménez',
-        userFullName: 'Luis Fernando Ramírez Jiménez',
-        userEmail: 'luis.ramirez@municipalidad.go.cr',
-        userCedula: '234567890',
-        description: 'Se actualizó el kilometraje del vehículo',
-        timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        changes: { 
-          before: { kilometraje: 25000, mantenimiento_proximo: '2025-11-01' }, 
-          after: { kilometraje: 25150, mantenimiento_proximo: '2025-10-28' } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.105' }
-      },
-      {
-        id: '10',
-        action: 'UPDATE',
-        entity: 'user_roles',
-        entityId: 'user-999',
-        userId: 'user123',
-        userName: 'Juan Pérez',
-        name: 'Juan Carlos',
-        lastname: 'Pérez González',
-        userFullName: 'Juan Carlos Pérez González',
-        userEmail: 'juan.perez@municipalidad.go.cr',
-        userCedula: '123456789',
-        description: 'Se cambió el rol del usuario de operador a supervisor',
-        timestamp: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-        changes: { 
-          before: { rol: 'operador', permisos: ['read'] }, 
-          after: { rol: 'supervisor', permisos: ['read', 'write'] } 
-        },
-        metadata: { userAgent: 'Mozilla/5.0...', ip: '192.168.1.100' }
+    // Función para generar datos simulados más dinámicamente
+    const generateMockData = () => {
+      const users = [
+        { id: 'user123', name: 'Juan Carlos', lastname: 'Pérez González', email: 'juan.perez@municipalidad.go.cr', cedula: '123456789' },
+        { id: 'user456', name: 'María Elena', lastname: 'García Rodríguez', email: 'maria.garcia@municipalidad.go.cr', cedula: '987654321' },
+        { id: 'user789', name: 'Carlos Antonio', lastname: 'López Vargas', email: 'carlos.lopez@municipalidad.go.cr', cedula: '456789123' },
+        { id: 'user890', name: 'Ana Patricia', lastname: 'Rodríguez Morales', email: 'ana.rodriguez@municipalidad.go.cr', cedula: '789123456' },
+        { id: 'user234', name: 'Luis Fernando', lastname: 'Ramírez Jiménez', email: 'luis.ramirez@municipalidad.go.cr', cedula: '234567890' }
+      ];
+
+      const actions = ['CREATE', 'UPDATE', 'DELETE', 'AUTH', 'RESTORE'];
+      const entities = ['transporte', 'operadores', 'maquinaria', 'reportes', 'fuentes', 'user_roles', 'authentication'];
+      
+      const logs = [];
+      
+      // Generar logs variados
+      for (let i = 1; i <= 15; i++) {
+        const user = users[Math.floor(Math.random() * users.length)];
+        const action = actions[Math.floor(Math.random() * actions.length)];
+        const entity = entities[Math.floor(Math.random() * entities.length)];
+        
+        logs.push({
+          id: i.toString(),
+          action,
+          entity,
+          entityId: entity === 'authentication' ? null : `${entity}-${i}`,
+          userId: user.id,
+          userName: `${user.name} ${user.lastname}`,
+          name: user.name,
+          lastname: user.lastname,
+          userFullName: `${user.name} ${user.lastname}`,
+          userEmail: user.email,
+          userCedula: user.cedula,
+          description: `Se ${action.toLowerCase()} ${entity}`,
+          timestamp: new Date(Date.now() - 1000 * 60 * (i * 30)).toISOString(),
+          changes: {
+            before: action === 'CREATE' ? null : { estado: 'anterior' },
+            after: action === 'DELETE' ? null : { estado: 'nuevo' }
+          },
+          metadata: { userAgent: 'Mozilla/5.0...', ip: `192.168.1.${100 + i}` }
+        });
       }
-    ];
+      
+      return logs;
+    };
+
+    const simulatedLogs = generateMockData();
 
     // Aplicar filtros a los datos simulados
     let filteredLogs = simulatedLogs;
