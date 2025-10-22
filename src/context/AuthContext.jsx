@@ -147,7 +147,7 @@ const refreshUserFromBackend = async () => {
   setUser(null);
   // Asegurarse de limpiar cualquier configuración de navegación cacheada
   clearNavigationCache();
-  window.location.href = '/login';
+  window.location.href = '/'; // Redirigir al login
 };
 
   // Función para actualizar los datos del usuario (útil cuando un admin cambia el rol)
