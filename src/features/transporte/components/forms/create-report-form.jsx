@@ -17,6 +17,54 @@ import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPicke
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 import { todayLocalISO, toISODateOnly } from "@/utils/date";
 
+/* ====== Helpers de tiempo/horas (JS) ====== */
+const minutesSinceMidnight = (hhmm = "") => {
+  if (!hhmm) return null;
+  const [HH, MM = "0"] = String(hhmm).split(":");
+  const h = parseInt(HH, 10), m = parseInt(MM, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
+
+// Diferencia en horas mismo día (clamp 0..18)
+const computeWorkedHours = (startHHMM, endHHMM) => {
+  const s = minutesSinceMidnight(startHHMM);
+  const e = minutesSinceMidnight(endHHMM);
+  if (s == null || e == null) return 0;
+  if (e <= s) return 0;
+  const minutes = e - s;
+  const hours = Math.round((minutes / 60) * 100) / 100;
+  return Math.min(18, Math.max(0, hours));
+};
+
+const splitOrdExt = (total) => {
+  const ord = Math.min(total, 8);
+  const ext = Math.max(0, total - ord);
+  return { ord, ext };
+};
+
+// Ventanas de viáticos
+const VIATIC_WINDOWS = {
+  desayuno: { from: 6 * 60, to: 11 * 60 },
+  almuerzo: { from: 11 * 60, to: 16 * 60 },
+  cena: { from: 18 * 60, to: 21 * 60 + 1 },
+};
+
+const overlaps = (aFrom, aTo, bFrom, bTo) => Math.max(aFrom, bFrom) < Math.min(aTo, bTo);
+
+const computeAllowedMeals = (startHHMM, endHHMM) => {
+  const s = minutesSinceMidnight(startHHMM);
+  const e = minutesSinceMidnight(endHHMM);
+  if (s == null || e == null || e <= s) {
+    return { desayuno: false, almuerzo: false, cena: false };
+  }
+  return {
+    desayuno: overlaps(s, e, VIATIC_WINDOWS.desayuno.from, VIATIC_WINDOWS.desayuno.to),
+    almuerzo: overlaps(s, e, VIATIC_WINDOWS.almuerzo.from, VIATIC_WINDOWS.almuerzo.to),
+    cena: overlaps(s, e, VIATIC_WINDOWS.cena.from, VIATIC_WINDOWS.cena.to),
+  };
+};
+
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 // Agrupa y suma m³ por tipo de material a partir de las boletas del formulario.
@@ -24,19 +72,12 @@ function getMaterialBreakdownFromForm(boletas = []) {
   const map = new Map();
   for (const b of boletas) {
     const mat = (b?.tipoMaterial || "").trim();
-    // admite distintos nombres por si tu UI usa "m3" o "cantidad"
     const qtyRaw = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen ?? 0;
     const qty = Number(qtyRaw);
     if (!mat || !Number.isFinite(qty) || qty <= 0) continue;
     map.set(mat, (map.get(mat) || 0) + qty);
   }
-  return Object.fromEntries(map); // { "Tierra": 19, "Arena": 8 }
-}
-
-// Para imprimirlo bonito (multilínea)
-function breakdownToMultiline(breakdown) {
-  const entries = Object.entries(breakdown);
-  return entries.length ? entries.map(([k, v]) => `${k}: ${v} m³`).join("\n") : "";
+  return Object.fromEntries(map);
 }
 
 export default function CreateReportForm({ onGoToCatalog }) {
@@ -50,14 +91,14 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
 
-  // 👇 definir aquí
-const isMaterialFlow = useMemo(() => {
-  const t = (selectedMachineryType || "").toLowerCase();
-  const v = (selectedVariant || "").toLowerCase();
-  return ["cabezal", "vagoneta"].includes(t) && v === "material";
-}, [selectedMachineryType, selectedVariant]);
+  const [allowedMeals, setAllowedMeals] = useState({ desayuno: false, almuerzo: false, cena: false });
+  const [selectedMeals, setSelectedMeals] = useState([]);
 
-  const [totalHours, setTotalHours] = useState("");
+  const isMaterialFlow = useMemo(() => {
+    const t = (selectedMachineryType || "").toLowerCase();
+    const v = (selectedVariant || "").toLowerCase();
+    return ["cabezal", "vagoneta"].includes(t) && v === "material";
+  }, [selectedMachineryType, selectedVariant]);
 
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
@@ -97,7 +138,7 @@ const isMaterialFlow = useMemo(() => {
     subFuente: "",
     boleta: "",
     cantidadLiquido: "",
-    placaCisterna: "", //NUEVO
+    placaCisterna: "",
     placaCarreta: "",
     destino: "",
     tipoCarga: "",
@@ -107,15 +148,12 @@ const isMaterialFlow = useMemo(() => {
     horaInicio: "",
     horaFin: "",
     placaMaquinariaLlevada: "",
-
-    // flujo material
     totalCantidadMaterial: "",
-    boletas: [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" }],
+    boletas: [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "", codigoCamino: "" }],
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
 
   // ====== HELPERS ======
-  const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
   const onlyDigitsMax = (v, max) => String(v || "").replace(/\D/g, "").slice(0, max);
 
   const rolesOf = (m) => {
@@ -126,16 +164,14 @@ const isMaterialFlow = useMemo(() => {
 
   const TRAILER_PLATES = {
     vagoneta: { carreta: ["SM 5765"] },
-    cabezal: { material: ["SM 8803", "SM 8844"], cisterna: ["SM 8678"], carreta: ["SM 8753"] },
+    cabezal: { material: ["SM 8803", "SM 8844"], cisterna: ["SM 8678"], carreta: ["SM 7853"] },
   };
 
-  // Mostrar boleta global solo en vagoneta/cabezal material y cuando la fuente NO sea Río/Tajo
-
   const showBoletaField = useCallback(() => {
-  const t = (selectedMachineryType || "").toLowerCase();
-  const v = (selectedVariant || "").toLowerCase();
-  return (t === "vagoneta" || t === "cabezal") && v === "material";
-}, [selectedMachineryType, selectedVariant]);
+    const t = (selectedMachineryType || "").toLowerCase();
+    const v = (selectedVariant || "").toLowerCase();
+    return (t === "vagoneta" || t === "cabezal") && v === "material";
+  }, [selectedMachineryType, selectedVariant]);
 
   // ====== DERIVADOS / CALLBACKS ======
   const getPlacaById = useCallback(
@@ -188,17 +224,16 @@ const isMaterialFlow = useMemo(() => {
     return sourceOptions.default;
   }, [selectedMachineryType, selectedVariant]);
 
-
-  // Suma por material a partir de boletas (re-usa tu helper)
+  //Suma por material a partir de boletas
   const materialBreakdown = useMemo(
     () => getMaterialBreakdownFromForm(formData.boletas || []),
     [formData.boletas]
   );
-
   const totalFromBoletas = useMemo(
     () => Object.values(materialBreakdown).reduce((a, b) => a + b, 0),
     [materialBreakdown]
   );
+
   // ====== EFECTOS ======
   useEffect(() => {
     (async () => {
@@ -250,7 +285,7 @@ const isMaterialFlow = useMemo(() => {
     });
   }, [getTrailerOptions]);
 
-  // Prefetch catálogos de ríos y tajos
+  // Prefetch catálogos
   useEffect(() => {
     (async () => {
       try {
@@ -266,18 +301,34 @@ const isMaterialFlow = useMemo(() => {
     })();
   }, []);
 
-  // OPCIONAL: autollenar el “Total m³ del día” con lo calculado
-   useEffect(() => {
-   if (!isMaterialFlow) return;
-   const next = totalFromBoletas ? String(totalFromBoletas) : "";
-   setFormData(p => (p.totalCantidadMaterial === next ? p : { ...p, totalCantidadMaterial: next }));
- }, [isMaterialFlow, totalFromBoletas]);
+  // Autollenar Total m³ del día
+  useEffect(() => {
+    if (!isMaterialFlow) return;
+    const next = totalFromBoletas ? String(totalFromBoletas) : "";
+    setFormData(p => (p.totalCantidadMaterial === next ? p : { ...p, totalCantidadMaterial: next }));
+  }, [isMaterialFlow, totalFromBoletas]);
+
+  // Horas automáticas + viáticos dependientes del horario
+  useEffect(() => {
+    if (!formData.horaInicio || !formData.horaFin) {
+      setFormData((p) => ({ ...p, horasOrd: "", horasExt: "" }));
+      setAllowedMeals({ desayuno: false, almuerzo: false, cena: false });
+      setSelectedMeals([]);
+      return;
+    }
+    const total = computeWorkedHours(formData.horaInicio, formData.horaFin);
+    const parts = splitOrdExt(total);
+    setFormData((p) => ({ ...p, horasOrd: total ? parts.ord : "", horasExt: total ? parts.ext : "" }));
+    const allowed = computeAllowedMeals(formData.horaInicio, formData.horaFin);
+    setAllowedMeals(allowed);
+    setSelectedMeals((prev) => prev.filter((m) => allowed[m]));
+  }, [formData.horaInicio, formData.horaFin]);
 
   // ====== BOLETAS HELPERS ======
   const addBoleta = () => {
     setFormData((p) => ({
       ...p,
-      boletas: [...(p.boletas || []), { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" }],
+      boletas: [...(p.boletas || []), { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "", codigoCamino: "" }],
     }));
   };
 
@@ -285,44 +336,321 @@ const isMaterialFlow = useMemo(() => {
     setFormData((p) => {
       const next = [...(p.boletas || [])];
       next.splice(idx, 1);
-      return {
-        ...p,
-        boletas: next.length ? next : [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }],
-      };
+      return { ...p, boletas: next.length ? next : [{ boleta: "", tipoMaterial: "", fuente: "", subFuente: "" }] };
     });
   };
 
   const updateBoleta = (idx, patch) => {
     setFormData((p) => {
       const next = [...(p.boletas || [])];
-      const cur = next[idx] || { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "" };
+      const cur = next[idx] || { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "", codigoCamino: "" };
       next[idx] = { ...cur, ...patch };
       return { ...p, boletas: next };
     });
   };
 
-  // ====== HANDLERS ======
-  const handleTotalHoursChange = (e) => {
-    const raw = e.target.value;
-    if (raw === "") {
-      setTotalHours("");
-      setFormData((p) => ({ ...p, horasOrd: "", horasExt: "" }));
-      return;
-    }
-    const h = clamp(parseFloat(String(raw).replace(",", ".")) || 0, 0, 18);
-    setTotalHours(h);
-    const ord = Math.min(h, 8);
-    const ext = clamp(h - ord, 0, 10);
-    setFormData((p) => ({ ...p, horasOrd: ord, horasExt: ext }));
+  // ====== RENDER DE CADA BOLETA SEGÚN LA FUENTE ======
+  const renderBoletaCard = (b, idx) => {
+    const isRio = b.fuente === "Ríos";
+    const isTajo = b.fuente === "Tajo";
+    const isPalo = !isRio && !isTajo; // Palo de Arco u otra que no sea Ríos/Tajo
+
+    return (
+      <div key={idx} className="border rounded-xl p-3 space-y-3 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">Boleta #{idx + 1}</div>
+          <Button type="button" variant="secondary" onClick={() => removeBoleta(idx)}>
+            Eliminar
+          </Button>
+        </div>
+
+        {/* ====== PALO DE ARCO: (Fuente | Boleta) + (Material | m3) + Código full ====== */}
+        {isPalo && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Fuente */}
+            <div>
+              <Label>Fuente</Label>
+              <Select
+                value={b.fuente || ""}
+                onValueChange={(v) =>
+                  updateBoleta(idx, {
+                    fuente: v,
+                    subFuente: "",
+                    boleta: v === "Ríos" || v === "Tajo" ? "" : (b.boleta || ""),
+                  })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar fuente" /></SelectTrigger>
+                <SelectContent>
+                  {(getFuenteOptions() || ["Palo de Arco", "Ríos", "Tajo"]).map((f) => (
+                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Boleta */}
+            <div>
+              <Label>Boleta (6 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="000000"
+                value={b.boleta || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6) })
+                }
+              />
+            </div>
+
+            {/* Tipo de material */}
+            <div>
+              <Label>Tipo de material</Label>
+              <Select
+                value={b.tipoMaterial || ""}
+                onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar material" /></SelectTrigger>
+                <SelectContent>
+                  {materialTypes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* m³ */}
+            <div>
+              <Label>m³ del viaje</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={4}
+                placeholder="00"
+                value={b.m3 || ""}
+                onChange={(e) => updateBoleta(idx, { m3: (e.target.value || "").replace(/\D/g, "").slice(0, 4) })}
+              />
+            </div>
+
+            {/* Código Camino (full width) */}
+            <div className="md:col-span-2">
+              <Label>Código Camino (3 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{3}"
+                maxLength={3}
+                placeholder="000"
+                value={b.codigoCamino || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { codigoCamino: (e.target.value || "").replace(/\D/g, "").slice(0, 3) })
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ====== RÍOS: (Fuente | Río) + (Boleta | Material) + (m3 | Código) ====== */}
+        {isRio && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Fuente */}
+            <div>
+              <Label>Fuente</Label>
+              <Select
+                value={b.fuente || ""}
+                onValueChange={(v) => updateBoleta(idx, { fuente: v, subFuente: "" })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar fuente" /></SelectTrigger>
+                <SelectContent>
+                  {(getFuenteOptions() || ["Palo de Arco", "Ríos", "Tajo"]).map((f) => (
+                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Río */}
+            <div>
+              <Label>Río</Label>
+              <Select
+                value={b.subFuente || ""}
+                onValueChange={(v) => updateBoleta(idx, { subFuente: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar río" /></SelectTrigger>
+                <SelectContent>
+                  {riosList.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                Administrar ríos en Catálogo
+              </button>
+            </div>
+
+            {/* Boleta */}
+            <div>
+              <Label>Boleta (6 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="000000"
+                value={b.boleta || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6) })
+                }
+              />
+            </div>
+
+            {/* Material */}
+            <div>
+              <Label>Tipo de material</Label>
+              <Select
+                value={b.tipoMaterial || ""}
+                onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar material" /></SelectTrigger>
+                <SelectContent>
+                  {materialTypes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* m³ */}
+            <div>
+              <Label>m³ del viaje</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={4}
+                placeholder="00"
+                value={b.m3 || ""}
+                onChange={(e) => updateBoleta(idx, { m3: (e.target.value || "").replace(/\D/g, "").slice(0, 4) })}
+              />
+            </div>
+
+            {/* Código */}
+            <div>
+              <Label>Código Camino (3 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{3}"
+                maxLength={3}
+                placeholder="000"
+                value={b.codigoCamino || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { codigoCamino: (e.target.value || "").replace(/\D/g, "").slice(0, 3) })
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ====== TAJO: (Fuente | Tajo) + (Boleta | Material) + (m3 | Código) ====== */}
+        {isTajo && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Fuente */}
+            <div>
+              <Label>Fuente</Label>
+              <Select
+                value={b.fuente || ""}
+                onValueChange={(v) => updateBoleta(idx, { fuente: v, subFuente: "" })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar fuente" /></SelectTrigger>
+                <SelectContent>
+                  {(getFuenteOptions() || ["Palo de Arco", "Ríos", "Tajo"]).map((f) => (
+                    <SelectItem key={f} value={f}>{f}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tajo */}
+            <div>
+              <Label>Tajo</Label>
+              <Select
+                value={b.subFuente || ""}
+                onValueChange={(v) => updateBoleta(idx, { subFuente: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar tajo" /></SelectTrigger>
+                <SelectContent>
+                  {tajosList.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
+                Administrar tajos en Catálogo
+              </button>
+            </div>
+
+            {/* Boleta */}
+            <div>
+              <Label>Boleta (6 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="000000"
+                value={b.boleta || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6) })
+                }
+              />
+            </div>
+
+            {/* Material */}
+            <div>
+              <Label>Tipo de material</Label>
+              <Select
+                value={b.tipoMaterial || ""}
+                onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar material" /></SelectTrigger>
+                <SelectContent>
+                  {materialTypes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* m³ */}
+            <div>
+              <Label>m³ del viaje</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={4}
+                placeholder="00"
+                value={b.m3 || ""}
+                onChange={(e) => updateBoleta(idx, { m3: (e.target.value || "").replace(/\D/g, "").slice(0, 4) })}
+              />
+            </div>
+
+            {/* Código */}
+            <div>
+              <Label>Código Camino (3 dígitos)</Label>
+              <Input
+                inputMode="numeric"
+                pattern="\d{3}"
+                maxLength={3}
+                placeholder="000"
+                value={b.codigoCamino || ""}
+                onChange={(e) =>
+                  updateBoleta(idx, { codigoCamino: (e.target.value || "").replace(/\D/g, "").slice(0, 3) })
+                }
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
+  // ====== HANDLERS ======
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
 
     if (name === "codigoCamino") {
       const codigo = onlyDigitsMax(value, 3);
       setFormData((p) => ({ ...p, codigoCamino: codigo }));
-      if (formData.maquinariaId) {
+
+      // Solo aplica a maquinarias con Estación
+      if (formData.maquinariaId && requiresField("Estacion")) {
         try {
           const c = await machineryService.getLastCounters(formData.maquinariaId, codigo);
           setLastCounters({
@@ -333,17 +661,10 @@ const isMaterialFlow = useMemo(() => {
             estacionDesde: c?.estacionDesde ?? null,
             estacionAvance: c?.estacionAvance ?? null,
           });
-          const isStale =
-            c?.estacionUpdatedAt &&
-            Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+          const isStale = c?.estacionUpdatedAt && Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
           setFormData((p) => ({
             ...p,
-            estacionDesde:
-              requiresField("Estacion") && c?.estacionHasta != null
-                ? isStale
-                  ? "0"
-                  : String(c.estacionHasta)
-                : p.estacionDesde,
+            estacionDesde: c?.estacionHasta != null ? (isStale ? "0" : String(c.estacionHasta)) : p.estacionDesde,
           }));
         } catch { }
       }
@@ -356,10 +677,8 @@ const isMaterialFlow = useMemo(() => {
     if (name === "combustible") return setFormData((p) => ({ ...p, combustible: onlyDigitsMax(value, 2) }));
     if (name === "boleta") return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
     if (name === "horimetro") return setFormData((p) => ({ ...p, horimetro: onlyDigitsMax(value, 5) }));
-    if (name === "estacionDesde" || name === "estacionHasta")
-      return setFormData((p) => ({ ...p, [name]: onlyDigitsMax(value, 6) }));
-    if (name === "cantidadLiquido")
-      return setFormData((p) => ({ ...p, cantidadLiquido: onlyDigitsMax(value, 4) }));
+    if (name === "estacionDesde" || name === "estacionHasta") return setFormData((p) => ({ ...p, [name]: onlyDigitsMax(value, 6) }));
+    if (name === "cantidadLiquido") return setFormData((p) => ({ ...p, cantidadLiquido: onlyDigitsMax(value, 4) }));
 
     setFormData((p) => ({ ...p, [name]: value }));
   };
@@ -388,6 +707,8 @@ const isMaterialFlow = useMemo(() => {
       setSelectedVariant("");
       setFormData((prev) => clearVariantSpecific({ ...prev, placa: "", maquinariaId: 0, tipoActividad: "" }));
       setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
+      // Si el nuevo tipo no usa Estación, limpia esos campos
+      setFormData((p) => (requiresField("Estacion") ? p : { ...p, estacionDesde: "", estacionHasta: "" }));
       return;
     }
 
@@ -395,19 +716,18 @@ const isMaterialFlow = useMemo(() => {
       setSelectedVariant(value);
       setFormData((prev) => clearVariantSpecific({ ...prev, variant: value, placa: "", maquinariaId: 0, tipoActividad: "" }));
       setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
+      setFormData((p) => (requiresField("Estacion") ? p : { ...p, estacionDesde: "", estacionHasta: "" }));
       return;
     }
 
     if (name === "placaId") {
       const id = Number(value);
-      setFormData((prev) => ({
-        ...prev,
-        maquinariaId: id,
-        placa: getPlacaById(id),
-      }));
+      setFormData((prev) => ({ ...prev, maquinariaId: id, placa: getPlacaById(id) }));
 
       try {
-        const c = await machineryService.getLastCounters(id, formData.codigoCamino || undefined);
+        // Solo pasamos codigoCamino si aplica Estación
+        const caminoArg = requiresField("Estacion") ? (formData.codigoCamino || undefined) : undefined;
+        const c = await machineryService.getLastCounters(id, caminoArg);
 
         setLastCounters({
           horimetro: c?.horimetro ?? null,
@@ -418,28 +738,17 @@ const isMaterialFlow = useMemo(() => {
           estacionAvance: c?.estacionAvance ?? null,
         });
 
-        const isStale =
-          c?.estacionUpdatedAt &&
-          Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+        const isStale = c?.estacionUpdatedAt && Date.now() - new Date(c.estacionUpdatedAt).getTime() > THIRTY_DAYS;
 
         setFormData((p) => ({
           ...p,
           estacionDesde:
-            requiresField("Estacion") && c?.estacionHasta != null
-              ? isStale
-                ? "0"
-                : String(c.estacionHasta)
-              : p.estacionDesde || "",
+            requiresField("Estacion") && c?.estacionHasta != null ? (isStale ? "0" : String(c.estacionHasta)) : (p.estacionDesde || ""),
           horimetro: p.horimetro ?? "",
         }));
       } catch (e) {
         setLastCounters({
-          horimetro: null,
-          kilometraje: null,
-          estacionHasta: null,
-          estacionUpdatedAt: null,
-          estacionDesde: null,
-          estacionAvance: null,
+          horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null, estacionDesde: null, estacionAvance: null,
         });
       }
       return;
@@ -455,33 +764,51 @@ const isMaterialFlow = useMemo(() => {
     if (mach.variantes && selectedVariant) fields = [...(mach.variantes[selectedVariant] || [])];
     else fields = [...(mach.campos || [])];
 
-    // En flujo material quitamos Boleta y Cantidad material (se manejan en boletas dinámicas)
+    // En flujo material quitamos campos manejados por boletas
     if (
       ["vagoneta", "cabezal"].includes((selectedMachineryType || "").toLowerCase()) &&
       (selectedVariant || "").toLowerCase() === "material"
     ) {
       fields = fields.filter((f) => {
         const k = normKey(f);
-        // En flujo material solo se muestran las boletas dinámicas.
-        return k !== "boleta" && k !== "cantidad material" && k !== "tipo material";
+        return k !== "boleta" && k !== "cantidad material" && k !== "tipo material" && k !== "codigo camino";
       });
     }
 
+    // Evitar duplicados de horas (se renderizan arriba)
+    fields = fields.filter((f) => {
+      const k = normKey(f);
+      return k !== "hora inicio" && k !== "hora fin";
+    });
+
     const t = (selectedMachineryType || "").toLowerCase();
     const v = (selectedVariant || "").toLowerCase();
-    const needsTrailer = !!TRAILER_PLATES[t]?.[v];
+    const hoist = ["vagoneta", "cabezal"].includes(t); // estos van arriba en la fila de 3
 
-    if (needsTrailer && !fields.some((f) => f?.toLowerCase().trim() === "placa carreta")) fields.push("Placa carreta");
-    if (v === "carreta" && !fields.some((f) => f?.toLowerCase().includes("placa maquinaria llevada")))
-      fields.push("Placa maquinaria llevada");
-
-    // 👇 NUEVO: si es cisterna en vagoneta/cabezal, agregamos el campo
-    if (["vagoneta", "cabezal"].includes(t) && v === "cisterna") {
-      if (!fields.some((f) => normKey(f) === "placa cisterna")) {
-        fields.push("Placa cisterna");
-      }
+    // Si es vagoneta/cabezal, NUNCA mostrar estos en Campos Específicos
+    if (hoist) {
+      fields = fields.filter((f) => {
+        const k = normKey(f);
+        if (k === "placa maquinaria llevada") return false;
+        // cualquier variación de "placa carreta"/"placa cisterna"
+        if (k.includes("placa") && (k.includes("carreta") || k.includes("cisterna"))) return false;
+        return true;
+      });
     }
 
+    // Solo añadir “Placa carreta” / “Placa maquinaria llevada” si NO se hoistean
+    const needsTrailer = !!TRAILER_PLATES[t]?.[v];
+    if (!hoist && needsTrailer && !fields.some((f) => normKey(f) === "placa carreta")) {
+      fields.push("Placa carreta");
+    }
+    if (!hoist && v === "carreta" && !fields.some((f) => normKey(f) === "placa maquinaria llevada")) {
+      fields.push("Placa maquinaria llevada");
+    }
+
+    // (Opcional) si alguna variante trae "placa cisterna" en el catálogo y NO hoist,
+    // se permite, de lo contrario ya quedó filtrada arriba.
+
+    // Quitar duplicados por si vienen repetidos del catálogo
     const seen = new Set();
     fields = fields.filter((f) => {
       const k = normKey(f);
@@ -493,6 +820,7 @@ const isMaterialFlow = useMemo(() => {
     return fields;
   }
 
+
   const requiresField = (name) => getDynamicFields().some((f) => normKey(f) === normKey(name));
 
   const renderDynamicField = (fieldName) => {
@@ -503,15 +831,9 @@ const isMaterialFlow = useMemo(() => {
           <div className="space-y-2" key={fieldName}>
             <Label>Distrito</Label>
             <Select onValueChange={(value) => handleSelectChange("distrito", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar distrito" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar distrito" /></SelectTrigger>
               <SelectContent>
-                {districts.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
+                {districts.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -521,13 +843,8 @@ const isMaterialFlow = useMemo(() => {
         return (
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="destino">Destino</Label>
-            <Input
-              id="destino"
-              name="destino"
-              placeholder="Punto de descarga / obra"
-              value={formData.destino || ""}
-              onChange={handleInputChange}
-            />
+            <Input id="destino" name="destino" placeholder="Punto de descarga / obra"
+              value={formData.destino || ""} onChange={handleInputChange} />
           </div>
         );
 
@@ -536,32 +853,10 @@ const isMaterialFlow = useMemo(() => {
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="cantidadLiquido">Cantidad (L)</Label>
             <div className="flex gap-2 items-center">
-              <Input
-                id="cantidadLiquido"
-                name="cantidadLiquido"
-                inputMode="numeric"
-                pattern="\d*"
-                placeholder="0000"
-                maxLength={4}
-                value={formData.cantidadLiquido ?? ""}
-                onChange={handleInputChange}
-              />
+              <Input id="cantidadLiquido" name="cantidadLiquido" inputMode="numeric" pattern="\d*"
+                placeholder="0000" maxLength={4} value={formData.cantidadLiquido ?? ""} onChange={handleInputChange} />
               <span className="text-sm text-muted-foreground">L</span>
             </div>
-          </div>
-        );
-
-      case "placa cisterna":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label htmlFor="placaCisterna">Placa cisterna</Label>
-            <Input
-              id="placaCisterna"
-              name="placaCisterna"
-              placeholder="Ej: SM 8678"
-              value={formData.placaCisterna || ""}
-              onChange={handleInputChange}
-            />
           </div>
         );
 
@@ -569,16 +864,8 @@ const isMaterialFlow = useMemo(() => {
         return (
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="combustible">Litros diésel</Label>
-            <Input
-              id="combustible"
-              name="combustible"
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={2}
-              placeholder="00"
-              value={formData.combustible ?? ""}
-              onChange={handleInputChange}
-            />
+            <Input id="combustible" name="combustible" inputMode="numeric" pattern="\d*"
+              maxLength={2} placeholder="00" value={formData.combustible ?? ""} onChange={handleInputChange} />
             <p className="text-xs text-muted-foreground">Máximo 2 dígitos (0–99)</p>
           </div>
         );
@@ -588,16 +875,8 @@ const isMaterialFlow = useMemo(() => {
         return (
           <div className="space-y-2" key={fieldName}>
             <Label htmlFor="boleta">Boleta (6 dígitos)</Label>
-            <Input
-              id="boleta"
-              name="boleta"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
-              placeholder="000000"
-              value={formData.boleta ?? ""}
-              onChange={handleInputChange}
-            />
+            <Input id="boleta" name="boleta" inputMode="numeric" pattern="\d{6}" maxLength={6}
+              placeholder="000000" value={formData.boleta ?? ""} onChange={handleInputChange} />
           </div>
         );
 
@@ -610,16 +889,8 @@ const isMaterialFlow = useMemo(() => {
                 <span className="text-xs text-muted-foreground">(último: {lastCounters.horimetro})</span>
               )}
             </Label>
-            <Input
-              id="horimetro"
-              name="horimetro"
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={5}
-              placeholder="00000"
-              value={formData.horimetro ?? ""}
-              onChange={handleInputChange}
-            />
+            <Input id="horimetro" name="horimetro" inputMode="numeric" pattern="\d*" maxLength={5}
+              placeholder="00000" value={formData.horimetro ?? ""} onChange={handleInputChange} />
             <p className="text-xs text-muted-foreground">Máximo 5 dígitos, no menor al último valor.</p>
           </div>
         );
@@ -633,16 +904,8 @@ const isMaterialFlow = useMemo(() => {
                 <span className="text-xs text-muted-foreground">(último: {lastCounters.kilometraje})</span>
               )}
             </Label>
-            <Input
-              id="kilometraje"
-              name="kilometraje"
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={6}
-              placeholder="000000"
-              value={formData.kilometraje ?? ""}
-              onChange={handleInputChange}
-            />
+            <Input id="kilometraje" name="kilometraje" inputMode="numeric" pattern="\d*" maxLength={6}
+              placeholder="000000" value={formData.kilometraje ?? ""} onChange={handleInputChange} />
             <p className="text-xs text-muted-foreground">Máximo 6 dígitos, no menor al último valor.</p>
           </div>
         );
@@ -664,31 +927,16 @@ const isMaterialFlow = useMemo(() => {
               Estación{" "}
               {Number.isFinite(ultimoHasta) && (
                 <span className="text-xs text-muted-foreground">
-                  (último hasta: {ultimoHasta}
-                  {Number.isFinite(ultimoAvance) ? `, avance: ${ultimoAvance} m` : ""})
+                  (último hasta: {ultimoHasta}{Number.isFinite(ultimoAvance) ? `, avance: ${ultimoAvance} m` : ""})
                 </span>
               )}
             </Label>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <Input
-                name="estacionDesde"
-                inputMode="numeric"
-                pattern="\d*"
-                maxLength={6}
-                placeholder="Desde (m)"
-                value={formData.estacionDesde}
-                onChange={handleInputChange}
-              />
-              <Input
-                name="estacionHasta"
-                inputMode="numeric"
-                pattern="\d*"
-                maxLength={6}
-                placeholder="Hasta (m)"
-                value={formData.estacionHasta}
-                onChange={handleInputChange}
-              />
+              <Input name="estacionDesde" inputMode="numeric" pattern="\d*" maxLength={6}
+                placeholder="Desde (m)" value={formData.estacionDesde} onChange={handleInputChange} />
+              <Input name="estacionHasta" inputMode="numeric" pattern="\d*" maxLength={6}
+                placeholder="Hasta (m)" value={formData.estacionHasta} onChange={handleInputChange} />
               <div className="flex items-center text-sm text-muted-foreground">
                 Avance:&nbsp;
                 {formData.estacionDesde && formData.estacionHasta
@@ -705,80 +953,25 @@ const isMaterialFlow = useMemo(() => {
         );
       }
 
-      case "placa carreta": {
-        const opciones = getTrailerOptions();
-        if (!opciones.length) return null;
+      case "codigo camino":
+        if (isMaterialFlow) return null; // ocultar global si es flujo material
         return (
           <div className="space-y-2" key={fieldName}>
-            <Label>Placa carreta</Label>
-            <Select
-              value={formData.placaCarreta || ""}
-              onValueChange={(value) => setFormData((p) => ({ ...p, placaCarreta: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar placa" />
-              </SelectTrigger>
-              <SelectContent>
-                {opciones.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      }
-
-      case "placa maquinaria llevada":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label htmlFor="placaMaquinariaLlevada">Placa maquinaria llevada</Label>
-            <Input
-              id="placaMaquinariaLlevada"
-              name="placaMaquinariaLlevada"
-              placeholder="SM 0000"
-              value={formData.placaMaquinariaLlevada || ""}
-              onChange={handleInputChange}
-            />
-          </div>
-        );
-
-      case "cantidad material":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label htmlFor="cantidadMaterial">Cantidad (m³)</Label>
-            <div className="flex gap-2 items-center">
-              <Input
-                id="cantidadMaterial"
-                name="cantidadMaterial"
-                inputMode="numeric"
-                pattern="\d*"
-                placeholder="00"
-                maxLength={2}
-                value={formData.cantidadMaterial ?? ""}
-                onChange={handleInputChange}
-              />
-              <span className="text-sm text-muted-foreground">m³</span>
-            </div>
+            <Label>Código Camino (3 dígitos)</Label>
+            <Input id="codigoCamino" name="codigoCamino" value={formData.codigoCamino}
+              onChange={handleInputChange} placeholder="000" maxLength={3} />
           </div>
         );
 
       case "tipo material":
-        if (isMaterialFlow) return null; // <- evita el duplicado
+        if (isMaterialFlow) return null;
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Material</Label>
             <Select onValueChange={(value) => handleSelectChange("tipoMaterial", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar material" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar material" /></SelectTrigger>
               <SelectContent>
-                {materialTypes.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
+                {materialTypes.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -788,20 +981,11 @@ const isMaterialFlow = useMemo(() => {
         return (
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Actividad</Label>
-            <Select
-              onValueChange={(value) => handleSelectChange("tipoActividad", value)}
-              value={formData.tipoActividad || ""}
-              disabled={!selectedMachineryType}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar actividad" />
-              </SelectTrigger>
+            <Select onValueChange={(value) => handleSelectChange("tipoActividad", value)}
+              value={formData.tipoActividad || ""} disabled={!selectedMachineryType}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar actividad" /></SelectTrigger>
               <SelectContent>
-                {activityChoices.map((act) => (
-                  <SelectItem key={act} value={act}>
-                    {act}
-                  </SelectItem>
-                ))}
+                {activityChoices.map((act) => (<SelectItem key={act} value={act}>{act}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -812,15 +996,9 @@ const isMaterialFlow = useMemo(() => {
           <div className="space-y-2" key={fieldName}>
             <Label>Tipo de Carga</Label>
             <Select onValueChange={(value) => handleSelectChange("tipoCarga", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar carga" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar carga" /></SelectTrigger>
               <SelectContent>
-                {cargoTypes.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
+                {cargoTypes.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -829,137 +1007,52 @@ const isMaterialFlow = useMemo(() => {
       case "viaticos":
         return (
           <div className="space-y-2" key={fieldName}>
-            <Label htmlFor="viaticos">Viáticos</Label>
-            <Input
-              id="viaticos"
-              name="viaticos"
-              inputMode="numeric"
-              pattern="\d*"
-              maxLength={5}
-              placeholder="00000"
-              value={formData.viaticos ?? ""}
-              onChange={handleInputChange}
-            />
+            <Label>Viáticos (según horario trabajado)</Label>
+            <div className="flex flex-col gap-2 border rounded-md p-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedMeals.includes("desayuno")}
+                  disabled={!allowedMeals.desayuno}
+                  onChange={(e) => {
+                    setSelectedMeals((prev) =>
+                      e.target.checked ? Array.from(new Set([...prev, "desayuno"])) : prev.filter((x) => x !== "desayuno")
+                    );
+                  }}
+                />
+                <span>Desayuno</span>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedMeals.includes("almuerzo")}
+                  disabled={!allowedMeals.almuerzo}
+                  onChange={(e) => {
+                    setSelectedMeals((prev) =>
+                      e.target.checked ? Array.from(new Set([...prev, "almuerzo"])) : prev.filter((x) => x !== "almuerzo")
+                    );
+                  }}
+                />
+                <span>Almuerzo</span>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedMeals.includes("cena")}
+                  disabled={!allowedMeals.cena}
+                  onChange={(e) => {
+                    setSelectedMeals((prev) =>
+                      e.target.checked ? Array.from(new Set([...prev, "cena"])) : prev.filter((x) => x !== "cena")
+                    );
+                  }}
+                />
+                <span>Cena</span>
+              </label>
+            </div>
           </div>
         );
-
-      case "hora inicio":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <HourAmPmPickerDialog
-              label="Hora inicio"
-              value={formData.horaInicio}
-              onChange={(v) => setFormData((p) => ({ ...p, horaInicio: v }))}
-            />
-          </div>
-        );
-
-      case "hora fin":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <HourAmPmPickerDialog
-              label="Hora fin"
-              value={formData.horaFin}
-              onChange={(v) => setFormData((p) => ({ ...p, horaFin: v }))}
-            />
-          </div>
-        );
-
-      case "codigo camino":
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label>Código Camino (3 dígitos)</Label>
-            <Input
-              id="codigoCamino"
-              name="codigoCamino"
-              value={formData.codigoCamino}
-              onChange={handleInputChange}
-              placeholder="000"
-              maxLength={3}
-            />
-          </div>
-        );
-
-      case "fuente": {
-        if (isMaterialFlow) return null;
-        const opciones = getFuenteOptions();
-        if (!opciones.length) return null;
-
-        const handleFuente = (value) => {
-          setFormData((p) => ({
-            ...p,
-            fuente: value,
-            subFuente: "",
-            tipoMaterial: value === "Ríos" ? "" : p.tipoMaterial,
-          }));
-        };
-
-        return (
-          <div className="space-y-2" key={fieldName}>
-            <Label>Fuente</Label>
-            <Select value={formData.fuente || ""} onValueChange={handleFuente}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar fuente" />
-              </SelectTrigger>
-              <SelectContent>
-                {opciones.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {formData.fuente === "Ríos" && (
-              <>
-                <Label className="mt-2">Río</Label>
-                <Select
-                  value={formData.subFuente || ""}
-                  onValueChange={(v) => setFormData((p) => ({ ...p, subFuente: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar río" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {riosList.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
-                  Administrar ríos en Catálogo
-                </button>
-              </>
-            )}
-
-            {formData.fuente === "Tajo" && (
-              <>
-                <Label className="mt-2">Tajo</Label>
-                <Select
-                  value={formData.subFuente || ""}
-                  onValueChange={(v) => setFormData((p) => ({ ...p, subFuente: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tajo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tajosList.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
-                  Administrar tajos en Catálogo
-                </button>
-              </>
-            )}
-          </div>
-        );
-      }
 
       default:
         return (
@@ -984,8 +1077,19 @@ const isMaterialFlow = useMemo(() => {
       return;
     }
 
+    // Validaciones extra para flujo material
+    if (isMaterialFlow) {
+      for (const [i, b] of (formData.boletas || []).entries()) {
+        if (!/^\d{3}$/.test(String(b.codigoCamino || ""))) {
+          await showError(`Boleta #${i + 1}: Código de camino`, "Ingrese exactamente 3 dígitos.");
+          return;
+        }
+      }
+    }
+
     const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
     const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
+
     const res = await confirmAction("¿Crear reporte?", "", {
       html: `<div style="text-align:left">
         <div><b>Operador:</b> ${operatorName || "—"}</div>
@@ -1003,18 +1107,12 @@ const isMaterialFlow = useMemo(() => {
     try {
       if (requiresField("Horimetro") && lastCounters.horimetro != null) {
         if (Number(formData.horimetro) < Number(lastCounters.horimetro)) {
-          closeLoading();
-          await showError("Horímetro inválido", "Debe ser igual o mayor al último.");
-          setLoading(false);
-          return;
+          closeLoading(); await showError("Horímetro inválido", "Debe ser igual o mayor al último."); setLoading(false); return;
         }
       }
       if (requiresField("Kilometraje") && lastCounters.kilometraje != null) {
         if (Number(formData.kilometraje) < Number(lastCounters.kilometraje)) {
-          closeLoading();
-          await showError("Kilometraje inválido", "Debe ser igual o mayor al último.");
-          setLoading(false);
-          return;
+          closeLoading(); await showError("Kilometraje inválido", "Debe ser igual o mayor al último."); setLoading(false); return;
         }
       }
 
@@ -1023,31 +1121,19 @@ const isMaterialFlow = useMemo(() => {
         const h = Number(formData.estacionHasta || 0);
 
         if (Number.isFinite(d) && Number.isFinite(h) && h < d) {
-          closeLoading();
-          await showError("Estación inválida", "'Hasta' no puede ser menor que 'Desde'.");
-          setLoading(false);
-          return;
+          closeLoading(); await showError("Estación inválida", "'Hasta' no puede ser menor que 'Desde'."); setLoading(false); return;
         }
 
         if (lastCounters.estacionHasta != null) {
-          const stale =
-            lastCounters.estacionUpdatedAt &&
-            Date.now() - new Date(lastCounters.estacionUpdatedAt).getTime() > THIRTY_DAYS;
+          const stale = lastCounters.estacionUpdatedAt && Date.now() - new Date(lastCounters.estacionUpdatedAt).getTime() > THIRTY_DAYS;
 
           if (stale && d !== Number(lastCounters.estacionHasta)) {
-            closeLoading();
-            await showError(
-              "Continuidad requerida",
-              `Debe iniciar en ${lastCounters.estacionHasta} m (último avance en este camino).`
-            );
-            setLoading(false);
-            return;
+            closeLoading(); await showError("Continuidad requerida", `Debe iniciar en ${lastCounters.estacionHasta} m (último avance en este camino).`);
+            setLoading(false); return;
           }
           if (!stale && d < Number(lastCounters.estacionHasta)) {
-            closeLoading();
-            await showError("Continuidad requerida", `El 'Desde' debe ser ≥ ${lastCounters.estacionHasta} m.`);
-            setLoading(false);
-            return;
+            closeLoading(); await showError("Continuidad requerida", `El 'Desde' debe ser ≥ ${lastCounters.estacionHasta} m.`);
+            setLoading(false); return;
           }
         }
       }
@@ -1055,56 +1141,36 @@ const isMaterialFlow = useMemo(() => {
       if (isMaterialFlow) {
         const totalM3 = Number(formData.totalCantidadMaterial || 0);
         if (!(Number.isFinite(totalM3) && totalM3 > 0)) {
-          closeLoading();
-          await showError("Total m³ requerido", "Ingrese el total de material del día (> 0).");
-          setLoading(false);
-          return;
+          closeLoading(); await showError("Total m³ requerido", "Ingrese el total de material del día (> 0).");
+          setLoading(false); return;
         }
 
         for (const [i, b] of (formData.boletas || []).entries()) {
-
-          // si es Ríos/Tajo, sigue pidiendo subfuente:
           const isRiverOrTajo = b.fuente === "Ríos" || b.fuente === "Tajo";
           if (isRiverOrTajo && !b.subFuente) {
-
-            closeLoading();
-            await showError(
-              `Seleccione el ${b.fuente === "Ríos" ? "Río" : "Tajo"} en boleta #${i + 1}`,
-              "Elija la sub-fuente."
-            );
-            setLoading(false);
-            return;
+            closeLoading(); await showError(`Seleccione el ${b.fuente === "Ríos" ? "Río" : "Tajo"} en boleta #${i + 1}`, "Elija la sub-fuente.");
+            setLoading(false); return;
           }
 
           if (!(b.tipoMaterial && Number(b.m3) > 0)) {
-            closeLoading();
-            await showError(
-              `Boleta #${i + 1} incompleta`,
-              "Debe seleccionar el tipo de material e ingresar m³ del viaje (> 0)."
-            );
-            setLoading(false);
-            return;
+            closeLoading(); await showError(`Boleta #${i + 1} incompleta`, "Debe seleccionar el tipo de material e ingresar m³ del viaje (> 0).");
+            setLoading(false); return;
           }
 
-          // Coherencia: suma de boletas vs total
-          const sumBoletas = (formData.boletas || [])
-            .map(b => Number(b.m3) || 0)
-            .reduce((a, b) => a + b, 0);
+          const sumBoletas = (formData.boletas || []).map(b => Number(b.m3) || 0).reduce((a, b) => a + b, 0);
           if (sumBoletas !== totalM3) {
-            closeLoading();
-            await showError(
-              "Total inconsistente",
-              `La suma de boletas (${sumBoletas} m³) no coincide con el Total m³ del día (${totalM3}).`
-            );
-            setLoading(false);
-            return;
+            closeLoading(); await showError("Total inconsistente", `La suma de boletas (${sumBoletas} m³) no coincide con el Total m³ del día (${totalM3}).`);
+            setLoading(false); return;
           }
-          // NUEVO: boleta requerida SIEMPRE (6 dígitos), sin importar la fuente
+
           if (!/^\d{6}$/.test(String(b.boleta || ""))) {
-            closeLoading();
-            await showError(`Boleta #${i + 1} inválida`, "Ingrese exactamente 6 dígitos.");
-            setLoading(false);
-            return;
+            closeLoading(); await showError(`Boleta #${i + 1} inválida`, "Ingrese exactamente 6 dígitos.");
+            setLoading(false); return;
+          }
+
+          if (!/^\d{3}$/.test(String(b.codigoCamino || ""))) {
+            closeLoading(); await showError(`Boleta #${i + 1}: Código de camino`, "Ingrese exactamente 3 dígitos.");
+            setLoading(false); return;
           }
         }
       }
@@ -1120,7 +1186,7 @@ const isMaterialFlow = useMemo(() => {
         horasOrd: formData.horasOrd === "" ? null : Number(formData.horasOrd),
         horasExt: formData.horasExt === "" ? null : Number(formData.horasExt),
         diesel: formData.combustible === "" ? null : Number(formData.combustible),
-        codigoCamino: formData.codigoCamino || null,
+        codigoCamino: isMaterialFlow ? null : (formData.codigoCamino || null),
         distrito: formData.distrito || null,
         viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
         tipoActividad: formData.tipoActividad || null,
@@ -1142,12 +1208,13 @@ const isMaterialFlow = useMemo(() => {
         destino: formData.destino || "",
         placaMaquinariaLlevada: formData.placaMaquinariaLlevada || "",
         cantidadLiquido: formData.cantidadLiquido || "",
-        placaCisterna: formData.placaCisterna || "",//NUEVO
+        placaCisterna: formData.placaCisterna || "",
         tipoMaterial: formData.tipoMaterial || "",
         cantidadMaterial: formData.cantidadMaterial || "",
         boleta: formData.boleta || "",
         fuente: formData.fuente || "",
         subFuente: formData.subFuente || "",
+        viaticosSeleccionados: selectedMeals,
         ...(isMat
           ? {
             totalCantidadMaterial:
@@ -1159,6 +1226,7 @@ const isMaterialFlow = useMemo(() => {
                 fuente: b.fuente || "",
                 subFuente: b.subFuente || "",
                 m3: b.m3 === "" ? null : Number(b.m3),
+                codigoCamino: b.codigoCamino || "",
               }))
               : [],
           }
@@ -1181,7 +1249,6 @@ const isMaterialFlow = useMemo(() => {
       setFormData({ ...INITIAL_FORM, fecha: todayLocalISO() });
       setSelectedMachineryType("");
       setSelectedVariant("");
-      setTotalHours("");
       setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
     } catch (err) {
       console.error("createReport error", err?.response?.data || err);
@@ -1193,6 +1260,9 @@ const isMaterialFlow = useMemo(() => {
   };
 
   // ====== RENDER ======
+  const computedTotalHours =
+    formData.horaInicio && formData.horaFin ? computeWorkedHours(formData.horaInicio, formData.horaFin) : "";
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -1210,9 +1280,7 @@ const isMaterialFlow = useMemo(() => {
                 value={formData.operadorId ? String(formData.operadorId) : ""}
                 onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar operador" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar operador" /></SelectTrigger>
                 <SelectContent>
                   {operatorsList.map((operator) => (
                     <SelectItem key={operator.id} value={String(operator.id)}>
@@ -1228,20 +1296,14 @@ const isMaterialFlow = useMemo(() => {
             </div>
           </div>
 
-          {/* Tipo / Variante / Placa */}
-          <div className="space-y-4">
+          {/* Tipo / Variante */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Tipo de Maquinaria</Label>
               <Select value={selectedMachineryType} onValueChange={(v) => handleSelectChange("tipoMaquinaria", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo de maquinaria" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar tipo de maquinaria" /></SelectTrigger>
                 <SelectContent>
-                  {Object.keys(machineryFields).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
+                  {Object.keys(machineryFields).map((type) => (<SelectItem key={type} value={type}>{type}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
@@ -1250,21 +1312,21 @@ const isMaterialFlow = useMemo(() => {
               <div className="space-y-2">
                 <Label>Variante</Label>
                 <Select value={selectedVariant} onValueChange={(v) => handleSelectChange("variant", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar variante" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar variante" /></SelectTrigger>
                   <SelectContent>
                     {Object.keys(machineryFields[selectedMachineryType].variantes).map((variant) => (
-                      <SelectItem key={variant} value={variant}>
-                        {variant}
-                      </SelectItem>
+                      <SelectItem key={variant} value={variant}>{variant}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
+          </div>
 
-            {selectedMachineryType && (
+          {/* Fila de 3: Placa / Placa carreta / Placa maquinaria llevada */}
+          {selectedMachineryType && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Placa */}
               <div className="space-y-2">
                 <Label>Placa</Label>
                 <Select
@@ -1276,14 +1338,9 @@ const isMaterialFlow = useMemo(() => {
                     <SelectValue placeholder={placasOptions.length ? "Seleccionar placa" : "No hay placas disponibles"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {placasOptions.map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id}>
-                        {opt.placa}
-                      </SelectItem>
-                    ))}
+                    {placasOptions.map((opt) => (<SelectItem key={opt.id} value={opt.id}>{opt.placa}</SelectItem>))}
                   </SelectContent>
                 </Select>
-
                 {placasOptions.length === 0 && (
                   <div className="text-sm text-muted-foreground">
                     No hay placas disponibles para este tipo/variante{" "}
@@ -1293,31 +1350,58 @@ const isMaterialFlow = useMemo(() => {
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Horas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Placa carreta (si aplica) */}
+              {(() => {
+                const opts = getTrailerOptions();
+                if (!opts.length) return null;
+                return (
+                  <div className="space-y-2">
+                    <Label>Placa carreta</Label>
+                    <Select value={formData.placaCarreta || ""} onValueChange={(v) => setFormData((p) => ({ ...p, placaCarreta: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar placa" /></SelectTrigger>
+                      <SelectContent>
+                        {opts.map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })()}
+
+              {/* Placa maquinaria llevada (solo variante carreta) */}
+              {((selectedVariant || "").toLowerCase() === "carreta") && (
+                <div className="space-y-2">
+                  <Label htmlFor="placaMaquinariaLlevada">Placa maquinaria llevada</Label>
+                  <Input
+                    id="placaMaquinariaLlevada"
+                    name="placaMaquinariaLlevada"
+                    placeholder="SM 0000"
+                    value={formData.placaMaquinariaLlevada || ""}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Horas (auto) */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="totalHours">Total de Horas Trabajadas</Label>
-              <Input
-                id="totalHours"
-                name="totalHours"
-                type="number"
-                step="1"
-                min="0"
-                max="18"
-                value={totalHours}
-                onChange={handleTotalHoursChange}
-              />
+              <HourAmPmPickerDialog label="Hora inicio" value={formData.horaInicio} onChange={(v) => setFormData((p) => ({ ...p, horaInicio: v }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="horasOrd">Horas Ordinarias (máx. 8)</Label>
-              <Input id="horasOrd" name="horasOrd" type="number" step="0.1" value={formData.horasOrd} readOnly className="bg-gray-50" />
+              <HourAmPmPickerDialog label="Hora fin" value={formData.horaFin} onChange={(v) => setFormData((p) => ({ ...p, horaFin: v }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="horasExt">Horas Extraordinarias</Label>
-              <Input id="horasExt" name="horasExt" type="number" step="0.1" value={formData.horasExt} readOnly className="bg-gray-50" />
+              <Label>Total horas (auto, máx. 18)</Label>
+              <Input readOnly className="bg-gray-50" value={computedTotalHours} />
+            </div>
+            <div className="space-y-2">
+              <Label>Ordinarias / Extra</Label>
+              <div className="flex gap-2">
+                <Input readOnly className="bg-gray-50" value={formData.horasOrd} placeholder="Ord" />
+                <Input readOnly className="bg-gray-50" value={formData.horasExt} placeholder="Ext" />
+              </div>
             </div>
           </div>
 
@@ -1332,149 +1416,23 @@ const isMaterialFlow = useMemo(() => {
           )}
 
           {/* Sección BOLETAS (solo material) */}
+          {/* Sección BOLETAS (solo material) */}
           {isMaterialFlow && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Boletas del día</h3>
-                <Button type="button" onClick={addBoleta}>
-                  + Agregar boleta
-                </Button>
+                <Button type="button" onClick={addBoleta}>+ Agregar boleta</Button>
               </div>
 
-              {(formData.boletas || []).map((b, idx) => {
-                return (
-                  <div key={idx} className="border rounded-xl p-3 space-y-3 bg-white">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Boleta #{idx + 1}</div>
-                      <Button type="button" variant="secondary" onClick={() => removeBoleta(idx)}>
-                        Eliminar
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <Label>Boleta (6 dígitos)</Label>
-                        <Input
-                          inputMode="numeric"
-                          pattern="\d{6}"
-                          maxLength={6}
-                          value={b.boleta || ""}
-                          onChange={(e) =>
-                            updateBoleta(idx, {
-                              boleta: (e.target.value || "").replace(/\D/g, "").slice(0, 6),
-                            })
-                          }
-                          placeholder="000000"
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Tipo de material</Label>
-                        <Select value={b.tipoMaterial || ""} onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar material" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {materialTypes.map((m) => (
-                              <SelectItem key={m} value={m}>
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>m³ del viaje</Label>
-                        <Input
-                          inputMode="numeric"
-                          pattern="\d*"
-                          maxLength={4}
-                          placeholder="00"
-                          value={b.m3 || ""}
-                          onChange={(e) => updateBoleta(idx, { m3: (e.target.value || "").replace(/\D/g, "").slice(0, 4) })
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <Label>Fuente</Label>
-                        <Select
-                          value={b.fuente || ""}
-                          onValueChange={(v) =>
-                            updateBoleta(idx, {
-                              fuente: v,
-                              subFuente: "",
-                              boleta: v === "Ríos" || v === "Tajo" ? "" : b.boleta || "",
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar fuente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(getFuenteOptions() || ["Palo de Arco", "Ríos", "Tajo"]).map((f) => (
-                              <SelectItem key={f} value={f}>
-                                {f}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {b.fuente === "Ríos" && (
-                        <div>
-                          <Label>Río</Label>
-                          <Select value={b.subFuente || ""} onValueChange={(v) => updateBoleta(idx, { subFuente: v })}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar río" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {riosList.map((r) => (
-                                <SelectItem key={r} value={r}>
-                                  {r}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
-                            Administrar ríos en Catálogo
-                          </button>
-                        </div>
-                      )}
-
-                      {b.fuente === "Tajo" && (
-                        <div>
-                          <Label>Tajo</Label>
-                          <Select value={b.subFuente || ""} onValueChange={(v) => updateBoleta(idx, { subFuente: v })}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar tajo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {tajosList.map((t) => (
-                                <SelectItem key={t} value={t}>
-                                  {t}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button type="button" className="mt-1 text-sm text-blue-600 underline" onClick={onGoToCatalog}>
-                            Administrar tajos en Catálogo
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {(formData.boletas || []).map(renderBoletaCard)}
             </div>
           )}
+
+
 
           {isMaterialFlow && (
             <div className="mt-3 p-3 border rounded-lg bg-gray-50">
               <div className="text-sm font-semibold mb-2">Totales por material</div>
-
               {Object.keys(materialBreakdown).length === 0 ? (
                 <div className="text-sm text-gray-500">Aún sin cantidades.</div>
               ) : (
@@ -1494,29 +1452,6 @@ const isMaterialFlow = useMemo(() => {
             </div>
           )}
 
-          {/* {isMaterialFlow && (
-            <div className="space-y-2">
-              <Label htmlFor="totalCantidadMaterial">Total m³ del día</Label>
-              <div className="flex gap-2 items-center">
-                <Input
-                  id="totalCantidadMaterial"
-                  name="totalCantidadMaterial"
-                  inputMode="numeric"
-                  pattern="\d*"
-                  placeholder="00"
-                  maxLength={4}
-                  value={formData.totalCantidadMaterial ?? ""}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      totalCantidadMaterial: (e.target.value || "").replace(/\D/g, "").slice(0, 4),
-                    }))
-                  }
-                />
-                <span className="text-sm text-muted-foreground">m³</span>
-              </div>
-            </div>
-          )} */}
 
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Enviando..." : "Crear Reporte"}
@@ -1526,3 +1461,4 @@ const isMaterialFlow = useMemo(() => {
     </Card>
   );
 }
+
