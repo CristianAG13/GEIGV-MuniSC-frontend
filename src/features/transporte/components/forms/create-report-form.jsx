@@ -1089,17 +1089,17 @@ function getDynamicFields() {
         ...(formData.estacionDesde || formData.estacionHasta
           ? { estacionDesde: formData.estacionDesde || "", estacionHasta: formData.estacionHasta || "" }
           : {}),
-        placaCarreta: formData.placaCarreta || "",
-        tipoCarga: formData.tipoCarga || "",
-        destino: formData.destino || "",
-        placaMaquinariaLlevada: formData.placaMaquinariaLlevada || "",
-        cantidadLiquido: formData.cantidadLiquido || "",
-        placaCisterna: formData.placaCisterna || "",
-        tipoMaterial: formData.tipoMaterial || "",
-        cantidadMaterial: formData.cantidadMaterial || "",
-        boleta: formData.boleta || "",
-        fuente: formData.fuente || "",
-        subFuente: formData.subFuente || "",
+        placaCarreta: formData.placaCarreta || null,
+        tipoCarga: formData.tipoCarga || null,
+        destino: formData.destino || null,
+        placaMaquinariaLlevada: formData.placaMaquinariaLlevada || null,
+        cantidadLiquido: formData.cantidadLiquido || null,
+        placaCisterna: formData.placaCisterna || null,
+        tipoMaterial: formData.tipoMaterial || null,
+        cantidadMaterial: formData.cantidadMaterial || null,
+        boleta: formData.boleta || null,
+        fuente: formData.fuente || null,
+        subFuente: formData.subFuente || null,
 
         ...(isMat && !isFlatbedMaterial
           ? {
@@ -1107,13 +1107,13 @@ function getDynamicFields() {
                 formData.totalCantidadMaterial === "" ? null : Number(formData.totalCantidadMaterial),
               boletas: Array.isArray(formData.boletas)
                 ? formData.boletas.map(b => ({
-                    boleta: b.boleta || "",
-                    tipoMaterial: b.tipoMaterial || "",
-                    fuente: b.fuente || "",
-                    subFuente: b.subFuente || "",
+                    boleta: b.boleta || null,
+                    tipoMaterial: b.tipoMaterial || null,
+                    fuente: b.fuente || null,
+                    subFuente: b.subFuente || null,
                     m3: b.m3 === "" ? null : Number(b.m3),
-                    distrito: b.distrito || "",
-                    codigoCamino: b.codigoCamino || "",
+                    distrito: b.distrito || null,
+                    codigoCamino: b.codigoCamino || null,
                   }))
                 : [],
             }
@@ -1129,11 +1129,19 @@ function getDynamicFields() {
           : {}),
       };
 
-       let result;
+      // Construir el payload completo
+      const payload = {
+        ...base,
+        detalles,
+      };
+
+      console.log("=== PAYLOAD PARA CARRETA ===", JSON.stringify(payload, null, 2));
+
+      let result;
       if (mode === "edit" && reportId) {
-        result = await machineryService.updateReport(reportId, formData);
+        result = await machineryService.updateReport(reportId, payload);
       } else {
-        result = await machineryService.createReport(formData);
+        result = await machineryService.createReport(payload);
       }
 
       if (result && result.success) {
