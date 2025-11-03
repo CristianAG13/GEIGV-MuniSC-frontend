@@ -336,24 +336,38 @@ export default function Dashboard() {
 
   const handleRoleChange = async (userId, roleName) => {
     try {
+      console.log('=== CAMBIO DE ROL ===');
+      console.log('Usuario ID:', userId);
+      console.log('Rol seleccionado:', roleName);
+      
       // Obtener datos del usuario antes del cambio
       const targetUser = users.find(u => u.id === userId);
       const oldRoles = targetUser?.roles || [];
       
+      console.log('Usuario encontrado:', targetUser);
+      console.log('Roles actuales:', oldRoles);
+      
       if (roleName === '') {
+        console.log('Removiendo todos los roles...');
         await usersService.assignRoles(userId, []);
-        
-     
       } else {
         const role = roles.find(r => r.name === roleName);
+        console.log('Rol encontrado para asignar:', role);
+        
         if (role) {
+          console.log('Asignando rol ID:', role.id);
           await usersService.assignRoles(userId, [role.id]);
-          
+        } else {
+          throw new Error(`No se encontró el rol: ${roleName}`);
         }
       }
+      
+      console.log('Recargando datos...');
       await loadData();
       showSuccess('Rol asignado', 'El rol ha sido asignado exitosamente');
+      console.log('=== FIN CAMBIO DE ROL ===');
     } catch (error) {
+      console.error('Error en handleRoleChange:', error);
       showError('Error al asignar rol', error.message);
     }
   };
