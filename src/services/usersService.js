@@ -29,7 +29,6 @@ class UsersService {
       }, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
           'X-Frontend-Request': 'true'
         },
       });
@@ -63,7 +62,6 @@ class UsersService {
       }, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
           'X-Frontend-Request': 'true'
         },
       });
@@ -80,7 +78,6 @@ class UsersService {
       const response = await apiClient.patch(`/users/${userId}`, userData, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
           'X-Frontend-Request': 'true'
         },
       });
