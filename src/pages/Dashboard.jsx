@@ -145,6 +145,15 @@ export default function Dashboard() {
       ]);
       setUsers(usersData);
       setRoles(rolesData);
+      
+      // Console log para mostrar los roles disponibles
+      console.log('=== ROLES DISPONIBLES EN USUARIOS ===');
+      console.log('Total de roles cargados:', rolesData.length);
+      console.log('Roles detallados:', rolesData);
+      rolesData.forEach((role, index) => {
+        console.log(`${index + 1}. ID: ${role.id}, Nombre: ${role.name}, Descripción: ${role.description || 'N/A'}, Activo: ${role.isActive}`);
+      });
+      console.log('=====================================');
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
