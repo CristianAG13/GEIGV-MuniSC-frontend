@@ -1362,6 +1362,7 @@ export default function Dashboard() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Nombre *
+                {newOperator.userId && <span className="text-xs text-blue-600 ml-2">(Auto-completado)</span>}
               </label>
               <input
                 type="text"
@@ -1369,7 +1370,9 @@ export default function Dashboard() {
                 onChange={(e) =>
                   setNewOperator({ ...newOperator, name: e.target.value })
                 }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  newOperator.userId ? 'bg-blue-50' : ''
+                }`}
                 placeholder="Ingrese el nombre"
               />
             </div>
@@ -1377,6 +1380,7 @@ export default function Dashboard() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Apellido *
+                {newOperator.userId && <span className="text-xs text-blue-600 ml-2">(Auto-completado)</span>}
               </label>
               <input
                 type="text"
@@ -1384,7 +1388,9 @@ export default function Dashboard() {
                 onChange={(e) =>
                   setNewOperator({ ...newOperator, last: e.target.value })
                 }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  newOperator.userId ? 'bg-blue-50' : ''
+                }`}
                 placeholder="Ingrese el apellido"
               />
             </div>
@@ -1425,9 +1431,34 @@ export default function Dashboard() {
               </label>
               <select
                 value={newOperator.userId}
-                onChange={(e) =>
-                  setNewOperator({ ...newOperator, userId: e.target.value })
-                }
+                onChange={(e) => {
+                  const selectedUserId = e.target.value;
+                  const selectedUser = users.find(u => u.id === parseInt(selectedUserId));
+                  
+                  if (selectedUser && selectedUserId) {
+                    console.log('=== AUTO-COMPLETANDO DATOS DEL OPERARIO ===');
+                    console.log('Usuario seleccionado:', selectedUser);
+                    console.log('Nombre auto-completado:', selectedUser.name);
+                    console.log('Apellido auto-completado:', selectedUser.lastname);
+                    
+                    // Auto-llenar nombre y apellido con los datos del usuario
+                    setNewOperator({ 
+                      ...newOperator, 
+                      userId: selectedUserId,
+                      name: selectedUser.name || '',
+                      last: selectedUser.lastname || ''
+                    });
+                  } else {
+                    console.log('=== LIMPIANDO CAMPOS DE OPERARIO ===');
+                    // Si no hay usuario seleccionado, limpiar los campos
+                    setNewOperator({ 
+                      ...newOperator, 
+                      userId: selectedUserId,
+                      name: '',
+                      last: ''
+                    });
+                  }
+                }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="">Sin asociar</option>
@@ -1440,7 +1471,10 @@ export default function Dashboard() {
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Solo se muestran usuarios sin rol o con rol de invitado
+                {newOperator.userId ? 
+                  'Los campos nombre y apellido se llenaron automáticamente' : 
+                  'Solo se muestran usuarios sin rol o con rol de invitado'
+                }
               </p>
             </div>
           </div>
