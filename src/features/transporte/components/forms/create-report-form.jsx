@@ -1118,6 +1118,29 @@ if (needsTrailer && !formData.placaCarreta) {
         }
       }
 
+      // Validaciones específicas para variante CARRETA
+      const isCarretaVariant = (selectedVariant || "").toLowerCase() === "carreta";
+      if (isCarretaVariant) {
+        if (!formData.placaCarreta) {
+          closeLoading();
+          await showError("Placa carreta requerida", "Debe seleccionar la placa de la carreta.");
+          setLoading(false);
+          return;
+        }
+        if (!formData.distrito) {
+          closeLoading();
+          await showError("Distrito requerido", "Debe seleccionar el distrito.");
+          setLoading(false);
+          return;
+        }
+        if (!/^\d{3}$/.test(String(formData.codigoCamino || ""))) {
+          closeLoading();
+          await showError("Código de camino requerido", "Ingrese exactamente 3 dígitos para el código de camino.");
+          setLoading(false);
+          return;
+        }
+      }
+
       const isMat = isMaterialFlow;
 
       const base = {
@@ -1229,9 +1252,20 @@ if (needsTrailer && !formData.placaCarreta) {
         setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
       }
     } catch (err) {
-      console.error("createReport error", err?.response?.data || err);
+      console.error("=== ERROR AL CREAR REPORTE ===");
+      console.error("Error completo:", err);
+      console.error("Response data:", err?.response?.data);
+      console.error("Response status:", err?.response?.status);
+      console.error("Error message:", err?.message);
+      
       closeLoading();
-      await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el reporte.");
+      
+      const errorMsg = err?.response?.data?.message 
+        || err?.response?.data?.error 
+        || err?.message 
+        || "No se pudo guardar el reporte.";
+      
+      await showError("Error al crear", errorMsg);
     } finally {
       setLoading(false);
     }
