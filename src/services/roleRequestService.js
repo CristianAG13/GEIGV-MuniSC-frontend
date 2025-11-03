@@ -89,6 +89,26 @@ class RoleRequestService {
     }
   }
 
+  // Aprobar solicitud de rol de operario con datos adicionales
+  async approveOperatorRequest(requestId, additionalData) {
+    try {
+      const response = await apiClient.patch(`/role-requests/${requestId}/approve-operator`, {
+        additionalData
+      });
+      return {
+        success: true,
+        data: response.data,
+        message: 'Solicitud de operario aprobada exitosamente'
+      };
+    } catch (error) {
+      console.error('Error approving operator request:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Error al aprobar solicitud de operario'
+      };
+    }
+  }
+
   // Rechazar solicitud de rol (admin)
   async rejectRequest(requestId, reason = '') {
     try {
