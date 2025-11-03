@@ -95,6 +95,8 @@ export default function CreateReportForm({
     estacionAvance: null,
   });
 
+  const TODAY = todayLocalISO(); // "YYYY-MM-DD" en zona local
+
   const INITIAL_FORM = {
     operadorId: "",
     maquinariaId: 0,
@@ -496,6 +498,13 @@ const updateBoleta = (idx, patch) => {
   // ====== HANDLERS ======
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
+
+    if (name === "fecha") {
+    const v = toISODateOnly(value || "");
+    const today = TODAY;
+    setFormData((p) => ({ ...p, fecha: v && v > today ? today : v }));
+    return;
+  }
 
     if (name === "codigoCamino") {
       const codigo = onlyDigitsMax(value, 3);
@@ -1206,9 +1215,18 @@ function getDynamicFields() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Fecha</Label>
-              <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleInputChange} required />
-            </div>
+        <Label>Fecha</Label>
+          <Input
+          id="fecha"
+          name="fecha"
+          type="date"
+          value={formData.fecha}
+          max={TODAY}                 // ← bloquea días futuros en el date-picker
+          onChange={handleInputChange}
+          required
+         />
+       </div>
+
           </div>
 
           {/* Tipo / Variante */}
