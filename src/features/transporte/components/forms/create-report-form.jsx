@@ -43,25 +43,6 @@ const splitOrdExt = (total) => {
   return { ord, ext };
 };
 
-// Ventanas de viáticos
-const VIATIC_WINDOWS = {
-  desayuno: { from: 6 * 60,  to: 11 * 60 },
-  almuerzo: { from: 11 * 60, to: 16 * 60 },
-  cena:     { from: 18 * 60, to: 21 * 60 + 1 },
-};
-const overlaps = (aFrom, aTo, bFrom, bTo) => Math.max(aFrom, bFrom) < Math.min(aTo, bTo);
-const computeAllowedMeals = (startHHMM, endHHMM) => {
-  const s = minutesSinceMidnight(startHHMM);
-  const e = minutesSinceMidnight(endHHMM);
-  if (s == null || e == null || e <= s) {
-    return { desayuno: false, almuerzo: false, cena: false };
-  }
-  return {
-    desayuno: overlaps(s, e, VIATIC_WINDOWS.desayuno.from, VIATIC_WINDOWS.desayuno.to),
-    almuerzo: overlaps(s, e, VIATIC_WINDOWS.almuerzo.from, VIATIC_WINDOWS.almuerzo.to),
-    cena:     overlaps(s, e, VIATIC_WINDOWS.cena.from,     VIATIC_WINDOWS.cena.to),
-  };
-};
 
 const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -78,7 +59,16 @@ function getMaterialBreakdownFromForm(boletas = []) {
   return Object.fromEntries(map);
 }
 
-export default function CreateReportForm({ onGoToCatalog }) {
+export default function CreateReportForm({
+  onGoToCatalog,
+  mode = "create",                 // "create" | "edit"
+  reportId = null,                 // id cuando es edición
+  initialValues = null,            // datos prellenados
+  submitLabel,                     // texto del botón si quieres sobrescribir
+  onCancel,                        // callback para cerrar modal
+  onSaved,                         // callback tras guardar (refrescar tabla)
+}) {
+
   const { toast } = useToast();
   const { logCreate } = useAuditLogger();
 
@@ -88,9 +78,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
   const [operatorsList, setOperatorsList] = useState([]);
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
-
-  const [allowedMeals, setAllowedMeals] = useState({ desayuno: false, almuerzo: false, cena: false });
-  const [selectedMeals, setSelectedMeals] = useState([]);
 
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
@@ -123,7 +110,6 @@ export default function CreateReportForm({ onGoToCatalog }) {
     codigoCamino: "",
     kilometraje: "",
     horimetro: "",
-    viaticos: "",
     tipoMaterial: "",
     cantidadMaterial: "",
     fuente: "",
@@ -331,17 +317,28 @@ const getFuenteOptions = useCallback(() => {
   useEffect(() => {
     if (!formData.horaInicio || !formData.horaFin) {
       setFormData((p) => ({ ...p, horasOrd: "", horasExt: "" }));
-      setAllowedMeals({ desayuno: false, almuerzo: false, cena: false });
-      setSelectedMeals([]);
       return;
     }
     const total = computeWorkedHours(formData.horaInicio, formData.horaFin);
     const parts = splitOrdExt(total);
     setFormData((p) => ({ ...p, horasOrd: total ? parts.ord : "", horasExt: total ? parts.ext : "" }));
-    const allowed = computeAllowedMeals(formData.horaInicio, formData.horaFin);
-    setAllowedMeals(allowed);
-    setSelectedMeals((prev) => prev.filter((m) => allowed[m]));
   }, [formData.horaInicio, formData.horaFin]);
+
+
+    // Precargar cuando modo edición
+  useEffect(() => {
+    if (!initialValues) return;
+    // Merge con tus defaults
+    setFormData((p) => ({ ...p, ...initialValues }));
+    // Setear selects derivados
+    if (initialValues.tipoMaquinaria) {
+      setSelectedMachineryType(String(initialValues.tipoMaquinaria));
+    }
+    if (initialValues.variant) {
+      setSelectedVariant(String(initialValues.variant));
+    }
+  }, [initialValues]);
+
 
   // ====== BOLETAS HELPERS ======
   const addBoleta = () => {
@@ -527,7 +524,6 @@ const updateBoleta = (idx, patch) => {
     }
 
     if (name === "kilometraje") return setFormData((p) => ({ ...p, kilometraje: onlyDigitsMax(value, 6) }));
-    if (name === "viaticos") return setFormData((p) => ({ ...p, viaticos: onlyDigitsMax(value, 5) }));
     if (name === "cantidadMaterial") return setFormData((p) => ({ ...p, cantidadMaterial: onlyDigitsMax(value, 2) }));
     if (name === "combustible") return setFormData((p) => ({ ...p, combustible: onlyDigitsMax(value, 2) }));
     if (name === "boleta") return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
@@ -684,7 +680,6 @@ function getDynamicFields() {
   fields = fields.filter((f) => {
     const k = normKey(f);
     if (k === "hora inicio" || k === "hora fin") return false; // horas se renderizan arriba
-    if (k === "viaticos") return false; // viáticos ya se movieron debajo de horas
 
     // En material NORMAL (no 8803) ocultar estos de Campos Específicos (van en Boletas)
     if (matFlow && !isFlatbedMaterial && (k === "distrito" || k === "codigo camino" || k === "fuente")) {
@@ -975,7 +970,10 @@ function getDynamicFields() {
     const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
     const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
 
-    const res = await confirmAction("¿Crear reporte?", "", {
+    const res = await confirmAction(
+      mode === "edit" ? "¿Guardar cambios del reporte?" : "¿Crear reporte?",
+      "",
+      {
       html: `<div style="text-align:left">
         <div><b>Operador:</b> ${operatorName || "—"}</div>
         <div><b>Tipo:</b> ${selectedMachineryType || formData.tipoMaquinaria || "—"}</div>
@@ -1077,7 +1075,6 @@ function getDynamicFields() {
         // En material normal, el global se ignora; en plataforma SM 8803 sí enviamos el global
         codigoCamino: (isMaterialFlow && !isFlatbedMaterial) ? null : (formData.codigoCamino || null),
         distrito: (isMaterialFlow && !isFlatbedMaterial) ? null : (formData.distrito || null),
-        viaticos: formData.viaticos === "" ? null : Number(formData.viaticos),
         tipoActividad: formData.tipoActividad || null,
         horaInicio: formData.horaInicio || null,
         horaFin: formData.horaFin || null,
@@ -1103,7 +1100,6 @@ function getDynamicFields() {
         boleta: formData.boleta || "",
         fuente: formData.fuente || "",
         subFuente: formData.subFuente || "",
-        viaticosSeleccionados: selectedMeals,
 
         ...(isMat && !isFlatbedMaterial
           ? {
@@ -1133,8 +1129,12 @@ function getDynamicFields() {
           : {}),
       };
 
-      const payload = { ...base, detalles };
-      const result = await machineryService.createReport(payload);
+       let result;
+      if (mode === "edit" && reportId) {
+        result = await machineryService.updateReport(reportId, formData);
+      } else {
+        result = await machineryService.createReport(formData);
+      }
 
       if (result && result.success) {
         await logCreate(
@@ -1151,12 +1151,20 @@ function getDynamicFields() {
       return;
      }
 
-      closeLoading();
-      await showSuccess("Reporte guardado", "El reporte ha sido enviado al administrador.");
-      setFormData({ ...INITIAL_FORM, fecha: todayLocalISO() });
-      setSelectedMachineryType("");
-      setSelectedVariant("");
-      setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
+     closeLoading();
+      await showSuccess(
+        mode === "edit" ? "Cambios guardados" : "Reporte guardado",
+        mode === "edit" ? "El reporte fue actualizado correctamente." : "El reporte ha sido enviado al administrador."
+      );
+      if (mode === "edit") {
+        onSaved?.();         // refresca tabla
+        onCancel?.();        // cierra modal
+      } else {
+        setFormData({ ...INITIAL_FORM, fecha: todayLocalISO() });
+        setSelectedMachineryType("");
+        setSelectedVariant("");
+        setLastCounters({ horimetro: null, kilometraje: null, estacionHasta: null, estacionUpdatedAt: null });
+      }
     } catch (err) {
       console.error("createReport error", err?.response?.data || err);
       closeLoading();
@@ -1173,7 +1181,7 @@ function getDynamicFields() {
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>Boleta Municipal</CardTitle>
+        <CardTitle>Boleta municipal</CardTitle>
         <CardDescription>Completa la información del reporte diario de operación</CardDescription>
       </CardHeader>
 
@@ -1312,28 +1320,6 @@ function getDynamicFields() {
             </div>
           </div>
 
-          {/* Viáticos (movido debajo de Horas) */}
-          <div className="space-y-2">
-            <Label>Viáticos (según horario trabajado)</Label>
-            <div className="flex flex-col gap-2 border rounded-md p-3">
-              {["desayuno","almuerzo","cena"].map(meal => (
-                <label className="flex items-center gap-2" key={meal}>
-                  <input
-                    type="checkbox"
-                    checked={selectedMeals.includes(meal)}
-                    disabled={!allowedMeals[meal]}
-                    onChange={(e) => {
-                      setSelectedMeals((prev) =>
-                        e.target.checked ? Array.from(new Set([...prev, meal])) : prev.filter((x) => x !== meal)
-                      );
-                    }}
-                  />
-                  <span className="capitalize">{meal}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           {/* Campos específicos */}
           {selectedMachineryType && (
             <div className="space-y-4">
@@ -1421,9 +1407,47 @@ function getDynamicFields() {
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          {/* <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Enviando..." : "Crear Reporte"}
-          </Button>
+          </Button> */}
+<div className="flex items-center justify-end gap-2 pt-2">
+  {mode === "edit" && (
+    <Button type="button" variant="outline" onClick={onCancel}>
+      Cancelar
+    </Button>
+  )}
+          <Button
+  type="submit"
+  disabled={loading}
+  className={[
+    // centrar y tamaño
+    "flex items-center justify-center ",
+    mode === "edit" ? "" : "mx-auto", 
+    "px-6 py-2.5 min-w-[14rem] w-fit",    // ← un poco más largo
+
+    // tipografía
+    "text-white font-semibold text-sm",
+
+    // borde + halo
+    "border-2 border-green-700",
+    "ring-1 ring-inset ring-green-900/25",
+
+    // color con gradiente (centro más claro)
+    "bg-gradient-to-b from-green-600 to-green-500",
+    "hover:from-green-600 hover:to-green-400",
+
+    // forma/sombra
+    "rounded-lg shadow-md hover:shadow-lg",
+
+    // estados
+    "disabled:opacity-60 disabled:cursor-not-allowed"
+  ].join(" ")}
+>
+  {loading ? "Guardando..." : (submitLabel || (mode === "edit" ? "Guardar cambios" : "Crear reporte"))}
+  </Button>
+</div>
+
+
         </form>
       </CardContent>
     </Card>

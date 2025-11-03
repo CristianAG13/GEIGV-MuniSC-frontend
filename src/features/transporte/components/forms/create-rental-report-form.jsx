@@ -634,7 +634,7 @@ export default function CreateRentalReportForm() {
   return (
     <Card className="w-full max-w-3xl mx-auto">
       <CardHeader>
-        <CardTitle>Boleta de Alquiler</CardTitle>
+        <CardTitle>Boleta de alquiler</CardTitle>
         <CardDescription>Registra el alquiler de maquinaria externa</CardDescription>
       </CardHeader>
 
@@ -774,9 +774,34 @@ export default function CreateRentalReportForm() {
             )}
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Enviando..." : "Crear Boleta de Alquiler"}
-          </Button>
+           <Button
+  type="submit"
+  disabled={loading}
+  className={[
+    // centrar y tamaño
+    "flex items-center justify-center mx-auto",
+    "px-6 py-2.5 min-w-[14rem] w-fit",    // ← un poco más largo
+
+    // tipografía
+    "text-white font-semibold text-sm",
+
+    // borde + halo
+    "border-2 border-green-700",
+    "ring-1 ring-inset ring-green-900/25",
+
+    // color con gradiente (centro más claro)
+    "bg-gradient-to-b from-green-600 to-green-500",
+    "hover:from-green-600 hover:to-green-400",
+
+    // forma/sombra
+    "rounded-lg shadow-md hover:shadow-lg",
+
+    // estados
+    "disabled:opacity-60 disabled:cursor-not-allowed"
+  ].join(" ")}
+>
+     {loading ? "Enviando..." : "Crear reporte"}
+</Button>
         </form>
       </CardContent>
     </Card>

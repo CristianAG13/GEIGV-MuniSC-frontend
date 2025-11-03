@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
-import { Eye, Trash2, Filter as FilterIcon, RefreshCcw, Download } from "lucide-react";
+import { Eye, Trash2, Filter as FilterIcon, RefreshCcw, Download, Edit2} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +86,44 @@ const _numOrUndef = (v) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+// Capitaliza sencillo
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// ¿Es flujo de “material” (vagoneta/cabezal + variante material)?
+const isMaterialFlow = (r) =>
+  ["vagoneta", "cabezal"].includes(String(getType(r))) &&
+  String(getVar(r)) === "material";
+
+// ¿Es plataforma SM 8803? (no muestra boletas)
+const isFlatbed8803 = (r) =>
+  isMaterialFlow(r) &&
+  String((r && r.detalles && r.detalles.placaCarreta) ?? r?.placaCarreta ?? "") === "SM 8803";
+
+
+// Une fuente + subfuente en un solo string bonito
+function fuseFuente(b = {}) {
+  const fuente = String(
+    b?.fuente ??
+    b?.fuenteAgua ??
+    b?.origenAgua ??
+    b?.rio ??
+    ""
+  ).trim();
+
+  const sub = String(
+    b?.subFuente ??
+    b?.subfuente ??
+    b?.subFuenteAgua ??
+    b?.sub_fuente ??
+    ""
+  ).trim();
+
+  if (!fuente && !sub) return "—";
+  if (!sub) return fuente;
+
+  const isRioOTajo = /^r[ií]os?$/i.test(fuente) || /^tajo$/i.test(fuente);
+  return isRioOTajo ? `${fuente} – ${sub}` : `${fuente} / ${sub}`;
+}
 
 // texto compacto para una boleta
 function fmtBoletaCompact(b = {}) {
@@ -144,6 +182,41 @@ function readFuente(r) {
   return f;
 }
 
+function readPlacaCarreta(r) {
+  const d = r?.detalles || {};
+  return (
+    d.placaCarreta ??
+    d?.carreta?.placa ??
+    r?.placaCarreta ??
+    r?.placa_carreta ??
+    d?.placa_carreta ??
+    null
+  );
+}
+
+function readPlacaCisterna(r) {
+  const d = r?.detalles || {};
+  return (
+    // claves “cisterna”
+    d.placaCisterna ??
+    r?.placaCisterna ??
+    d.cisternaPlaca ??           // alias frecuente
+    r?.cisternaPlaca ??          // alias frecuente
+    d?.cisterna?.placa ??
+    r?.placa_cisterna ??
+    d?.placa_cisterna ??
+    // fallbacks (a veces se guarda como carreta)
+    d.placaCarreta ??
+    r?.placaCarreta ??
+    d?.carreta?.placa ??
+    r?.placa_carreta ??
+    d?.placa_carreta ??
+    null
+  );
+}
+
+
+
 /* ---------- Estación helpers ---------- */
 function _readStationPair(r) {
   const d = _first(
@@ -164,6 +237,40 @@ function _readStationPair(r) {
   );
   return { d, h };
 }
+
+// Normaliza strings
+const _norm = (s) => String(s ?? "").trim();
+
+// De boletas -> distritos únicos (o el de nivel superior si existe)
+function getDistritosForSearch(r) {
+  const top = _norm(r?.distrito);
+  const out = new Set();
+  if (top) out.add(top);
+
+  const boletas = getBoletasArr(r) || [];
+  for (const b of boletas) {
+    const d = _norm(b?.distrito ?? b?.district);
+    if (d) out.add(d);
+  }
+  return Array.from(out);
+}
+
+// De boletas -> códigos de camino únicos (o el de nivel superior si existe)
+function getCodigosForSearch(r) {
+  const normDigits = (x) => _norm(x).replace(/\D/g, ""); // solo dígitos
+  const top = normDigits(r?.codigoCamino);
+  const out = new Set();
+  if (top) out.add(top);
+
+  const boletas = getBoletasArr(r) || [];
+  for (const b of boletas) {
+    const raw = b?.codigoCamino ?? b?.codigo ?? b?.codigo_camino;
+    const v = normDigits(raw);
+    if (v) out.add(v);
+  }
+  return Array.from(out);
+}
+
 function _hasStationData(r) {
   const pre = _first(get(r, "estacion"), get(r, "detalles.estacion"));
   if (_hasVal(pre)) return true;
@@ -323,7 +430,6 @@ function flattenMunicipalReport(r) {
     // admin
     Distrito: r.distrito ?? null,
     CodigoCamino: r.codigoCamino ?? null,
-    Viaticos: r.viaticos ?? null,
     Fecha: r.fecha ?? null,
 
     // Estación unificada
@@ -363,8 +469,12 @@ function flattenMunicipalReport(r) {
     );
     flat.PlacaCisterna = read(
       "placaCisterna", "detalles.placaCisterna",
-      "cisternaPlaca", "placa_cisterna", "detalles.placa_cisterna",
-      "detalles.cisterna.placa"
+  "cisternaPlaca", "placa_cisterna", "detalles.placa_cisterna",
+  "detalles.cisterna.placa",
+  // fallbacks de carreta
+  "placaCarreta", "detalles.placaCarreta",
+  "placa_carreta", "detalles.placa_carreta",
+  "detalles.carreta.placa"
     );
   }
 
@@ -502,6 +612,8 @@ const usesStation = (r) => {
   return STATION_TYPES.has(t) || _hasStationData(r);
 };
 
+
+
 /* --------- filas para export --------- */
 function buildMunicipalExportRow(r) {
   const t = getType(r);
@@ -543,7 +655,6 @@ function buildMunicipalExportRow(r) {
     horario,
     showText(r?.distrito),
     showText(r?.codigoCamino),
-    showNum(r?.viaticos),
     fmtDMY(r?.fecha),
   ];
 }
@@ -617,12 +728,48 @@ function materialSummaryStr(breakdown) {
   return entries.length ? entries.map(([k, v]) => `${k}: ${v} m³`).join("\n") : "";
 }
 
+// Caja con el mismo estilo de las tarjetas del modal de VER (JS puro)
+const CardField = ({ label, children }) => (
+  <div className="bg-white border rounded-lg p-3">
+    <div className="text-xs text-gray-500">{label}</div>
+    <div className="mt-1 font-medium break-words">{children}</div>
+  </div>
+);
+
+// --- Tarjeta "KV" con input embebido (idéntica a la de VER, pero editable) ---
+function EditKV({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  disabled = false,
+  step,
+  inputProps = {},
+}) {
+  return (
+    <div className="bg-white border rounded-lg p-3">
+      <div className="text-xs text-gray-500">{label}</div>
+      <Input
+        type={type}
+        value={value ?? ""}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        step={step}
+        {...inputProps}
+      />
+    </div>
+  );
+}
 
 /* ==================== componente principal ==================== */
 export default function ReportsTable({
   municipalReports = [],
   rentalReports = [],
   districts: districtsProp,
+  rows,
+ onEdit,
 }) {
   /* estado base */
   const [rowsMunicipal, setRowsMunicipal] = useState(municipalReports);
@@ -640,6 +787,12 @@ export default function ReportsTable({
   /* ver */
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+
+  /*editar*/ 
+  const [editOpen, setEditOpen] = useState(false);
+const [editingId, setEditingId] = useState(null);
+const [initialValues, setInitialValues] = useState(null);
+const [saving, setSaving] = useState(false);
 
   /* eliminados */
   const [deletedOpen, setDeletedOpen] = useState(false);
@@ -696,16 +849,24 @@ export default function ReportsTable({
         return true;
       });
     }
-    if (isMunicipal) {
-      if (distritoFilter)
-        rows = rows.filter((r) => (r?.distrito || "").trim() === distritoFilter);
-      if (codigoFilter)
-        rows = rows.filter(
-          (r) =>
-            String(r?.codigoCamino ?? "").trim() ===
-            String(codigoFilter).trim()
-        );
-    }
+   if (isMunicipal) {
+  if (distritoFilter) {
+    const target = _norm(distritoFilter);
+    rows = rows.filter((r) => {
+      const list = getDistritosForSearch(r).map(_norm);
+      return list.includes(target);
+    });
+  }
+
+  if (codigoFilter) {
+    const target = String(codigoFilter).replace(/\D/g, "");
+    rows = rows.filter((r) => {
+      const list = getCodigosForSearch(r);
+      return list.includes(target);
+    });
+  }
+}
+
     return rows;
   }, [activeReports, startDate, endDate, distritoFilter, codigoFilter, isMunicipal]);
 
@@ -837,9 +998,17 @@ export default function ReportsTable({
 
     if (VARIANT_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Variante");
     if (STATION_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Estación");
-    if (VARIANT_TYPES.has(t) && (variantFilter || "").toLowerCase() === "cisterna") {
-      insertAfter(cols, "Maquinaria", "Placa cisterna");
-    }
+    // if (VARIANT_TYPES.has(t) && (variantFilter || "").toLowerCase() === "cisterna") {
+    //   insertAfter(cols, "Maquinaria", "Placa cisterna");
+    // }
+
+ if (
+  (t === "cabezal" && (variantFilter || "").toLowerCase() === "cisterna") ||
+  t === "cisterna" // si algún día usas tipo 'cisterna'
+) {
+  insertAfter(cols, "Maquinaria", "Placa cisterna");
+}
+
 
     return cols;
   }, [isMunicipal, typeFilter, variantFilter]);
@@ -865,22 +1034,38 @@ export default function ReportsTable({
         return r?.maquinariaId ?? "—";
 
       case "Placa cisterna":
-        return showText(
-          get(r, "detalles.placaCisterna") ||
-          get(r, "placaCisterna") ||
-          get(r, "detalles.cisterna.placa") ||
-          get(r, "placa_cisterna") ||
-          get(r, "detalles.placa_cisterna")
-        );
+  return showText(
+    // rutas de cisterna
+    get(r, "detalles.placaCisterna") ||
+    get(r, "placaCisterna") ||
+    get(r, "detalles.cisternaPlaca") ||   // 👈 NUEVO
+    get(r, "cisternaPlaca") ||            // 👈 NUEVO
+    get(r, "detalles.cisterna.placa") ||
+    get(r, "placa_cisterna") ||
+    get(r, "detalles.placa_cisterna") ||
+    // fallbacks si el form la guardó como “carreta”
+    get(r, "detalles.placaCarreta") ||
+    get(r, "placaCarreta") ||
+    get(r, "detalles.carreta.placa") ||
+    get(r, "placa_carreta") ||
+    get(r, "detalles.placa_carreta")
+  );
 
       case "Variante":
         return getVar(r) || "—";
       case "Estación":
         return toEstacionTxt(r);
-      case "Distrito":
-        return showText(r?.distrito);
-      case "Código Camino":
-        return showText(r?.codigoCamino);
+
+      case "Distrito": {
+        const list = getDistritosForSearch(r);
+        // si hay varios, muéstralos separados por " · "
+        return list.length ? list.join(" · ") : "—";
+     }
+      case "Código Camino": {
+        const list = getCodigosForSearch(r);
+        return list.length ? list.join(", ") : "—";
+    }
+
       case "Fecha":
         return fmtDMY(r?.fecha);
       default:
@@ -936,6 +1121,24 @@ export default function ReportsTable({
     }
   };
 
+async function handleOpenEdit(id) {
+  try {
+    const rep = await machineryService.getReportById(id);
+
+    // (a) El modal necesita el full para evaluar tipo/variante y mostrar campos condicionales
+    setSelectedRow(rep);
+
+    // (b) Inicializa los inputs ya mapeados
+    setEditingId(id);
+    setInitialValues(mapReportToForm(rep));
+
+    // (c) Abre modal
+    setEditOpen(true);
+  } catch (e) {
+    console.error("GET detalle (editar) ->", e?.response || e);
+    alert("No se pudo abrir el reporte para editar.");
+  }
+}
 
   /* -------- eliminar -------- */
   const askDelete = (row) => {
@@ -963,6 +1166,7 @@ export default function ReportsTable({
     }
   };
 
+
   /* -------- eliminados -------- */
   const openDeleted = async () => {
     try {
@@ -979,6 +1183,77 @@ export default function ReportsTable({
     }
   };
 
+ function mapReportToForm(rep) {
+  const d = (rep && rep.detalles) || {};
+  return {
+    actividad: rep?.tipoActividad ?? rep?.actividad ?? "",
+    horasOrd: rep?.horasOrd ?? rep?.horas_or ?? "",
+    horasExt: rep?.horasExt ?? rep?.horas_ext ?? "",
+    horaInicio: rep?.horaInicio ?? d?.horaInicio ?? "",
+    horaFin: rep?.horaFin ?? d?.horaFin ?? "",
+    fecha: rep?.fecha ?? "",
+    kilometraje: rep?.kilometraje ?? d?.kilometraje ?? "",
+    horimetro:  rep?.horimetro  ?? d?.horimetro  ?? "",
+    diesel:     rep?.diesel     ?? rep?.combustible ?? "",
+    codigoCamino: rep?.codigoCamino ?? "",
+    distrito: rep?.distrito ?? "",
+    estacion: rep?.estacion ?? "",
+    placaCarreta: rep?.placaCarreta ?? d?.placaCarreta ?? "",
+    detalles: d,
+  };
+}
+
+
+async function handleSaveEdit() {
+  if (!editingId || !initialValues) return;
+  try {
+    setSaving(true);
+
+    const toNull = (v) => (v === "" || v === undefined ? null : v);
+
+    const toNumOrNull = (v) => {
+  if (v === "" || v === undefined || v === null) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+
+    // payload parcial: campos comunes y merge seguro de detalles
+     const payload = {
+    tipoActividad: toNull(initialValues.actividad),
+    horasOrd:      toNumOrNull(initialValues.horasOrd),
+    horasExt:      toNumOrNull(initialValues.horasExt),
+    horaInicio:    toNull(initialValues.horaInicio),
+    horaFin:       toNull(initialValues.horaFin),
+    fecha:         toNull(initialValues.fecha),
+
+    // 👇👇 NUEVO
+    kilometraje:   toNumOrNull(initialValues.kilometraje),
+    horimetro:     toNumOrNull(initialValues.horimetro),
+    diesel:        toNumOrNull(initialValues.diesel),
+
+    codigoCamino:  toNull(initialValues.codigoCamino),
+    distrito:      toNull(initialValues.distrito),
+    estacion:      toNull(initialValues.estacion),
+    placaCarreta:  toNull(initialValues.placaCarreta),
+    detalles:      initialValues.detalles || {},
+  };
+
+    const updated = await machineryService.updateReport(editingId, payload);
+
+    // refresca lista municipal en memoria
+    setRowsMunicipal((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+
+    setEditOpen(false);
+    setEditingId(null);
+    setInitialValues(null);
+  } catch (e) {
+    console.error("UPDATE report ->", e?.response || e);
+    alert("No se pudo guardar los cambios.");
+  } finally {
+    setSaving(false);
+  }
+}
+  
   const anyCisternaVar = filtered.some(
     r => (["vagoneta", "cabezal"].includes(getType(r)) && getVar(r) === "cisterna")
   );
@@ -1012,8 +1287,7 @@ export default function ReportsTable({
       TipoActividad: pick(r?.tipoActividad, r?.actividad) ?? "",
       HoraInicio: pick(r?.horaInicio, d?.horaInicio) ?? "",
       HoraFin: pick(r?.horaFin, d?.horaFin) ?? "",
-      Distrito: r?.distrito ?? "",
-      CodigoCamino: r?.codigoCamino ?? "",
+
       Fecha: fmtDMY(r?.fecha),
       Estacion: usesStation(r) ? toEstacionTxt(r) : "",
       PlacaMaquinariaLlevada: d?.placaMaquinariaLlevada ?? r?.placaMaquinariaLlevada ?? "",
@@ -1023,7 +1297,18 @@ export default function ReportsTable({
       BoletaSimple: d?.boleta ?? r?.boleta ?? "",
       Fuente: readFuente(r) ?? "",
       TotalDia_m3: getTotalM3(r) ?? "",
+      Distrito: getDistritosForSearch(r).join(" · ") || "",
+      CodigoCamino: getCodigosForSearch(r).join(", ") || "",
+
     };
+
+    // Para material en cabezal/vagoneta: si existe placa de carreta, expórtala
+if ((t === "vagoneta" || t === "cabezal") && v === "material") {
+  const placaCarretaMat = readPlacaCarreta(r);
+  if (placaCarretaMat) {
+    flat.PlacaCarreta = placaCarretaMat;
+  }
+}
 
     // ==== Material: decidir entre columnas clásicas VS resumen por material ====
     const isMaterialVar = (t === "vagoneta" || t === "cabezal") && v === "material";
@@ -1075,17 +1360,38 @@ export default function ReportsTable({
     }
 
     // Cisterna (tipo o variante)
-    const isCisternaTipo = t === "cisterna";
-    const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
-    if (isCisternaTipo || isCisternaVar) {
-      flat.CantidadAgua_m3 = d?.cantidadLiquido ?? r?.cantidadLiquido ?? d?.cantidad_agua ?? r?.cantidad_agua ?? "";
-      flat.Fuente = flat.Fuente || readFuente(r) || "";
-      flat.PlacaCisterna = d?.placaCisterna ?? r?.placaCisterna ?? d?.cisterna?.placa ?? r?.placa_cisterna ?? d?.placa_cisterna ?? "";
-    }
+  // Cisterna (solo mostrar placa cuando es cabezal + variante cisterna)
+const isCisternaTipo = t === "cisterna";
+const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
+
+// Cantidad y fuente sí las seteamos para ambos casos (tipo o variante)
+if (isCisternaTipo || isCisternaVar) {
+  flat.CantidadAgua_m3 =
+    d?.cantidadLiquido ?? r?.cantidadLiquido ??
+    d?.cantidad_agua ?? r?.cantidad_agua ?? "";
+  flat.Fuente = flat.Fuente || readFuente(r) || "";
+}
+
+// 🚩Placa cisterna: SOLO cuando es cabezal + variante cisterna
+if (t === "cabezal" && v === "cisterna") {
+  const placaCis = (
+    d?.placaCisterna ?? r?.placaCisterna ??
+    d?.cisternaPlaca ?? r?.cisternaPlaca ??   // por si vino con este alias
+    d?.cisterna?.placa ??
+    r?.placa_cisterna ?? d?.placa_cisterna ??
+    // fallbacks si el form la guardó como “carreta”
+    d?.placaCarreta ?? r?.placaCarreta ??
+    d?.carreta?.placa ?? r?.placa_carreta ?? d?.placa_carreta ??
+    null
+  );
+  flat.PlacaCisterna = placaCis ?? "";
+}
+
 
     return flat;
   }
 
+  
   function buildFlatRowRental(r) {
     const operadorTxt = r?.operador
       ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
@@ -1159,101 +1465,112 @@ export default function ReportsTable({
   };
 
 
- const exportPDF = () => {
-  // 1) Aplana reportes
-  let rows = isMunicipal
-    ? filtered.map(buildFlatRowMunicipal)
-    : filtered.map(buildFlatRowRental);
+  const exportPDF = () => {
+    // 1) Aplana reportes
+    let rows = isMunicipal
+      ? filtered.map(buildFlatRowMunicipal)
+      : filtered.map(buildFlatRowRental);
 
-  // 2) Normalización global de boletas (idéntico a Excel)
-  const maxBoletas = rows.reduce((m, r) => {
-    const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
-    return Math.max(m, n);
-  }, 0);
+      console.log(
+  "Debug PDF PlacaCisterna:",
+  rows.map(r => ({ id: r.ID, tipo: r.TipoMaquinaria, var: r.Variante, placa: r.PlacaCisterna }))
+);
 
-  if (maxBoletas > 0) {
-    rows = rows.map(r => {
-      const { Boletas, ...rest } = r; // quita "Boletas"
-      return rest;
-    });
-  } else {
-    rows = rows.map(r => {
-      const clean = { ...r };
-      Object.keys(clean).forEach(k => {
-        if (/^Boleta \d+$/.test(k)) delete clean[k];
+console.log(
+  rows
+    .filter(r => r.TipoMaquinaria === "cabezal" && r.Variante === "cisterna")
+    .map(r => ({ id: r.ID, placa: r.PlacaCisterna, fuente: r.Fuente, cantidad: r.CantidadAgua_m3 }))
+);
+
+    // 2) Normalización global de boletas (idéntico a Excel)
+    const maxBoletas = rows.reduce((m, r) => {
+      const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
+      return Math.max(m, n);
+    }, 0);
+
+    if (maxBoletas > 0) {
+      rows = rows.map(r => {
+        const { Boletas, ...rest } = r; // quita "Boletas"
+        return rest;
       });
-      return clean;
-    });
-  }
+    } else {
+      rows = rows.map(r => {
+        const clean = { ...r };
+        Object.keys(clean).forEach(k => {
+          if (/^Boleta \d+$/.test(k)) delete clean[k];
+        });
+        return clean;
+      });
+    }
 
-  // 3) Headers visibles y prune de columnas 100% vacías
-  let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
-  headers = pruneEmptyColumns(rows, headers);
+    // 3) Headers visibles y prune de columnas 100% vacías
+    let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+    headers = pruneEmptyColumns(rows, headers);
 
-  // Ocultar columnas clásicas de material (siempre)
-  headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
+    // Ocultar columnas clásicas de material (siempre)
+    headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
 
-  // 4) Helpers
-  const toHTML = (v) => (isEmptyVal(v) ? "—" : String(v).replace(/\n/g, "<br>"));
-  const headerAbs = new URL(HEADER_URL , window.location.origin).toString();
-  const footerAbs = new URL(FOOTER_URL , window.location.origin).toString();
+    // 4) Helpers
+    const toHTML = (v) => (isEmptyVal(v) ? "—" : String(v).replace(/\n/g, "<br>"));
+    const headerAbs = new URL(HEADER_URL, window.location.origin).toString();
+    const footerAbs = new URL(FOOTER_URL, window.location.origin).toString();
 
-  // 5) CSS (defínelo ANTES de usarlo en el HTML)
-// === 1) Configurables ===
-const ROWS_PER_PAGE = 9; // ← filas por página
+    // 5) CSS (defínelo ANTES de usarlo en el HTML)
+    // === 1) Configurables ===
+    const ROWS_PER_PAGE = 9; // ← filas por página
 
-// Anchuras por columna (usa los headers BONITOS)
-const COL_WIDTHS = {
-  "Tipo": "54px",
-  "ID": "30px",
-  "Operador": "70px",
-  "Maquinaria": "70px",
-  "Tipo Maquinaria": "75px",
-  "Variante": "50px",
-  "Kilometraje": "64px",
-  "Horímetro": "50px",
-  "Diesel": "42px",
-  "Horas Ord": "46px",
-  "Horas Ext": "46px",
-  "Tipo Actividad": "98px",
-  "Hora Inicio": "55px",
-  "Hora Fin": "46px",
-  "Distrito": "65px",
-  "Código Camino": "55px",
-  "Codigo Camino": "48px", // por si llega sin tilde
-  "Fecha": "65px",
-  "Total Dia m³": "40px",
-  "Materiales m³": "83px",
-  "Placa cisterna": "86px",
-  "Boleta 1": "88px",
-  "Boleta 2": "88px",
-  "Boleta 3": "88px",
-  "Boleta 4": "88px",
-  "Boleta 5": "88px",
-  "Cantidad Agua m³": "100px",   // ← dale aire a esta columna
-  "Fuente": "80",
-        // ← opcional: un poco más ancha
-  "Estacion": "50",
-  "Horimetro": "60",
+    // Anchuras por columna (usa los headers BONITOS)
+    const COL_WIDTHS = {
+      "Tipo": "54px",
+      "ID": "30px",
+      "Operador": "70px",
+      "Maquinaria": "70px",
+      "Tipo Maquinaria": "75px",
+      "Variante": "50px",
+      "Kilometraje": "64px",
+      "Horímetro": "50px",
+      "Diesel": "42px",
+      "Horas Ord": "46px",
+      "Horas Ext": "46px",
+      "Tipo Actividad": "98px",
+      "Hora Inicio": "55px",
+      "Hora Fin": "46px",
+      "Distrito": "65px",
+      "Código Camino": "55px",
+      "Codigo Camino": "48px", // por si llega sin tilde
+      "Fecha": "65px",
+      "Total Dia m³": "40px",
+      "Materiales m³": "83px",
+      "Placa cisterna": "86px",
+      "Boleta 1": "88px",
+      "Boleta 2": "88px",
+      "Boleta 3": "88px",
+      "Boleta 4": "88px",
+      "Boleta 5": "88px",
+      "Cantidad Agua m³": "100px",   // ← dale aire a esta columna
+      "Fuente": "80px",
+      // ← opcional: un poco más ancha
+      "Estacion": "50px",
+      "Horimetro": "60px",
 
-  "Placa Cisterna": "80",
-  "Placa Carreta": "60",
-  "Placa Maquinaria Llevada": "65",
-  "Tipo Carga": "60",
-  "Destino": "60"
-
-  
-};
+      "Placa Cisterna": "80px",
+      "Placa Carreta": "60px",
+      "Placa Maquinaria Llevada": "65px",
+      "Tipo Carga": "60px",
+      "Destino": "60px"
 
 
-const NUMERIC_COLS = new Set([
-  "ID","Kilometraje","Horímetro","Horimetro","Diesel",
-  "Horas Ord","Horas Ext","Código Camino","Codigo Camino",
-  "Fecha","Total Día m³","Total Dia m³"
-]);
+    };
 
-// Crea el colgroup usando los anchos configurados
-const colgroup = `
+
+    const NUMERIC_COLS = new Set([
+      "ID", "Kilometraje", "Horímetro", "Horimetro", "Diesel",
+      "Horas Ord", "Horas Ext", "Código Camino", "Codigo Camino",
+      "Fecha", "Total Día m³", "Total Dia m³"
+    ]);
+
+    // Crea el colgroup usando los anchos configurados
+    const colgroup = `
   <colgroup>
     ${headers.map(h => {
       // si usas pretty(h), puedes mirar COL_WIDTHS[pretty(h)]
@@ -1265,8 +1582,8 @@ const colgroup = `
 `;
 
 
-// ======================= CSS (reemplaza tu const head) =======================
-const head = `
+    // ======================= CSS (reemplaza tu const head) =======================
+    const head = `
 <style>
   :root{
     --footer-h: 30px;
@@ -1335,21 +1652,20 @@ const head = `
 }
 </style>`;
 
-// ======================= Construcción de headers =======================
-// OJO: 'headers' aquí son tus claves RAW (sin pretty). Creamos dos arrays:
-const headersRaw = headers.slice();              // para leer datos
-const headersPretty = headersRaw.map(h => pretty(h)); // para mostrar y medir ancho
+    // ======================= Construcción de headers =======================
+    // OJO: 'headers' aquí son tus claves RAW (sin pretty). Creamos dos arrays:
+    const headersRaw = headers.slice();              // para leer datos
+    const headersPretty = headersRaw.map(h => pretty(h)); // para mostrar y medir ancho
 
-// colgroup por header BONITO (así aplican tus anchos)
-const colgroupHTML = `<colgroup>${
-  headersPretty.map(hNice => {
-    const w = COL_WIDTHS[hNice] || "auto";
-    return `<col style="width:${w}">`;
-  }).join("")
-}</colgroup>`;
+    // colgroup por header BONITO (así aplican tus anchos)
+    const colgroupHTML = `<colgroup>${headersPretty.map(hNice => {
+      const w = COL_WIDTHS[hNice] || "auto";
+      return `<col style="width:${w}">`;
+    }).join("")
+      }</colgroup>`;
 
-// THEAD: texto bonito, y clase numérica según el bonito
-const thead = `
+    // THEAD: texto bonito, y clase numérica según el bonito
+    const thead = `
   <tr class="logo-row">
     <td colspan="${headersRaw.length}">
       <div class="logo-wrap"><img src="${headerAbs}" alt="Header"></div>
@@ -1363,30 +1679,29 @@ const thead = `
     }).join("")}
   </tr>`;
 
-// ======================= TBODY: usa tus 'rows' aplanados =======================
-// (ANTES lo había puesto sobre 'filtered' por error)
-const tbody = (() => {
-  const out = [];
-  rows.forEach((rowObj, idx) => {
-    out.push(
-      `<tr>${
-        headersRaw.map((hRaw, i) => {
-          const v = isEmptyVal(rowObj[hRaw]) ? "" : toHTML(rowObj[hRaw]);
-          const hNice = headersPretty[i];
-          const cls = NUMERIC_COLS.has(hNice) || NUMERIC_COLS.has(hRaw) ? ' class="num"' : '';
-          return `<td${cls}>${v}</td>`;
-        }).join("")
-      }</tr>`
-    );
-    if ((idx + 1) % ROWS_PER_PAGE === 0) {
-      out.push(`<tr class="break-row"><td colspan="${headersRaw.length}"></td></tr>`);
-    }
-  });
-  return out.join("");
-})();
+    // ======================= TBODY: usa tus 'rows' aplanados =======================
+    // (ANTES lo había puesto sobre 'filtered' por error)
+    const tbody = (() => {
+      const out = [];
+      rows.forEach((rowObj, idx) => {
+        out.push(
+          `<tr>${headersRaw.map((hRaw, i) => {
+            const v = isEmptyVal(rowObj[hRaw]) ? "" : toHTML(rowObj[hRaw]);
+            const hNice = headersPretty[i];
+            const cls = NUMERIC_COLS.has(hNice) || NUMERIC_COLS.has(hRaw) ? ' class="num"' : '';
+            return `<td${cls}>${v}</td>`;
+          }).join("")
+          }</tr>`
+        );
+        if ((idx + 1) % ROWS_PER_PAGE === 0) {
+          out.push(`<tr class="break-row"><td colspan="${headersRaw.length}"></td></tr>`);
+        }
+      });
+      return out.join("");
+    })();
 
-// ======================= HTML final =======================
-const html = `
+    // ======================= HTML final =======================
+    const html = `
 <html>
   <head>${head}</head>
   <body>
@@ -1402,19 +1717,20 @@ const html = `
 </html>`;
 
 
-  // 8) Abrir/Imprimir
-  const win = window.open("", "_blank");
-  if (!win) { alert("Bloqueado por el navegador. Habilita pop-ups para exportar."); return; }
-  win.document.open(); win.document.write(html); win.document.close();
+    // 8) Abrir/Imprimir
+    const win = window.open("", "_blank");
+    if (!win) { alert("Bloqueado por el navegador. Habilita pop-ups para exportar."); return; }
+    win.document.open(); win.document.write(html); win.document.close();
 
-  const waitImages = () =>
-    Promise.all(Array.from(win.document.images).map(img => new Promise(res => {
-      if (img.complete) return res(); img.onload = res; img.onerror = res;
-    })));
+    const waitImages = () =>
+      Promise.all(Array.from(win.document.images).map(img => new Promise(res => {
+        if (img.complete) return res(); img.onload = res; img.onerror = res;
+      })));
 
-  waitImages().then(() => { win.focus(); win.print(); });
-  win.onafterprint = () => { try { win.close(); } catch {} };
-};
+    waitImages().then(() => { win.focus(); win.print(); });
+    win.onafterprint = () => { try { win.close(); } catch { } };
+    
+  };
 
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -1515,14 +1831,14 @@ const html = `
                 className="bg-green-500 hover:bg-green-600 text-white whitespace-nowrap"
                 onClick={exportExcel}
               >
-              <Download className="w-4 h-4" />
-                 Excel
+                <Download className="w-4 h-4" />
+                Excel
               </Button>
               <Button
                 className="bg-red-500 hover:bg-red-600 text-white whitespace-nowrap"
                 onClick={exportPDF}
               >
-              <Download className="w-4 h-4" />
+                <Download className="w-4 h-4" />
                 PDF
               </Button>
               <Button
@@ -1809,6 +2125,14 @@ const html = `
                     >
                       <Eye size={18} />
                     </button>
+<button
+  className="p-2 rounded hover:bg-blue-50 text-blue-800"
+  title="Editar reporte"
+  onClick={() => handleOpenEdit(r.id)}   // <- antes decía row.id
+>
+  <Edit2 className="w-4 h-4" />
+</button>
+
                     <button
                       type="button"
                       onClick={() => askDelete(r)}
@@ -1874,157 +2198,207 @@ const html = `
           </DialogHeader>
 
           {selectedRow &&
-  (() => {
-    const r = selectedRow;
-    const t = getType(r);
-    const v = getVar(r);
-    const d = r.detalles || {};
-    const kmType = isKmType(t);
+            (() => {
+              const r = selectedRow;
+              const t = getType(r);
+              const v = getVar(r);
+              const d = r.detalles || {};
+              const kmType = isKmType(t);
 
-    // banderas
-    const showVariante = t === "vagoneta" || t === "cabezal";
-    const showEstacion = STATION_TYPES.has(t) || _hasStationData(r);
+              // banderas
+              const showVariante = t === "vagoneta" || t === "cabezal";
+              const showEstacion = STATION_TYPES.has(t) || _hasStationData(r);
 
-    // fuente si cisterna (tipo/variante)
-    const fuenteTxt =
-      t === "cisterna" || ((t === "vagoneta" || t === "cabezal") && v === "cisterna")
-        ? readFuente(r)
-        : null;
+              // fuente si cisterna (tipo/variante)
+              const fuenteTxt =
+                t === "cisterna" || ((t === "vagoneta" || t === "cabezal") && v === "cisterna")
+                  ? readFuente(r)
+                  : null;
 
-    const KV = ({ label, value }) => (
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">{label}</div>
-        <div className="font-medium break-words">{value || value === 0 ? value : "—"}</div>
-      </div>
-    );
+              const KV = ({ label, value }) => (
+                <div className="bg-white border rounded-lg p-3">
+                  <div className="text-xs text-gray-500">{label}</div>
+                  <div className="font-medium break-words">{value || value === 0 ? value : "—"}</div>
+                </div>
+              );
 
-    const base = [
-      {
-        label: "Operador",
-        value: r?.operador
-          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
-          : r?.operadorId,
-      },
-      {
-        label: "Maquinaria",
-        value: r?.maquinaria
-          ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
-          : r?.maquinariaId,
-      },
-      {
-        label: kmType ? "Kilometraje" : "Horímetro",
-        value: kmType ? (r?.kilometraje ?? d?.kilometraje) : (r?.horimetro ?? d?.horimetro),
-      },
-      { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
-      {
-        label: "Horario",
-        value: (() => {
-          const ini = r?.horaInicio ?? d?.horaInicio;
-          const fin = r?.horaFin ?? d?.horaFin;
-          return ini || fin ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
-        })(),
-      },
-      { label: "Diésel", value: r?.diesel ?? r?.combustible },
-      {
-        label: "Horas (Ord/Ext)",
-        value:
-          (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
-          (r?.horasExt ?? r?.horas_ext ?? null) !== null
-            ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${r?.horasExt ?? r?.horas_ext ?? "—"}`
-            : null,
-      },
-      { label: "Distrito", value: r?.distrito },
-      { label: "Código Camino", value: r?.codigoCamino },
-      { label: "Viáticos", value: r?.viaticos },
-      { label: "Fecha", value: fmtDMY(r?.fecha) },
-    ];
+              // justo antes de armar el array `base` o inmediatamente después:
+            let addedFuente = false;
+            const pushFuente = (v) => {
+           if (addedFuente) return;
+          if (v !== null && v !== undefined && String(v).trim() !== "") {
+          base.push({ label: "Fuente", value: v });
+           addedFuente = true;
+         }
+       };
 
-    if (fuenteTxt !== null) base.push({ label: "Fuente", value: fuenteTxt });
-    if (showVariante) base.push({ label: "Variante", value: v || null });
-    if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
+              const base = [
+                {
+                  label: "Operador",
+                  value: r?.operador
+                    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
+                    : r?.operadorId,
+                },
+                {
+                  label: "Maquinaria",
+                  value: r?.maquinaria
+                    ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
+                    : r?.maquinariaId,
+                },
+                {
+                  label: kmType ? "Kilometraje" : "Horímetro",
+                  value: kmType ? (r?.kilometraje ?? d?.kilometraje) : (r?.horimetro ?? d?.horimetro),
+                },
+                { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
+                {
+                  label: "Horario",
+                  value: (() => {
+                    const ini = r?.horaInicio ?? d?.horaInicio;
+                    const fin = r?.horaFin ?? d?.horaFin;
+                    return ini || fin ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
+                  })(),
+                },
+                { label: "Diésel", value: r?.diesel ?? r?.combustible },
+                {
+                  label: "Horas (Ord/Ext)",
+                  value:
+                    (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
+                      (r?.horasExt ?? r?.horas_ext ?? null) !== null
+                      ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${r?.horasExt ?? r?.horas_ext ?? "—"}`
+                      : null,
+                },
+                { label: "Distrito", value: r?.distrito },
+                { label: "Código Camino", value: r?.codigoCamino },
+                { label: "Fecha", value: fmtDMY(r?.fecha) },
+              ];
 
-    // helper de lectura múltiple
-    const read = (...paths) => {
-      for (const p of paths) {
-        const val = get(r, p);
-        if (val !== undefined && val !== null && String(val) !== "") return val;
-      }
-      return null;
-    };
+              
+              if (showVariante) base.push({ label: "Variante", value: v || null });
+              if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
 
-    // placa maquinaria llevada
-    const placaMaqLlevada = read(
-      "placaMaquinariaLlevada",
-      "detalles.placaMaquinariaLlevada",
-      "placa_maquinaria_llevada",
-      "detalles.placa_maquinaria_llevada"
-    );
-    if (placaMaqLlevada) base.push({ label: "Placa maq. llevada", value: placaMaqLlevada });
+              // helper de lectura múltiple
+              const read = (...paths) => {
+                for (const p of paths) {
+                  const val = get(r, p);
+                  if (val !== undefined && val !== null && String(val) !== "") return val;
+                }
+                return null;
+              };
 
-    // carreta
-    if ((t === "vagoneta" || t === "cabezal") && v === "carreta") {
-      base.push({ label: "Placa carreta", value: read("placaCarreta","detalles.placaCarreta","placa_carreta","detalles.placa_carreta") ?? "—" });
-      base.push({ label: "Tipo de carga", value: read("tipoCarga","detalles.tipoCarga","tipo_carga","detalles.tipo_carga") ?? "—" });
-      base.push({ label: "Destino", value: read("destino","detalles.destino","destino_carga","detalles.destino_carga") ?? "—" });
-    }
+              // placa maquinaria llevada
+              const placaMaqLlevada = read(
+                "placaMaquinariaLlevada",
+                "detalles.placaMaquinariaLlevada",
+                "placa_maquinaria_llevada",
+                "detalles.placa_maquinaria_llevada"
+              );
+              if (placaMaqLlevada) base.push({ label: "Placa maq. llevada", value: placaMaqLlevada });
 
-    // cisterna (tipo/variante)
-    const isCisternaTipo = t === "cisterna";
-    const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
-    if (isCisternaTipo || isCisternaVar) {
-      const cantidadAgua = read(
-        "cantidadLiquido","detalles.cantidadLiquido",
-        "cantidad_agua","detalles.cantidad_agua",
-        "detalles.cisterna.cantidad","detalles.cisterna.cantidadLiquido"
-      );
-      const fuenteAgua =
-        readFuente(r) ??
-        read("detalles.cisterna.fuenteAgua","fuenteAgua","detalles.fuenteAgua");
-      const placaCisterna = read(
-        "placaCisterna","detalles.placaCisterna",
-        "placa_cisterna","detalles.placa_cisterna",
-        "detalles.cisterna.placa"
-      );
-      base.push({ label: "Cantidad agua (m³)", value: cantidadAgua ?? "—" });
-      base.push({ label: "Fuente", value: fuenteAgua ?? "—" });
-      if (placaCisterna) base.push({ label: "Placa cisterna", value: placaCisterna });
-    }
+              // carreta
+              if ((t === "vagoneta" || t === "cabezal") && v === "carreta") {
+                base.push({ label: "Placa carreta", value: read("placaCarreta", "detalles.placaCarreta", "placa_carreta", "detalles.placa_carreta") ?? "—" });
+                base.push({ label: "Tipo de carga", value: read("tipoCarga", "detalles.tipoCarga", "tipo_carga", "detalles.tipo_carga") ?? "—" });
+                base.push({ label: "Destino", value: read("destino", "detalles.destino", "destino_carga", "detalles.destino_carga") ?? "—" });
+              }
 
-    // material (campos simples)
-    if ((t === "vagoneta" || t === "cabezal") && v === "material") {
-      const tipoMaterial = read("tipoMaterial","detalles.tipoMaterial");
-      const cantidadMaterial = read("cantidadMaterial","detalles.cantidadMaterial");
-      const boletaSimple = read("boleta","detalles.boleta");
-      if (tipoMaterial) base.push({ label: "Tipo material", value: tipoMaterial });
-      if (cantidadMaterial) base.push({ label: "Cantidad (m³)", value: cantidadMaterial });
-      if (boletaSimple) base.push({ label: "Boleta", value: boletaSimple });
-      const fuenteMaterial = readFuente(r);
-      if (fuenteMaterial) base.push({ label: "Fuente", value: fuenteMaterial });
-    }
+              // cabezal/vagoneta con variante material -> también mostrar placa de carreta si existe
+             if ((t === "vagoneta" || t === "cabezal") && v === "material") {
+             const placaCarretaMat = readPlacaCarreta(r);
+             if (placaCarretaMat) {
+             base.push({ label: "Placa carreta", value: placaCarretaMat });
+            }
+           } 
 
-    // helpers boletas/tabla
-    const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
-    const showBoletas = showVariante && v === "material";
-    const fmtFuente = (b = {}) =>
-      isRioOTajo(b?.fuente) ? `${b.fuente}${b?.subFuente ? ` – ${b.subFuente}` : ""}` : (b?.fuente || "—");
+               // dentro del bloque cisterna del modal VER
+if (t === "cabezal" && v === "cisterna" && placaCisterna) {
+  base.push({ label: "Placa cisterna", value: placaCisterna });
+}
 
-    // 👇 claves que te faltaban:
-    const boletas = getBoletasArr(r);
-    const totalM3 = getTotalM3(r);
+              // cisterna (tipo/variante)
+              const isCisternaTipo = t === "cisterna";
+              const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
+              if (isCisternaTipo || isCisternaVar) {
+                const cantidadAgua = read(
+                  "cantidadLiquido", "detalles.cantidadLiquido",
+                  "cantidad_agua", "detalles.cantidad_agua",
+                  "detalles.cisterna.cantidad", "detalles.cisterna.cantidadLiquido"
+                );
+                const fuenteAgua =
+                  readFuente(r) ??
+                  read("detalles.cisterna.fuenteAgua", "fuenteAgua", "detalles.fuenteAgua");
+                const placaCisterna = read(
+                  "placaCisterna", "detalles.placaCisterna",
+                 "placa_cisterna", "detalles.placa_cisterna",
+                "detalles.cisterna.placa",
+                 // fallbacks de carreta
+                 "placaCarreta", "detalles.placaCarreta",
+                 "placa_carreta", "detalles.placa_carreta",
+                 "detalles.carreta.placa"
+                );
+                base.push({ label: "Cantidad agua (m³)", value: cantidadAgua ?? "—" });
+                // ✅ ahora (solo si hay valor y evitando duplicados)
+                pushFuente(fuenteAgua);
 
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {base.map((k, i) => (
-            <KV key={`b-${i}`} {...k} />
-          ))}
-        </div>
+                if (placaCisterna) base.push({ label: "Placa cisterna", value: placaCisterna });
+              }
 
-        {showBoletas && (
-          <div className="border rounded-lg p-3">
-            <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
+              // --- al final del armado de `base`, justo antes del return del modal ---
+              const isMaterialVar =
+                (t === "vagoneta" || t === "cabezal") && v === "material";
 
-            {/* total del día
+              // helper local por si no lo tienes aquí
+              const hasVal = (x) => x !== undefined && x !== null && String(x).trim() !== "";
+
+              // por defecto: elimina tarjetas totalmente vacías (excepto si el valor es 0)
+              let baseFiltered = base.filter(k => hasVal(k.value) || k.value === 0);
+
+              // regla especial para vagoneta/cabezal variante 'material':
+              if (isMaterialVar) {
+                baseFiltered = baseFiltered.filter(k => {
+                  // quita siempre Distrito y Código Camino (ya van en boletas)
+                  if (k.label === "Distrito") return false;
+                  if (k.label === "Código Camino") return false;
+
+                  return true;
+                });
+              }
+
+              // material (campos simples)
+              if ((t === "vagoneta" || t === "cabezal") && v === "material") {
+                const tipoMaterial = read("tipoMaterial", "detalles.tipoMaterial");
+                const cantidadMaterial = read("cantidadMaterial", "detalles.cantidadMaterial");
+                const boletaSimple = read("boleta", "detalles.boleta");
+                if (tipoMaterial) base.push({ label: "Tipo material", value: tipoMaterial });
+                if (cantidadMaterial) base.push({ label: "Cantidad (m³)", value: cantidadMaterial });
+                if (boletaSimple) base.push({ label: "Boleta", value: boletaSimple });
+                // ✅ ahora
+                pushFuente(readFuente(r));
+              }
+
+              // helpers boletas/tabla
+              const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
+              const showBoletas = showVariante && v === "material" && !isFlatbed8803(r);
+              const fmtFuente = (b = {}) =>
+                isRioOTajo(b?.fuente) ? `${b.fuente}${b?.subFuente ? ` – ${b.subFuente}` : ""}` : (b?.fuente || "—");
+
+              // 👇 claves que te faltaban:
+              const boletas = getBoletasArr(r);
+              const totalM3 = getTotalM3(r);
+
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {baseFiltered.map((k, i) => (
+                      <KV key={`b-${i}`} {...k} />
+                    ))}
+                  </div>
+
+
+                  {showBoletas && (
+                    <div className="border rounded-lg p-3">
+                      <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
+
+                      {/* total del día
             <div className="mb-3">
               <div className="bg-white border rounded-lg p-3">
                 <div className="text-xs text-gray-500">
@@ -2034,8 +2408,357 @@ const html = `
               </div>
             </div> */}
 
-            {/* tabla de boletas */}
-            {Array.isArray(boletas) && boletas.length > 0 ? (
+                      {/* tabla de boletas */}
+                      {Array.isArray(boletas) && boletas.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-3 py-2">#</th>
+                                <th className="text-left px-3 py-2">Tipo material</th>
+                                <th className="text-left px-3 py-2">Fuente / Sub-fuente</th>
+                                <th className="text-left px-3 py-2">m³</th>
+                                <th className="text-left px-3 py-2">Distrito</th>
+                                <th className="text-left px-3 py-2">Código Camino</th>
+                                <th className="text-left px-3 py-2">Boleta</th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {boletas.map((b, i) => {
+                                // intenta leer m3 desde varias claves
+                                const m3 = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen ?? "";
+                                const distrito = b?.distrito ?? b?.Distrito ?? "";
+                                const codigo = b?.codigoCamino ?? b?.CodigoCamino ?? b?.codigo_camino ?? "";
+
+                                return (
+                                  <tr key={i} className="border-t">
+                                    <td className="px-3 py-2">{i + 1}</td>
+                                    <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
+                                    <td className="px-3 py-2">{fuseFuente(b)}</td> {/* 👈 aquí va combinada */}
+                                    <td className="px-3 py-2">{showNum(m3)}</td>
+                                    <td className="px-3 py-2">{showText(distrito)}</td>
+                                    <td className="px-3 py-2">{showText(codigo)}</td>
+                                    <td className="px-3 py-2">{showText(b?.boleta)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+
+
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-500">Sin boletas registradas.</div>
+                      )}
+
+                      {/* totales por material */}
+                      {(() => {
+                        const breakdown = getMaterialBreakdown(r);
+                        const entries = Object.entries(breakdown);
+                        if (!entries.length) return null;
+                        const total = entries.reduce((acc, [, v]) => acc + Number(v || 0), 0);
+                        return (
+                          <div className="mt-3 p-3 border rounded-lg bg-gray-50">
+                            <div className="text-sm font-semibold mb-2">Totales por material</div>
+                            {entries.map(([mat, qty]) => (
+                              <div key={mat} className="flex justify-between text-sm py-0.5">
+                                <span>{mat}</span>
+                                <span>{qty} m³</span>
+                              </div>
+                            ))}
+                            <div className="border-t mt-2 pt-2 flex justify-between text-sm font-medium">
+                              <span>Total m³</span>
+                              <span>{total} m³</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Plataforma SM 8803: no hay boletas; lista materiales transportados */}
+                  {isFlatbed8803(r) && (
+                    <div className="mt-4 space-y-2">
+
+                      {/* En 8803, distrito y código vienen del root del reporte */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border rounded-lg p-3">
+                          <div className="text-xs text-gray-500">Distrito</div>
+                          <div className="font-medium">{r?.distrito || "—"}</div>
+                        </div>
+                        <div className="bg-white border rounded-lg p-3">
+                          <div className="text-xs text-gray-500">Código Camino</div>
+                          <div className="font-medium">{r?.codigoCamino || "—"}</div>
+                        </div>
+                      </div>
+                      <br />
+                      <div className="text-sm font-semibold">Material(es) transportados</div>
+                      <div className="border rounded-md p-3">
+                        <div className="text-sm">
+                          {(r?.detalles?.plataforma?.materiales || []).length
+                            ? r.detalles.plataforma.materiales.join(", ")
+                            : "—"}
+                        </div>
+                        {r?.detalles?.plataforma?.materiales?.includes("Otros") && (
+                          <div className="mt-2 text-sm">
+                            <span className="text-muted-foreground">Detalle (Otros): </span>
+                            <span className="font-medium">
+                              {r?.detalles?.plataforma?.materialesOtros || "—"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              );
+            })()}
+
+        </DialogContent>
+      </Dialog>
+      
+
+{/* ===== Modal EDITAR ===== */}
+<Dialog open={editOpen} onOpenChange={setEditOpen}>
+  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Editar reporte {editingId ? `#${editingId}` : ""}</DialogTitle>
+      <DialogDescription>Modifica los campos necesarios.</DialogDescription>
+    </DialogHeader>
+
+    {initialValues && (() => {
+      const r = selectedRow || {};
+      const t = getType(r);
+      const v = getVar(r);
+
+      const isCarretaVar  = (t === "vagoneta" || t === "cabezal") && v === "carreta";
+      const isMaterialVar = (t === "vagoneta" || t === "cabezal") && v === "material";
+      const isCisterna    = t === "cisterna" || ((t === "vagoneta" || t === "cabezal") && v === "cisterna");
+      const showStation   = STATION_TYPES.has(t) || _hasStationData(r);
+
+      const setIV  = (patch) => setInitialValues((prev) => ({ ...prev, ...patch }));
+      const setDet = (patch) =>
+        setInitialValues((prev) => ({ ...prev, detalles: { ...(prev?.detalles || {}), ...patch }}));
+      const numberOrBlank = (x) => (x === null || x === undefined ? "" : x);
+
+      // Tarjeta idéntica a VER
+const FieldBox = ({ label, children, className = "" }) => (
+  <div className={`bg-white border rounded-lg p-3 ${className}`}>
+    <div className="text-xs text-gray-500">{label}</div>
+    <div className="mt-1">{children}</div>
+  </div>
+);
+
+// Input plano (sin bordes propios, usa el borde del FieldBox)
+const flatInputClass =
+  "h-8 w-full border-none bg-transparent shadow-none px-0 focus-visible:ring-0 focus:outline-none";
+
+// Input para celdas de tabla (boletas), liso
+const cellInputClass =
+  "h-8 w-full text-sm px-2 border border-gray-300 rounded-md shadow-none focus-visible:ring-1 focus-visible:ring-blue-500";
+
+
+      // Colección de boletas editable
+      const boletas = Array.isArray(initialValues?.detalles?.boletas)
+        ? initialValues.detalles.boletas
+        : [];
+
+      const updateBoleta = (idx, key, val) => {
+        setDet({ boletas: boletas.map((b, i) => (i === idx ? { ...b, [key]: val } : b)) });
+      };
+      const addBoleta = () =>
+        setDet({ boletas: [...boletas, { boleta:"", tipoMaterial:"", fuente:"", subFuente:"", m3:"", distrito:"", codigoCamino:"" }] });
+      const removeBoleta = (idx) => setDet({ boletas: boletas.filter((_, i) => i !== idx) });
+
+      return (
+        <div className="space-y-5">
+          {/* ====== Cabecera con el mismo layout que VER ====== */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <FieldBox label="Operador">
+              {r?.operador
+                ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
+                : r?.operadorId || "—"}
+            </FieldBox>
+
+            <FieldBox label="Maquinaria">
+              {r?.maquinaria
+                ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
+                : r?.maquinariaId || "—"}
+            </FieldBox>
+
+            <FieldBox label={isKmType(t) ? "Kilometraje" : "Horímetro"}>
+              <Input
+                type="number"
+                step="0.01"
+                value={isKmType(t) ? numberOrBlank(initialValues?.kilometraje ?? initialValues?.detalles?.kilometraje) : numberOrBlank(initialValues?.horimetro ?? initialValues?.detalles?.horimetro)}
+                onChange={(e) => {
+                  if (isKmType(t)) setIV({ kilometraje: e.target.value });
+                  else setIV({ horimetro: e.target.value });
+                }}
+                className={flatInputClass}
+              />
+            </FieldBox>
+
+            <FieldBox label="Tipo actividad">
+              <Input
+                value={initialValues.actividad || ""}
+                onChange={(e) => setIV({ actividad: e.target.value })}
+                className={flatInputClass}
+              />
+            </FieldBox>
+
+            {/* Horario en una sola tarjeta (inicio – fin) */}
+            <FieldBox label="Horario">
+  <div className="flex items-center gap-3">
+    <Input
+      type="time"
+      className={`${flatInputClass} w-[120px]`}
+      value={initialValues.horaInicio || ""}
+      onChange={(e) => setIV({ horaInicio: e.target.value })}
+    />
+    <span className="text-gray-400">–</span>
+    <Input
+      type="time"
+      className={`${flatInputClass} w-[120px]`}
+      value={initialValues.horaFin || ""}
+      onChange={(e) => setIV({ horaFin: e.target.value })}
+    />
+  </div>
+</FieldBox>
+
+
+            {/* Diésel solo para maquinaria de carretera (no excavadora, etc.) */}
+{(t === "vagoneta" || t === "cabezal" || t === "cisterna") && (
+  <FieldBox label="Diésel">
+    <Input
+      type="number"
+      step="0.01"
+      value={numberOrBlank(initialValues?.diesel ?? initialValues?.combustible)}
+      onChange={(e) => setIV({ diesel: e.target.value })}
+      className="h-9 w-28"
+    />
+  </FieldBox>
+)}
+
+
+            <FieldBox label="Horas (Ord/Ext)">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={numberOrBlank(initialValues.horasOrd)}
+                  onChange={(e) => setIV({ horasOrd: e.target.value })}
+                  className={flatInputClass}
+                />
+                <span className="text-gray-400">/</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={numberOrBlank(initialValues.horasExt)}
+                  onChange={(e) => setIV({ horasExt: e.target.value })}
+                  className={flatInputClass}
+                />
+              </div>
+            </FieldBox>
+
+            <FieldBox label="Fecha">
+              <Input value={initialValues.fecha || ""} disabled className={flatInputClass} />
+            </FieldBox>
+
+            {/* Variante solo aplica a vagoneta/cabezal */}
+            {(t === "vagoneta" || t === "cabezal") && ( <FieldBox label="Variante">{getVar(r) || "—"}</FieldBox>)}
+
+            {/* Estación cuando aplique */}
+            {showStation && (
+              <FieldBox label="Estación (N+M)">
+                <Input
+                  value={initialValues.estacion || ""}
+                  onChange={(e) => setIV({ estacion: e.target.value })}
+                  className={flatInputClass}
+                  placeholder="Ej: 12+500"
+                />
+              </FieldBox>
+            )}
+
+            {/* Código & Distrito: sólo si NO es variante material */}
+            {!isMaterialVar && (
+              <>
+                <FieldBox label="Código Camino">
+                  <Input
+                    value={initialValues.codigoCamino || ""}
+                    onChange={(e) => setIV({ codigoCamino: e.target.value.replace(/\D/g, "").slice(0, 3) })}
+                    className={flatInputClass}
+                    placeholder="3 dígitos"
+                  />
+                </FieldBox>
+                <FieldBox label="Distrito">
+                  <Input
+                    value={initialValues.distrito || ""}
+                    onChange={(e) => setIV({ distrito: e.target.value })}
+                    className={flatInputClass}
+                  />
+                </FieldBox>
+              </>
+            )}
+
+            {/* Placa Carreta arriba: solo si la variante es carreta */}
+            {isCarretaVar && (
+              <FieldBox label="Placa carreta" className="md:col-span-2">
+                <Input
+                  value={initialValues.placaCarreta || ""}
+                  onChange={(e) => setIV({ placaCarreta: e.target.value })}
+                  className={flatInputClass}
+                  placeholder="Opcional"
+                />
+              </FieldBox>
+            )}
+
+            {/* Cisterna: cantidad/fuente/placa (si aplica) */}
+  {isCisterna && (
+  <Field label="Cisterna" className="md:col-span-2">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <Input
+        type="number"
+        step="0.01"
+        className="h-9"
+        placeholder="Cantidad agua (m³)"
+        value={numberOrBlank(initialValues?.detalles?.cantidadLiquido)}
+        onChange={(e) => setDet({ cantidadLiquido: e.target.value })}
+      />
+      <Input
+        className="h-9"
+        placeholder="Fuente (Ríos / Tajo / …)"
+        value={initialValues?.detalles?.fuente || ""}
+        onChange={(e) => setDet({ fuente: e.target.value })}
+      />
+      {/* 👇 Solo para Cabezales con variante 'cisterna' */}
+      {(t === "cabezal" && v === "cisterna") && (
+        <Input
+          className="h-9"
+          placeholder="Placa cisterna"
+          value={
+            initialValues?.detalles?.placaCisterna ||
+            initialValues?.detalles?.cisternaPlaca || ""
+          }
+          onChange={(e) => setDet({ placaCisterna: e.target.value })}
+        />
+      )}
+    </div>
+  </Field>
+)}
+
+          </div>
+
+          {/* ====== Boletas (tabla PLANA, sin cards) ====== */}
+          {isMaterialVar && !isFlatbed8803(r) && (
+            <div className="border rounded-lg">
+              <div className="flex items-center justify-between px-3 py-2">
+                <div className="text-sm font-semibold">Detalles de Boleta</div>
+                <Button variant="secondary" onClick={addBoleta}>Agregar boleta</Button>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -2043,55 +2766,111 @@ const html = `
                       <th className="text-left px-3 py-2">#</th>
                       <th className="text-left px-3 py-2">Tipo material</th>
                       <th className="text-left px-3 py-2">Fuente</th>
+                      <th className="text-left px-3 py-2">Sub-fuente</th>
+                      <th className="text-left px-3 py-2">m³</th>
+                      <th className="text-left px-3 py-2">Distrito</th>
+                      <th className="text-left px-3 py-2">Código Camino</th>
                       <th className="text-left px-3 py-2">Boleta</th>
+                      <th className="text-right px-3 py-2">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {boletas.length === 0 && (
+                      <tr>
+                        <td className="px-3 py-4 text-gray-500" colSpan={9}>Sin boletas.</td>
+                      </tr>
+                    )}
                     {boletas.map((b, i) => (
                       <tr key={i} className="border-t">
                         <td className="px-3 py-2">{i + 1}</td>
-                        <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
-                        <td className="px-3 py-2">{fmtFuente(b)}</td>
-                        <td className="px-3 py-2">{showText(b?.boleta)}</td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            value={b?.tipoMaterial || ""}
+                            onChange={(e) => updateBoleta(i, "tipoMaterial", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            value={b?.fuente || ""}
+                            onChange={(e) => updateBoleta(i, "fuente", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            
+                            value={b?.subFuente || ""}
+                            onChange={(e) => updateBoleta(i, "subFuente", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className={flatInputClass}
+                            
+                            value={numberOrBlank(b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen)}
+                            onChange={(e) => updateBoleta(i, "m3", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            
+                            value={b?.distrito || b?.District || ""}
+                            onChange={(e) => updateBoleta(i, "distrito", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            
+                            value={b?.codigoCamino || b?.codigo || b?.codigo_camino || ""}
+                            onChange={(e) => updateBoleta(i, "codigoCamino", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className={flatInputClass}
+                            
+                            value={b?.boleta || ""}
+                            onChange={(e) => updateBoleta(i, "boleta", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button variant="secondary" onClick={() => removeBoleta(i)}>Quitar</Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <div className="text-sm text-gray-500">Sin boletas registradas.</div>
-            )}
+            </div>
+          )}
 
-            {/* totales por material */}
-            {(() => {
-              const breakdown = getMaterialBreakdown(r);
-              const entries = Object.entries(breakdown);
-              if (!entries.length) return null;
-              const total = entries.reduce((acc, [, v]) => acc + Number(v || 0), 0);
-              return (
-                <div className="mt-3 p-3 border rounded-lg bg-gray-50">
-                  <div className="text-sm font-semibold mb-2">Totales por material</div>
-                  {entries.map(([mat, qty]) => (
-                    <div key={mat} className="flex justify-between text-sm py-0.5">
-                      <span>{mat}</span>
-                      <span>{qty} m³</span>
-                    </div>
-                  ))}
-                  <div className="border-t mt-2 pt-2 flex justify-between text-sm font-medium">
-                    <span>Total m³</span>
-                    <span>{total} m³</span>
-                  </div>
-                </div>
-              );
-            })()}
+          {/* Acciones */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => { setEditOpen(false); setEditingId(null); setInitialValues(null); }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={saving}
+              onClick={handleSaveEdit}
+            >
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </Button>
           </div>
-        )}
-      </div>
-    );
-  })()}
-
-        </DialogContent>
-      </Dialog>
+        </div>
+      );
+    })()}
+  </DialogContent>
+</Dialog>
 
       {/* Confirmar eliminación */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

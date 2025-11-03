@@ -2,7 +2,7 @@
 // src/features/machinery/machineryFields.js
 
 export const machineryFields = {
-  vagoneta: {
+  Vagoneta: {
     variantes: {
       material: [
         "Tipo actividad",
@@ -16,7 +16,6 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
       ],
       cisterna: [
         "Tipo actividad",
@@ -28,7 +27,6 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
       ],
       carreta: [
         "Tipo actividad",
@@ -42,7 +40,6 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
       ],
     },
     placas: [
@@ -60,7 +57,7 @@ export const machineryFields = {
     ],
   },
 
-  cisterna: {
+  Cisterna: {
     campos: [
       "Tipo actividad",
       "Cantidad liquido",
@@ -71,12 +68,11 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 7842", "SM 8553"],
   },
 
-  cabezal: {
+  Cabezal: {
     variantes: {
       material: [
         "Tipo actividad",
@@ -90,7 +86,6 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
         "Placa carreta",
       ],
       cisterna: [
@@ -103,7 +98,6 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
         "Placa carreta",
       ],
       carreta: [
@@ -119,13 +113,12 @@ export const machineryFields = {
         "Litros diesel",
         "Hora inicio",
         "Hora fin",
-        "Viaticos",
       ],
     },
     placas: ["SM 7843", "SM 8772"],
   },
 
-  excavadora: {
+  Excavadora: {
     campos: [
       "Tipo actividad",
       "Estación",
@@ -135,12 +128,11 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 8423"],
   },
 
-  niveladora: {
+  Niveladora: {
     campos: [
       "Tipo actividad",
       "Estación",
@@ -150,12 +142,11 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 8462", "SM 8684"],
   },
 
-  compactadora: {
+  Compactadora: {
     campos: [
       "Tipo actividad",
       "Estación",
@@ -165,12 +156,11 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 5256", "SM 8434"],
   },
 
-  backhoe: {
+  Backhoe: {
     campos: [
       "Tipo actividad",
       "Estación",
@@ -180,12 +170,11 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 4509", "SM 7724", "SM 8425"],
   },
 
-  cargador: {
+  Cargador: {
     campos: [
       "Tipo actividad",
       "Tipo carga",
@@ -196,7 +185,6 @@ export const machineryFields = {
       "Litros diesel",
       "Hora inicio",
       "Hora fin",
-      "Viaticos",
     ],
     placas: ["SM 2954"],
   },
