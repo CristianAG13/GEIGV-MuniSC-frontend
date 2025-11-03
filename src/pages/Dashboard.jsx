@@ -45,7 +45,10 @@ export default function Dashboard() {
     name: '',
     lastname: '',
     email: '',
-    password: ''
+    password: '',
+    isOperator: false,
+    identification: '',
+    phoneNumber: ''
   });
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
@@ -181,7 +184,10 @@ export default function Dashboard() {
       name: '',
       lastname: '',
       email: '',
-      password: ''
+      password: '',
+      isOperator: false,
+      identification: '',
+      phoneNumber: ''
     });
     setShowCreateModal(true);
   };
@@ -207,15 +213,49 @@ export default function Dashboard() {
         password: newUser.password,
       });
 
+      // Si se marcó como operario, crear automáticamente la solicitud de rol
+      if (newUser.isOperator) {
+        try {
+          // Preparar datos adicionales del operario si se proporcionaron
+          const additionalData = {};
+          if (newUser.identification.trim()) {
+            additionalData.identification = newUser.identification.trim();
+          }
+          if (newUser.phoneNumber.trim()) {
+            additionalData.phoneNumber = newUser.phoneNumber.trim();
+          }
+
+          const roleResponse = await roleRequestService.createRoleRequestForUser(
+            createdUser.id, 
+            'operario', 
+            'Usuario creado como operario por administrador',
+            Object.keys(additionalData).length > 0 ? additionalData : null
+          );
+          
+          if (roleResponse.success) {
+            showSuccess('Usuario y solicitud creados', 'El usuario ha sido creado y se ha enviado automáticamente una solicitud de rol de operario');
+          } else {
+            showSuccess('Usuario creado parcialmente', 'El usuario ha sido creado pero no se pudo enviar la solicitud de rol automáticamente. Puede crear la solicitud manualmente.');
+          }
+        } catch (error) {
+          console.error('Error creating role request:', error);
+          showSuccess('Usuario creado parcialmente', 'El usuario ha sido creado pero no se pudo enviar la solicitud de rol automáticamente. Puede crear la solicitud manualmente.');
+        }
+      } else {
+        showSuccess('Usuario creado', 'El usuario ha sido creado exitosamente');
+      }
+
       await loadData();
       setShowCreateModal(false);
       setNewUser({
         name: '',
         lastname: '',
         email: '',
-        password: ''
+        password: '',
+        isOperator: false,
+        identification: '',
+        phoneNumber: ''
       });
-      showSuccess('Usuario creado', 'El usuario ha sido creado exitosamente');
     } catch (error) {
       showError('Error al crear usuario', error.message);
     }
@@ -1231,6 +1271,70 @@ export default function Dashboard() {
                 placeholder="Mínimo 6 caracteres"
               />
             </div>
+
+            {/* Opción para crear como operario */}
+            <div className="border-t border-gray-200 pt-4">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={newUser.isOperator}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, isOperator: e.target.checked })
+                  }
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Crear como operario (solicitar rol automáticamente)
+                </span>
+              </label>
+              {newUser.isOperator && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Se enviará automáticamente una solicitud de rol de operario para este usuario
+                </p>
+              )}
+            </div>
+
+            {/* Campos adicionales para operario */}
+            {newUser.isOperator && (
+              <div className="space-y-4 border border-blue-200 rounded-lg p-4 bg-blue-50">
+                <p className="text-sm font-medium text-blue-800 mb-2">
+                  Datos adicionales del operario (opcional)
+                </p>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número de Identificación
+                  </label>
+                  <input
+                    type="text"
+                    value={newUser.identification}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, identification: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ej: 12345678"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si no se proporciona, se solicitará durante la aprobación del rol
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Teléfono
+                  </label>
+                  <input
+                    type="text"
+                    value={newUser.phoneNumber}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, phoneNumber: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ej: 12345678"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 mt-6">

@@ -205,6 +205,37 @@ class RoleRequestService {
       };
     }
   }
+
+  // Crear solicitud de rol para un usuario específico (función administrativa)
+  async createRoleRequestForUser(userId, roleName, justification = '', additionalData = null) {
+    try {
+      const payload = {
+        userId,
+        requestedRole: roleName.toLowerCase(),
+        justification,
+        additionalData: additionalData || undefined
+      };
+      
+      console.log('RoleRequestService - creando solicitud para usuario:', payload);
+      
+      const response = await apiClient.post('/role-requests/admin-create', payload);
+      
+      console.log('Response del backend:', response.data);
+      
+      return {
+        success: true,
+        data: response.data,
+        message: 'Solicitud de rol creada exitosamente para el usuario'
+      };
+    } catch (error) {
+      console.error('Error creating role request for user:', error);
+      console.error('Error response:', error.response?.data);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Error al crear solicitud de rol para el usuario'
+      };
+    }
+  }
 }
 
 export default new RoleRequestService();
