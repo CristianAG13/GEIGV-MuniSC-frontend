@@ -41,7 +41,15 @@ export default function TrailersAdmin() {
       const data = await trailersService.list(listParams);
       setRows(Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : []);
     } catch (e) {
-      await showError("No se pudo cargar Carretas");
+      console.error("Error cargando carretas:", e);
+      console.error("Params:", listParams);
+      console.error("Response:", e?.response?.data);
+      
+      // No mostrar error en este caso, solo dejar la tabla vacía
+      setRows([]);
+      
+      // Opcional: mostrar un toast informativo en lugar de error
+      // await showError("No se pudo cargar el catálogo", "El servidor está teniendo problemas. Intente más tarde.");
     } finally {
       setLoading(false);
     }
@@ -201,7 +209,25 @@ export default function TrailersAdmin() {
                 );
               })}
               {rows.length===0 && (
-                <tr><td className="py-4 text-center text-gray-500" colSpan={5}>{loading?'Cargando…':'Sin registros'}</td></tr>
+                <tr>
+                  <td className="py-8 text-center text-gray-500" colSpan={5}>
+                    {loading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+                        <span>Cargando catálogo...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="font-medium">No hay carretas registradas</p>
+                        <p className="text-xs text-gray-400">
+                          {tm === 'cabezal' && categoria === 'material' 
+                            ? `Tipo: ${materialTipo}` 
+                            : `${tm} / ${categoria}`}
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
