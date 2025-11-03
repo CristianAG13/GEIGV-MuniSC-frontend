@@ -111,10 +111,6 @@ class MachineryService {
       horaInicio: formData.horaInicio ?? dIn.horaInicio ?? null,
       horaFin: formData.horaFin ?? dIn.horaFin ?? null,
 
-      // NUEVO: viáticos seleccionados (["desayuno","almuerzo","cena"])
-      viaticosSeleccionados: Array.isArray(formData.viaticosSeleccionados)
-        ? formData.viaticosSeleccionados
-        : dIn.viaticosSeleccionados ?? [],
     };
 
     // merge: preserva cualquier cosa que ya viniera en detalles
@@ -137,7 +133,6 @@ class MachineryService {
       diesel: toNumOrNull(formData.combustible ?? formData.diesel),
       horasOrd: toNumOrNull(formData.horasOrd),
       horasExt: toNumOrNull(formData.horasExt),
-      viaticos: toNumOrNull(formData.viaticos),
 
       estacion:
         normalizeEstacion(formData.estacion ?? formData.estacionStr) ??

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   LogOut, User, Users, Menu, X, Plus, Edit, Trash2,
   Home, MapPin, CheckCircle, Clock, UserCheck, Loader,
-  FileText, Truck, BarChart3, Settings, UserPlus, HardHat,
+  FileText, Truck, BarChart3, Settings, UserPlus, HardHat,Shield,
   AlertCircle, Send
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -494,14 +494,13 @@ export default function Dashboard() {
           <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-blue-600 pl-3">
             Gestión de Equipamiento y Personal
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 items-stretch">
             {/* Maquinaria */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Gestión Principal</p>
-                  <p className="text-lg font-semibold text-gray-900 mt-1">Vehículos y Maquinaria</p>
-                  <p className="text-sm text-gray-500 mt-2">Control de flota vehicular municipal</p>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">Gestión de maquinarias</p>
+                  <p className="text-sm text-gray-500 mt-2">Control de flota de maquinarias municipales</p>
                   <button 
                     onClick={() => setActiveSection('transporte')}
                     className="mt-4 px-4 py-2 bg-santa-cruz-blue-600 text-white rounded-lg hover:bg-santa-cruz-blue-700 transition-colors text-sm inline-flex items-center"
@@ -520,7 +519,6 @@ export default function Dashboard() {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Recursos Humanos</p>
                   <p className="text-lg font-semibold text-gray-900 mt-1">Operadores</p>
                   <p className="text-sm text-gray-500 mt-2">Gestión de operadores de maquinaria</p>
                   <button 
@@ -534,52 +532,6 @@ export default function Dashboard() {
                 <div className="p-3 bg-santa-cruz-green-100 rounded-full">
                   <HardHat className="w-8 h-8 text-santa-cruz-green-600" />
                 </div>
-              </div>
-            </div>
-
-            {/* Proyectos Cuadrilla */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Proyectos</p>
-                  <p className="text-lg font-semibold text-gray-900 mt-1">Cuadrillas y Obras</p>
-                  <p className="text-sm text-gray-500 mt-2">Gestión de proyectos de infraestructura</p>
-                  <button 
-                    onClick={() => setActiveSection('proyectos-cuadrilla')}
-                    className="mt-4 px-4 py-2 bg-santa-cruz-gold-600 text-white rounded-lg hover:bg-santa-cruz-gold-700 transition-colors text-sm inline-flex items-center"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Acceder
-                  </button>
-                </div>
-                <div className="p-3 bg-santa-cruz-gold-100 rounded-full">
-                  <FileText className="w-8 h-8 text-santa-cruz-gold-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sistema de Análisis y Reportes */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-green-600 pl-3">
-            Análisis y Reportes
-          </h3>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold text-gray-900">Estadísticas y Reportes</p>
-                <p className="text-sm text-gray-500 mt-2">Informes de gestión, rendimiento y análisis de operaciones</p>
-                <button 
-                  onClick={() => setActiveSection('reportes')}
-                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
-                >
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  Ver Reportes
-                </button>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <BarChart3 className="w-10 h-10 text-purple-600" />
               </div>
             </div>
           </div>
@@ -632,6 +584,31 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+         {/* Sistema de Análisis y Reportes */}
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-green-600 pl-3">
+            Análisis del sistema 
+          </h3>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-semibold text-gray-900">Gestión de auditoría</p>
+                <p className="text-sm text-gray-500 mt-2">Informes de gestión del sistema en general</p>
+                <button 
+                  onClick={() => setActiveSection('auditoria')}
+                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Acceder
+                </button>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-full">
+                <Shield className="w-10 h-10 text-purple-600" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -791,22 +768,7 @@ export default function Dashboard() {
         return <TransporteModule />;
       case 'operadores':
         return <OperadoresModule />;
-      case 'proyectos-cuadrilla':
-        return (
-          <div className="text-center py-12">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Proyectos Cuadrilla Manual</h2>
-            <p className="text-gray-600">Módulo en desarrollo - Gestión de proyectos con personal manual</p>
-          </div>
-        );
-      case 'reportes':
-        return (
-          <div className="text-center py-12">
-            <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Reportes</h2>
-            <p className="text-gray-600">Módulo en desarrollo - Generación de reportes y estadísticas</p>
-          </div>
-        );
+    
       case 'configuracion':
         return <SweetAlertDemo />;
       case 'auditoria':
@@ -1069,17 +1031,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-      {/* Botón para refrescar el menú */}
-      <button
-        onClick={() => {
-          clearNavigationCache();
-          window.location.reload();
-        }}
-        className="w-full flex items-center gap-3 px-3 py-2.5 mb-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all group"
-      >
-        <AlertCircle className="w-5 h-5" />
-        <span>Actualizar Menú</span>
-      </button>
 
       {/* Botón para cerrar sesión */}
       <button

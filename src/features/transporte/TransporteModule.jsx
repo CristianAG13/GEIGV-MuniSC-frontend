@@ -64,51 +64,111 @@ export function TransporteModule() {
       </h2>
 
       <div className="flex flex-wrap gap-2 border-b mb-6">
-        <button
-          onClick={() => setActiveTab("maquinaria")}
-          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-            activeTab === "maquinaria"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-          }`}
-        >
+       <button
+  onClick={() => setActiveTab("maquinaria")}
+  className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
+    border-2  /* <-- borde visible */
+    ${
+      activeTab === "maquinaria"
+        ? [
+            "text-white",
+            "border-blue-800",                           // borde más fuerte
+            "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
+            "shadow-md",
+            "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
+            "hover:from-blue-700 hover:to-blue-400"
+          ].join(" ")
+        : [
+            "text-gray-600",
+            "border-transparent",
+            "hover:text-blue-700",
+            "hover:bg-blue-50",
+            "hover:border-blue-300"
+          ].join(" ")
+    }`}
+>
           <FileText className="w-4 h-4" />
-          Boleta Municipal
+          Boleta municipal
         </button>
 
-        <button
-          onClick={() => setActiveTab("alquiler")}
-          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-            activeTab === "alquiler"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-          }`}
-        >
+       <button
+  onClick={() => setActiveTab("alquiler")}
+  className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
+    border-2  /* <-- borde visible */
+    ${
+      activeTab === "alquiler"
+        ? [
+            "text-white",
+            "border-blue-800",                           // borde más fuerte
+            "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
+            "shadow-md",
+            "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
+            "hover:from-blue-700 hover:to-blue-400"
+          ].join(" ")
+        : [
+            "text-gray-600",
+            "border-transparent",
+            "hover:text-blue-700",
+            "hover:bg-blue-50",
+            "hover:border-blue-300"
+          ].join(" ")
+    }`}
+>
           <Receipt className="w-4 h-4" /> {/* 👈 usa FileText para evitar crashes */}
-          Boleta Alquiler
+          Boleta alquiler
         </button>
 
-        <button
-          onClick={() => setActiveTab("reportes")}
-          className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-            activeTab === "reportes"
-              ? "bg-blue-600 text-white shadow-md"
-              : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-          }`}
-        >
+       <button
+  onClick={() => setActiveTab("reportes")}
+  className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
+    border-2  /* <-- borde visible */
+    ${
+      activeTab === "reportes"
+        ? [
+            "text-white",
+            "border-blue-800",                           // borde más fuerte
+            "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
+            "shadow-md",
+            "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
+            "hover:from-blue-700 hover:to-blue-400"
+          ].join(" ")
+        : [
+            "text-gray-600",
+            "border-transparent",
+            "hover:text-blue-700",
+            "hover:bg-blue-50",
+            "hover:border-blue-300"
+          ].join(" ")
+    }`}
+>
           <ClipboardList className="w-4 h-4" />
           Reportes
         </button>
 
         {hasRole(["superadmin", "ingeniero", "inspector"]) && (
           <button
-            onClick={() => setActiveTab("catalogo")}
-            className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-              activeTab === "catalogo"
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-gray-600 hover:text-blue-600 hover:bg-gray-100"
-            }`}
-          >
+  onClick={() => setActiveTab("catalogo")}
+  className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
+    border-2  /* <-- borde visible */
+    ${
+      activeTab === "catalogo"
+        ? [
+            "text-white",
+            "border-blue-800",                           // borde más fuerte
+            "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
+            "shadow-md",
+            "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
+            "hover:from-blue-700 hover:to-blue-400"
+          ].join(" ")
+        : [
+            "text-gray-600",
+            "border-transparent",
+            "hover:text-blue-700",
+            "hover:bg-blue-50",
+            "hover:border-blue-300"
+          ].join(" ")
+    }`}
+>
             <Wrench className="w-4 h-4" />
             Catálogo
           </button>
