@@ -79,7 +79,8 @@ const RoleRequestsManagement = () => {
     // Obtener los detalles de la solicitud para verificar si es de operario
     const request = requests.find(req => req.id === requestId);
     
-    if (typeof request?.requestedRole === 'string' && request.requestedRole.toLowerCase() === 'operario') {
+    const requestedRoleName = getRequestedRoleName(request).toLowerCase();
+    if (requestedRoleName === 'operario') {
       // Si es una solicitud de operario, mostrar el modal para datos adicionales
       setSelectedRequest(request);
       setShowOperatorModal(true);
@@ -206,6 +207,16 @@ const RoleRequestsManagement = () => {
       default:
         return 'Desconocido';
     }
+  };
+
+  // Normalizar el nombre del rol solicitado (el backend puede devolver un string o un objeto)
+  const getRequestedRoleName = (request) => {
+    if (!request) return '';
+    const rr = request.requestedRole ?? request.role ?? null;
+    if (!rr) return '';
+    if (typeof rr === 'string') return rr;
+    if (typeof rr === 'object' && rr.name) return rr.name;
+    return '';
   };
 
   return (
@@ -351,11 +362,11 @@ const RoleRequestsManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        typeof request.requestedRole === 'string' && request.requestedRole.toLowerCase() === 'operario' 
+                        getRequestedRoleName(request).toLowerCase() === 'operario'
                           ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                           : 'bg-gray-100 text-gray-800 border border-gray-200'
                       }`}>
-                        {request.requestedRole || 'No especificado'}
+                        {getRequestedRoleName(request) || 'No especificado'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -433,11 +444,11 @@ const RoleRequestsManagement = () => {
                 <label className="block text-sm font-medium text-gray-700">Rol Solicitado</label>
                 <p className="text-sm text-gray-900 mt-1">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    typeof selectedRequest?.requestedRole === 'string' && selectedRequest.requestedRole.toLowerCase() === 'operario' 
+                    getRequestedRoleName(selectedRequest).toLowerCase() === 'operario'
                       ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                       : 'bg-gray-100 text-gray-800 border border-gray-200'
                   }`}>
-                    {selectedRequest.requestedRole || 'No especificado'}
+                    {getRequestedRoleName(selectedRequest) || 'No especificado'}
                   </span>
                 </p>
               </div>
