@@ -28,9 +28,7 @@ class UsersService {
         lastname: userData.lastname,
       }, {
         headers: { 
-          Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
-          'X-Frontend-Request': 'true'
+          Authorization: `Bearer ${token}`
         },
       });
       console.log('Usuario creado exitosamente:', response.data);
@@ -58,18 +56,23 @@ class UsersService {
   async assignRoles(userId, roleIds) {
     try {
       const token = localStorage.getItem('access_token');
+      console.log('=== ASIGNANDO ROLES ===');
+      console.log('userId:', userId);
+      console.log('roleIds:', roleIds);
+      
       const response = await apiClient.post(`/users/${userId}/roles`, { 
         roleIds: roleIds // tu backend espera { roleIds: [1, 2, 3] }
       }, {
         headers: { 
-          Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
-          'X-Frontend-Request': 'true'
+          Authorization: `Bearer ${token}`
         },
       });
+      
+      console.log('Respuesta del backend:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error assigning roles:', error);
+      console.error('Error completo:', error.response?.data);
       throw new Error(error.response?.data?.message || 'Error al asignar rol');
     }
   }
@@ -79,9 +82,7 @@ class UsersService {
       const token = localStorage.getItem('access_token');
       const response = await apiClient.patch(`/users/${userId}`, userData, {
         headers: { 
-          Authorization: `Bearer ${token}`,
-          'X-Skip-Audit': 'true',
-          'X-Frontend-Request': 'true'
+          Authorization: `Bearer ${token}`
         },
       });
       return response.data;

@@ -15,10 +15,11 @@ export default function AuthPage() {
   const navigate = useNavigate();
   const { login, loading, isAuthenticated } = useAuth();
 
-  // Redirigir al dashboard si ya está autenticado
+  // Verificar si ya está autenticado (sin redirección automática)
   useEffect(() => {
     if (isAuthenticated && !loading) {
-      console.log('Usuario ya autenticado, redirigiendo al dashboard');
+     
+      console.log('Usuario ya autenticado');
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, loading, navigate]);

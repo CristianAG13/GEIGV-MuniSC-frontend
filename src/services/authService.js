@@ -1,5 +1,8 @@
 import apiClient from '../config/api.js';
 
+// Obtener la URL base de la API desde las variables de entorno
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 class AuthService {
   // Iniciar sesión
   async login(email, password) {
@@ -269,7 +272,7 @@ class AuthService {
   // Verificar token de reseteo
   async verifyResetToken(token) {
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/verify-reset-token', {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-reset-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
@@ -300,7 +303,7 @@ class AuthService {
   // Resetear contraseña
   async resetPassword(token, newPassword) {
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

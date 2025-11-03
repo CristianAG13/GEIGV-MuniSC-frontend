@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import roleRequestService from '../services/roleRequestService';
+import operatorsService from '../services/operatorsService';
 import { useAuditLogger } from '../hooks/useAuditLogger';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import { clearNavigationCache } from '@/utils/refreshNavigation';
@@ -40,12 +41,20 @@ export default function Dashboard() {
   const [editingUser, setEditingUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateOperatorModal, setShowCreateOperatorModal] = useState(false);
   const [showRoleRequestModal, setShowRoleRequestModal] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
     lastname: '',
     email: '',
     password: ''
+  });
+  const [newOperator, setNewOperator] = useState({
+    name: '',
+    last: '',
+    identification: '',
+    phoneNumber: '',
+    userId: ''
   });
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
@@ -110,7 +119,7 @@ export default function Dashboard() {
   
   // Verificar si el usuario ya tiene solicitudes de rol pendientes
   useEffect(() => {
-    if (user?.roles?.some(role => role.toLowerCase() === 'invitado')) {
+    if (user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado')) {
       (async () => {
         try {
           const result = await roleRequestService.getMyRequests();
@@ -136,6 +145,15 @@ export default function Dashboard() {
       ]);
       setUsers(usersData);
       setRoles(rolesData);
+      
+      // Console log para mostrar los roles disponibles
+      console.log('=== ROLES DISPONIBLES EN USUARIOS ===');
+      console.log('Total de roles cargados:', rolesData.length);
+      console.log('Roles detallados:', rolesData);
+      rolesData.forEach((role, index) => {
+        console.log(`${index + 1}. ID: ${role.id}, Nombre: ${role.name}, Descripción: ${role.description || 'N/A'}, Activo: ${role.isActive}`);
+      });
+      console.log('=====================================');
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -184,6 +202,128 @@ export default function Dashboard() {
       password: ''
     });
     setShowCreateModal(true);
+  };
+
+  const handleCreateOperator = () => {
+    setNewOperator({
+      name: '',
+      last: '',
+      identification: '',
+      phoneNumber: '',
+      userId: ''
+    });
+    setShowCreateOperatorModal(true);
+  };
+
+  const handleSaveNewOperator = async () => {
+    try {
+      // Validaciones básicas
+      if (!newOperator.name.trim() || !newOperator.last.trim() || !newOperator.identification.trim()) {
+        showError('Campos requeridos', 'Nombre, apellido e identificación son obligatorios');
+        return;
+      }
+
+      if (newOperator.identification.trim().length < 8) {
+        showError('Identificación inválida', 'La identificación debe tener al menos 8 caracteres');
+        return;
+      }
+
+      if (newOperator.phoneNumber.trim() && newOperator.phoneNumber.trim().length < 8) {
+        showError('Teléfono inválido', 'El teléfono debe tener al menos 8 caracteres');
+        return;
+      }
+
+      // Crear el operario
+      const operatorData = {
+        name: newOperator.name.trim(),
+        last: newOperator.last.trim(),
+        identification: newOperator.identification.trim(),
+        phoneNumber: newOperator.phoneNumber.trim() || null
+      };
+
+      // Si se seleccionó un usuario, incluirlo
+      if (newOperator.userId) {
+        operatorData.userId = parseInt(newOperator.userId);
+      }
+
+      console.log('=== CREANDO OPERARIO ===');
+      console.log('Datos del operario:', operatorData);
+
+      const createdOperator = await operatorsService.createOperator(operatorData);
+      console.log('Operario creado:', createdOperator);
+
+      // Si se asoció con un usuario, cambiar su rol a "operario"
+      if (newOperator.userId) {
+        try {
+          console.log('=== ASIGNANDO ROL DE OPERARIO AL USUARIO ===');
+          console.log('Usuario ID seleccionado:', newOperator.userId);
+          console.log('Todos los roles disponibles:', roles);
+          
+          // Buscar el rol "operario" de diferentes maneras
+          let operarioRole = roles.find(r => r.name && r.name.toLowerCase() === 'operario');
+          
+          if (!operarioRole) {
+            // Intentar otras variantes del nombre
+            operarioRole = roles.find(r => 
+              r.name && (
+                r.name.toLowerCase() === 'operator' ||
+                r.name.toLowerCase() === 'operador' ||
+                r.name.toLowerCase().includes('operario')
+              )
+            );
+          }
+          
+          console.log('Rol de operario encontrado:', operarioRole);
+          
+          if (operarioRole) {
+            console.log('Asignando rol ID:', operarioRole.id, 'al usuario ID:', newOperator.userId);
+            
+            const assignResult = await usersService.assignRoles(parseInt(newOperator.userId), [operarioRole.id]);
+            console.log('Resultado de asignación de rol:', assignResult);
+            
+            // Verificar que se asignó correctamente
+            console.log('Esperando un momento antes de recargar datos...');
+            setTimeout(async () => {
+              await loadData();
+              console.log('Datos recargados después de asignar rol');
+            }, 1000);
+            
+          } else {
+            console.error('No se encontró ningún rol de operario');
+            console.log('Roles disponibles:', roles.map(r => ({ id: r.id, name: r.name })));
+            showError('Advertencia', 'El operario fue creado pero no se encontró el rol "operario" para asignar automáticamente');
+          }
+        } catch (roleError) {
+          console.error('Error completo asignando rol de operario:', roleError);
+          console.error('Stack trace:', roleError.stack);
+          showError('Advertencia', `El operario fue creado pero hubo un error al asignar el rol: ${roleError.message}`);
+        }
+      }
+
+      // Recargar datos y limpiar formulario
+      setShowCreateOperatorModal(false);
+      setNewOperator({
+        name: '',
+        last: '',
+        identification: '',
+        phoneNumber: '',
+        userId: ''
+      });
+      
+      // Dar tiempo para que se procese la asignación de rol antes de recargar
+      setTimeout(async () => {
+        await loadData();
+        console.log('=== DATOS RECARGADOS DESPUÉS DE CREAR OPERARIO ===');
+      }, 1500);
+      
+      if (newOperator.userId) {
+        showSuccess('Operario creado y rol asignado', 'El operario ha sido creado y el usuario ahora tiene rol de operario');
+      } else {
+        showSuccess('Operario creado', 'El operario ha sido creado exitosamente');
+      }
+    } catch (error) {
+      showError('Error al crear operario', error.message);
+    }
   };
 
   const handleSaveNewUser = async () => {
@@ -258,24 +398,38 @@ export default function Dashboard() {
 
   const handleRoleChange = async (userId, roleName) => {
     try {
+      console.log('=== CAMBIO DE ROL ===');
+      console.log('Usuario ID:', userId);
+      console.log('Rol seleccionado:', roleName);
+      
       // Obtener datos del usuario antes del cambio
       const targetUser = users.find(u => u.id === userId);
       const oldRoles = targetUser?.roles || [];
       
+      console.log('Usuario encontrado:', targetUser);
+      console.log('Roles actuales:', oldRoles);
+      
       if (roleName === '') {
+        console.log('Removiendo todos los roles...');
         await usersService.assignRoles(userId, []);
-        
-     
       } else {
         const role = roles.find(r => r.name === roleName);
+        console.log('Rol encontrado para asignar:', role);
+        
         if (role) {
+          console.log('Asignando rol ID:', role.id);
           await usersService.assignRoles(userId, [role.id]);
-          
+        } else {
+          throw new Error(`No se encontró el rol: ${roleName}`);
         }
       }
+      
+      console.log('Recargando datos...');
       await loadData();
       showSuccess('Rol asignado', 'El rol ha sido asignado exitosamente');
+      console.log('=== FIN CAMBIO DE ROL ===');
     } catch (error) {
+      console.error('Error en handleRoleChange:', error);
       showError('Error al asignar rol', error.message);
     }
   };
@@ -395,7 +549,7 @@ export default function Dashboard() {
         </div>
 
         {/* Componente para solicitar rol si no tiene rol asignado - Solo para usuarios sin rol, no invitados */}
-        {!user?.rol && !user?.role && !user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+        {!user?.rol && !user?.role && !user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
           <RequestRoleComponent 
             user={user} 
             onRequestSent={async () => {
@@ -419,7 +573,7 @@ export default function Dashboard() {
         )}
         
         {/* Mensaje para usuarios con rol "invitado" */}
-        {user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+        {user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md mb-6">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -617,13 +771,22 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Gestión de usuarios</h1>
-        <button 
-          onClick={handleCreateUser}
-          className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo usuario
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleCreateUser}
+            className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo usuario
+          </button>
+          <button 
+            onClick={handleCreateOperator}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <HardHat className="w-4 h-4" />
+            Crear operario
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -751,7 +914,7 @@ export default function Dashboard() {
 
   const renderContent = () => {
     // Verificar si el usuario es "invitado" y está intentando acceder a una sección que no sea dashboard
-    const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado');
+    const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado');
     if (isInvitado && activeSection !== 'dashboard') {
       return <InvitadoRestrictionMessage />;
     }
@@ -1251,6 +1414,151 @@ export default function Dashboard() {
       </div>
     )}
 
+    {/* Create Operator Modal */}
+    {showCreateOperatorModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h2 className="text-lg font-bold mb-4">Crear Nuevo Operario</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre *
+                {newOperator.userId && <span className="text-xs text-blue-600 ml-2">(Auto-completado)</span>}
+              </label>
+              <input
+                type="text"
+                value={newOperator.name}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, name: e.target.value })
+                }
+                className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  newOperator.userId ? 'bg-blue-50' : ''
+                }`}
+                placeholder="Ingrese el nombre"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Apellido *
+                {newOperator.userId && <span className="text-xs text-blue-600 ml-2">(Auto-completado)</span>}
+              </label>
+              <input
+                type="text"
+                value={newOperator.last}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, last: e.target.value })
+                }
+                className={`w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  newOperator.userId ? 'bg-blue-50' : ''
+                }`}
+                placeholder="Ingrese el apellido"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de Identificación *
+              </label>
+              <input
+                type="text"
+                value={newOperator.identification}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, identification: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ej: 12345678"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Teléfono
+              </label>
+              <input
+                type="text"
+                value={newOperator.phoneNumber}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, phoneNumber: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ej: 12345678"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Asociar con usuario (opcional)
+              </label>
+              <select
+                value={newOperator.userId}
+                onChange={(e) => {
+                  const selectedUserId = e.target.value;
+                  const selectedUser = users.find(u => u.id === parseInt(selectedUserId));
+                  
+                  if (selectedUser && selectedUserId) {
+                    console.log('=== AUTO-COMPLETANDO DATOS DEL OPERARIO ===');
+                    console.log('Usuario seleccionado:', selectedUser);
+                    console.log('Nombre auto-completado:', selectedUser.name);
+                    console.log('Apellido auto-completado:', selectedUser.lastname);
+                    
+                    // Auto-llenar nombre y apellido con los datos del usuario
+                    setNewOperator({ 
+                      ...newOperator, 
+                      userId: selectedUserId,
+                      name: selectedUser.name || '',
+                      last: selectedUser.lastname || ''
+                    });
+                  } else {
+                    console.log('=== LIMPIANDO CAMPOS DE OPERARIO ===');
+                    // Si no hay usuario seleccionado, limpiar los campos
+                    setNewOperator({ 
+                      ...newOperator, 
+                      userId: selectedUserId,
+                      name: '',
+                      last: ''
+                    });
+                  }
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Sin asociar</option>
+                {users.filter(user => !user.roles || user.roles.length === 0 || user.roles.some(role => 
+                  typeof role === 'string' ? role.toLowerCase() === 'invitado' : role.name?.toLowerCase() === 'invitado'
+                )).map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.email} - {user.name} {user.lastname}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {newOperator.userId ? 
+                  'Los campos nombre y apellido se llenaron automáticamente' : 
+                  'Solo se muestran usuarios sin rol o con rol de invitado'
+                }
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => setShowCreateOperatorModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveNewOperator}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Crear Operario
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Overlay para mobile */}
     {sidebarOpen && (
       <div
@@ -1260,7 +1568,7 @@ export default function Dashboard() {
     )}
 
     {/* Modal para solicitud de cambio de rol - Solo para usuarios invitados */}
-    {showRoleRequestModal && user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+    {showRoleRequestModal && user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
           <div className="flex items-center justify-between mb-4">

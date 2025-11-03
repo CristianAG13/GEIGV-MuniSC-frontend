@@ -1,5 +1,5 @@
 import axios from 'axios';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -31,12 +31,25 @@ apiClient.interceptors.response.use(
 
       try {
         // pedir refresh al backend
-        const user = JSON.parse(localStorage.getItem("user"));
+        const userStr = localStorage.getItem("user");
+        if (!userStr) {
+          throw new Error("No user data found");
+        }
+        
+        const user = JSON.parse(userStr);
+        if (!user || !user.id) {
+          throw new Error("Invalid user data");
+        }
+        
         const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           userId: user.id,
         });
 
         const newToken = res.data.access_token;
+        if (!newToken) {
+          throw new Error("No access token received");
+        }
+        
         localStorage.setItem("access_token", newToken);
 
         // actualizar el header y reintentar la request original
@@ -44,9 +57,11 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         console.error("❌ Refresh token falló:", refreshError);
+        console.error("❌ Detalles del error:", refreshError.response?.data || refreshError.message);
         // redirigir al login si falla el refresh
         localStorage.removeItem("access_token");
         localStorage.removeItem("user");
+        localStorage.setItem("sessionExpiredReason", "token_refresh_failed");
         if (window.location.pathname !== "/login") {
           window.location.href = "/login";
         }

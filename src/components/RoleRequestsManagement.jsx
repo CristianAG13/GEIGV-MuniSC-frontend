@@ -4,7 +4,9 @@ import {
   Search, Calendar, AlertTriangle, RefreshCw 
 } from 'lucide-react';
 import roleRequestService from '../services/roleRequestService';
+import operatorsService from '../services/operatorsService';
 import { showSuccess, showError, promptTextarea, confirmAction } from '../utils/sweetAlert';
+import OperatorDataModal from './OperatorDataModal';
 
 const RoleRequestsManagement = () => {
   const [requests, setRequests] = useState([]);
@@ -15,6 +17,8 @@ const RoleRequestsManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [operatorApprovalLoading, setOperatorApprovalLoading] = useState(false);
 
   useEffect(() => {
     loadAllRequests();
@@ -72,20 +76,73 @@ const RoleRequestsManagement = () => {
   };
 
   const handleApprove = async (requestId) => {
-    const result = await confirmAction('¿Aprobar solicitud?', '¿Está seguro de aprobar esta solicitud?');
-    if (result.isConfirmed) {
-      try {
-        const response = await roleRequestService.approveRequest(requestId);
-        if (response.success) {
-          showSuccess('Solicitud aprobada', 'La solicitud ha sido aprobada exitosamente');
-          loadAllRequests();
-          loadStats();
-        } else {
-          showError('Error al aprobar', response.error);
+    // Obtener los detalles de la solicitud para verificar si es de operario
+    const request = requests.find(req => req.id === requestId);
+    
+    const requestedRoleName = getRequestedRoleName(request).toLowerCase();
+    if (requestedRoleName === 'operario') {
+      // Si es una solicitud de operario, mostrar el modal para datos adicionales
+      setSelectedRequest(request);
+      setShowOperatorModal(true);
+    } else {
+      // Para otros roles, proceder con la aprobación normal
+      const result = await confirmAction('¿Aprobar solicitud?', '¿Está seguro de aprobar esta solicitud?');
+      if (result.isConfirmed) {
+        try {
+          const response = await roleRequestService.approveRequest(requestId);
+          if (response.success) {
+            showSuccess('Solicitud aprobada', 'La solicitud ha sido aprobada exitosamente');
+            loadAllRequests();
+            loadStats();
+          } else {
+            showError('Error al aprobar', response.error);
+          }
+        } catch (error) {
+          showError('Error inesperado', 'No se pudo aprobar la solicitud');
         }
-      } catch (error) {
-        showError('Error inesperado', 'No se pudo aprobar la solicitud');
       }
+    }
+  };
+
+  const handleApproveOperator = async (operatorData) => {
+    try {
+      setOperatorApprovalLoading(true);
+      
+      // Primero crear el operador
+      const operatorResult = await operatorsService.createOperator({
+        ...operatorData,
+        userId: selectedRequest.user.id
+      });
+
+      if (!operatorResult) {
+        throw new Error('No se pudo crear el registro del operario');
+      }
+
+      // Luego aprobar la solicitud de rol
+      const response = await roleRequestService.approveRequest(selectedRequest.id);
+      
+      if (response.success) {
+        showSuccess(
+          'Operario creado exitosamente', 
+          'La solicitud ha sido aprobada y el operario ha sido registrado en el sistema'
+        );
+        setShowOperatorModal(false);
+        setSelectedRequest(null);
+        loadAllRequests();
+        loadStats();
+      } else {
+        // Si falló la aprobación del rol, mostrar error pero el operador ya fue creado
+        showError('Error parcial', 'El operario fue creado pero hubo un error al aprobar el rol. Contacte al administrador.');
+        setShowOperatorModal(false);
+        setSelectedRequest(null);
+        loadAllRequests();
+        loadStats();
+      }
+    } catch (error) {
+      console.error('Error approving operator:', error);
+      showError('Error', error.message || 'Error al crear el operario y aprobar la solicitud');
+    } finally {
+      setOperatorApprovalLoading(false);
     }
   };
 
@@ -150,6 +207,16 @@ const RoleRequestsManagement = () => {
       default:
         return 'Desconocido';
     }
+  };
+
+  // Normalizar el nombre del rol solicitado (el backend puede devolver un string o un objeto)
+  const getRequestedRoleName = (request) => {
+    if (!request) return '';
+    const rr = request.requestedRole ?? request.role ?? null;
+    if (!rr) return '';
+    if (typeof rr === 'string') return rr;
+    if (typeof rr === 'object' && rr.name) return rr.name;
+    return '';
   };
 
   return (
@@ -267,6 +334,9 @@ const RoleRequestsManagement = () => {
                     Usuario
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rol Solicitado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -289,6 +359,15 @@ const RoleRequestsManagement = () => {
                           {request.user?.email}
                         </p>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        getRequestedRoleName(request).toLowerCase() === 'operario'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                          : 'bg-gray-100 text-gray-800 border border-gray-200'
+                      }`}>
+                        {getRequestedRoleName(request) || 'No especificado'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
@@ -362,6 +441,19 @@ const RoleRequestsManagement = () => {
               </div>
               
               <div>
+                <label className="block text-sm font-medium text-gray-700">Rol Solicitado</label>
+                <p className="text-sm text-gray-900 mt-1">
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    getRequestedRoleName(selectedRequest).toLowerCase() === 'operario'
+                      ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                      : 'bg-gray-100 text-gray-800 border border-gray-200'
+                  }`}>
+                    {getRequestedRoleName(selectedRequest) || 'No especificado'}
+                  </span>
+                </p>
+              </div>
+              
+              <div>
                 <label className="block text-sm font-medium text-gray-700">Estado</label>
                 <div className="flex items-center space-x-2 mt-1">
                   {getStatusIcon(selectedRequest.status)}
@@ -432,6 +524,18 @@ const RoleRequestsManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de datos del operario */}
+      <OperatorDataModal
+        isOpen={showOperatorModal}
+        onClose={() => {
+          setShowOperatorModal(false);
+          setSelectedRequest(null);
+        }}
+        onSubmit={handleApproveOperator}
+        userData={selectedRequest?.user}
+        loading={operatorApprovalLoading}
+      />
     </div>
   );
 };

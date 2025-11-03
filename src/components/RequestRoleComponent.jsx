@@ -21,7 +21,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
     
     // Verificar cambios en el usuario cada 10 segundos si hay solicitudes pendientes
     const checkUserUpdates = setInterval(async () => {
-      const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+      const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') || 
                          user?.rol === 'invitado' || 
                          user?.role === 'invitado' || 
                          (!user?.rol && !user?.role);
@@ -200,6 +200,16 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
     }
   };
 
+  // Normalizar el nombre del rol solicitado (puede venir como string o como objeto)
+  const getRequestedRoleName = (request) => {
+    if (!request) return '';
+    const rr = request.requestedRole ?? request.role ?? null;
+    if (!rr) return '';
+    if (typeof rr === 'string') return rr;
+    if (typeof rr === 'object' && rr.name) return rr.name;
+    return '';
+  };
+
   // Verificar si el usuario ya tiene un rol asignado
   console.log('=== VERIFICANDO ESTADO DEL USUARIO ===');
   console.log('Usuario completo:', user);
@@ -208,7 +218,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
   console.log('user.roles:', user?.roles);
   
   // Verificar si el usuario es invitado o no tiene rol
-  const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+  const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') || 
                     user?.rol === 'invitado' || 
                     user?.role === 'invitado';
   
@@ -353,7 +363,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
                       </div>
                       
                       <p className="text-sm font-medium text-gray-900 mb-1">
-                        Rol solicitado: <span className="text-blue-600">{request.role?.name}</span>
+                        Rol solicitado: <span className="text-blue-600">{getRequestedRoleName(request)}</span>
                       </p>
                       
                       {request.justification && (

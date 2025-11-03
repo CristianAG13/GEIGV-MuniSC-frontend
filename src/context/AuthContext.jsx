@@ -21,14 +21,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar si hay un usuario autenticado al cargar la aplicación
-    const currentUser = authService.getCurrentUser();
-    if (currentUser && authService.isAuthenticated()) {
-      setUser(currentUser);
-      // Opcionalmente, refrescar datos del usuario desde el backend
-      refreshUserFromBackend();
-    }
-    setLoading(false);
+    const initializeAuth = async () => {
+      // Verificar si hay un usuario autenticado al cargar la aplicación
+      const currentUser = authService.getCurrentUser();
+      if (currentUser && authService.isAuthenticated()) {
+        setUser(currentUser);
+        // Refrescar datos del usuario desde el backend y esperar
+        await refreshUserFromBackend();
+      }
+      setLoading(false);
+    };
+    
+    initializeAuth();
   }, []);
 
 
@@ -38,12 +42,20 @@ const refreshUserFromBackend = async () => {
     if (result.success) {
       const normalizedUser = {
         ...result.data,
-        roles: result.data.roles?.map(r => r.name || r) || []
+        roles: result.data.roles?.map(r => {
+          if (typeof r === 'string') return r;
+          if (r && typeof r.name === 'string') return r.name;
+          return null;
+        }).filter(Boolean) || []
       };
       setUser(normalizedUser);
+    } else {
+      // Si falla la actualización, mantener los datos del localStorage
+      console.warn('No se pudo actualizar datos del usuario:', result.error);
     }
   } catch (error) {
-    console.error('Error refreshing user data:', error);
+    // Si hay error de red, mantener los datos del localStorage
+    console.warn('Error de red al actualizar usuario, manteniendo datos locales:', error);
   }
 };
   
@@ -56,7 +68,11 @@ const refreshUserFromBackend = async () => {
     if (result.success) {
       const normalizedUser = {
         ...result.data.user,
-        roles: result.data.user?.roles?.map(r => r.name || r) || []
+        roles: result.data.user?.roles?.map(r => {
+          if (typeof r === 'string') return r;
+          if (r && typeof r.name === 'string') return r.name;
+          return null;
+        }).filter(Boolean) || []
       };
       setUser(normalizedUser);
       
@@ -147,7 +163,7 @@ const refreshUserFromBackend = async () => {
   setUser(null);
   // Asegurarse de limpiar cualquier configuración de navegación cacheada
   clearNavigationCache();
-  window.location.href = '/login';
+  window.location.href = '/'; // Redirigir al login
 };
 
   // Función para actualizar los datos del usuario (útil cuando un admin cambia el rol)
@@ -187,7 +203,7 @@ const refreshUserFromBackend = async () => {
     login,
     logout,
     loading,
-    isAuthenticated: authService.isAuthenticated(),
+    isAuthenticated: user !== null && authService.isAuthenticated(),
     refreshUser,
     updateProfile,
   };

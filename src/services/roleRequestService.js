@@ -5,14 +5,16 @@ class RoleRequestService {
   // Solicitar un rol (usuario sin rol)
   async requestRole(roleName, justification = '') {
     try {
+      // Aceptar roleName como string o como objeto { name }
+      const roleStr = typeof roleName === 'string' ? roleName : (roleName && roleName.name) ? roleName.name : '';
       const payload = {
-        requestedRole: roleName.toLowerCase(), // Convertir a minúsculas como espera el backend
+        requestedRole: (roleStr || '').toLowerCase(), // Convertir a minúsculas como espera el backend
         justification
       };
       
       console.log('RoleRequestService - enviando al backend:');
       console.log('- roleName original:', roleName);
-      console.log('- roleName.toLowerCase():', roleName.toLowerCase());
+  console.log('- roleName.toLowerCase():', (roleStr || '').toLowerCase());
       console.log('- justification:', justification);
       console.log('- payload final:', payload);
       
@@ -85,6 +87,26 @@ class RoleRequestService {
       return {
         success: false,
         error: error.response?.data?.message || 'Error al aprobar solicitud'
+      };
+    }
+  }
+
+  // Aprobar solicitud de rol de operario con datos adicionales
+  async approveOperatorRequest(requestId, additionalData) {
+    try {
+      const response = await apiClient.patch(`/role-requests/${requestId}/approve-operator`, {
+        additionalData
+      });
+      return {
+        success: true,
+        data: response.data,
+        message: 'Solicitud de operario aprobada exitosamente'
+      };
+    } catch (error) {
+      console.error('Error approving operator request:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Error al aprobar solicitud de operario'
       };
     }
   }
