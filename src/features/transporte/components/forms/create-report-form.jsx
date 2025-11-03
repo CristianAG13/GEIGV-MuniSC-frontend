@@ -16,6 +16,8 @@ import { useAuditLogger } from "@/hooks/useAuditLogger";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 import { todayLocalISO, toISODateOnly } from "@/utils/date";
+import trailersService from "@/services/trailersService";
+
 
 /* ====== Helpers de tiempo/horas (JS) ====== */
 const minutesSinceMidnight = (hhmm = "") => {
@@ -78,6 +80,8 @@ export default function CreateReportForm({
   const [operatorsList, setOperatorsList] = useState([]);
   const [selectedMachineryType, setSelectedMachineryType] = useState("");
   const [selectedVariant, setSelectedVariant] = useState("");
+  // Placas de carreta desde catálogo (cada item: { id, placa, tipoMaquinaria, categoria, materialTipo })
+  const [trailerOptions, setTrailerOptions] = useState([]);
 
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
@@ -146,10 +150,13 @@ export default function CreateReportForm({
   }, [selectedMachineryType, selectedVariant]);
 
   const isFlatbedMaterial = useMemo(() => {
-    const t = (selectedMachineryType || "").toLowerCase();
-    const v = (selectedVariant || "").toLowerCase();
-    return t === "cabezal" && v === "material" && (formData.placaCarreta || "") === "SM 8803";
-  }, [selectedMachineryType, selectedVariant, formData.placaCarreta]);
+  const t = (selectedMachineryType || "").toLowerCase();
+  const v = (selectedVariant || "").toLowerCase();
+  if (t !== "cabezal" || v !== "material") return false;
+  const match = trailerOptions.find((it) => it.placa === formData.placaCarreta);
+  // 'plataforma' = materiales como cemento/blocks/etc.  'desecho' = arena/base/subbase/tierra...
+  return match?.materialTipo === "plataforma";
+}, [selectedMachineryType, selectedVariant, trailerOptions, formData.placaCarreta]);
 
   const isCisternaFlow = useMemo(() => {
   const t = (selectedMachineryType || "").toLowerCase();
@@ -166,16 +173,30 @@ export default function CreateReportForm({
     return legacy ? [String(legacy).toLowerCase()] : [];
   };
 
-  const TRAILER_PLATES = {
-    vagoneta: { carreta: ["SM 5765"] },
-    cabezal: { material: ["SM 8803", "SM 8844"], cisterna: ["SM 8678"], carreta: ["SM 7853"] },
-  };
-
   const showBoletaField = useCallback(() => {
     const t = (selectedMachineryType || "").toLowerCase();
     const v = (selectedVariant || "").toLowerCase();
     return (t === "vagoneta" || t === "cabezal") && v === "material";
   }, [selectedMachineryType, selectedVariant]);
+
+  // Mapea la selección a la query del catálogo de carretas
+const computeTrailerQuery = useCallback(() => {
+  const t = (selectedMachineryType || "").toLowerCase();   // vagoneta | cabezal
+  const v = (selectedVariant || "").toLowerCase();         // material | carreta | cisterna ...
+
+  if (t === "vagoneta" && v === "carreta") {
+    return { tipoMaquinaria: "vagoneta", categoria: "carreta" };
+  }
+  if (t === "cabezal" && v === "carreta") {
+    return { tipoMaquinaria: "cabezal", categoria: "carreta" };
+  }
+  if (t === "cabezal" && v === "material") {
+    // Para material en cabezal traemos TODAS (desecho + plataforma). El flujo se decide por la placa elegida.
+    return { tipoMaquinaria: "cabezal", categoria: "material" };
+  }
+  return null;
+}, [selectedMachineryType, selectedVariant]);
+
 
   const getPlacaById = useCallback(
     (id) => {
@@ -184,12 +205,6 @@ export default function CreateReportForm({
     },
     [machineryList]
   );
-
-  const getTrailerOptions = useCallback(() => {
-    const t = (selectedMachineryType || "").toLowerCase();
-    const v = (selectedVariant || "").toLowerCase();
-    return TRAILER_PLATES[t]?.[v] ?? [];
-  }, [selectedMachineryType, selectedVariant]);
 
   const placasOptions = useMemo(() => {
     let list = Array.isArray(machineryList) ? machineryList : [];
@@ -282,16 +297,6 @@ const getFuenteOptions = useCallback(() => {
     }
   }, [getFuenteOptions, formData.fuente]);
 
-  // Sugerir/validar placa de carreta
-  useEffect(() => {
-    const opts = getTrailerOptions();
-    setFormData((p) => {
-      if (!opts.length) return p.placaCarreta ? { ...p, placaCarreta: "" } : p;
-      if (!p.placaCarreta || !opts.includes(p.placaCarreta)) return { ...p, placaCarreta: opts[0] };
-      return p;
-    });
-  }, [getTrailerOptions]);
-
   // Prefetch catálogos
   useEffect(() => {
     (async () => {
@@ -340,6 +345,40 @@ const getFuenteOptions = useCallback(() => {
       setSelectedVariant(String(initialValues.variant));
     }
   }, [initialValues]);
+
+
+  useEffect(() => {
+  (async () => {
+    const q = computeTrailerQuery();
+    if (!q) {
+      setTrailerOptions([]);
+      // limpiar placa carreta si ya no aplica
+      setFormData((p) => (p.placaCarreta ? { ...p, placaCarreta: "" } : p));
+      return;
+    }
+    try {
+      const data = await trailersService.list(q);      // espera { items, total } o [] (según tu service)
+      const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setTrailerOptions(items);                        // cada item debería traer al menos { placa, materialTipo? }
+
+      setFormData((p) => {
+        // si la seleccionada ya no existe, escoger la primera
+        const exists = items.some((it) => it.placa === p.placaCarreta);
+        if (!items.length) {
+          return p.placaCarreta ? { ...p, placaCarreta: "" } : p;
+        }
+        if (!exists) {
+          return { ...p, placaCarreta: items[0].placa };
+        }
+        return p;
+      });
+    } catch (e) {
+      console.error("[CreateReportForm] trailersService.list error:", e);
+      setTrailerOptions([]);
+      setFormData((p) => (p.placaCarreta ? { ...p, placaCarreta: "" } : p));
+    }
+  })();
+}, [computeTrailerQuery]);
 
 
   // ====== BOLETAS HELPERS ======
@@ -712,11 +751,6 @@ function getDynamicFields() {
     });
   }
 
-  // Añadir condicionalmente campos de remolque si no se hoistean
-  const needsTrailer = !!(TRAILER_PLATES[t] && TRAILER_PLATES[t][v]);
-  if (!hoist && needsTrailer && !fields.some((f) => normKey(f) === "placa carreta")) {
-    fields.push("Placa carreta");
-  }
   if (!hoist && v === "carreta" && !fields.some((f) => normKey(f) === "placa maquinaria llevada")) {
     fields.push("Placa maquinaria llevada");
   }
@@ -966,6 +1000,18 @@ function getDynamicFields() {
 
     if (!formData.operadorId) { await showError("Operador requerido", "Debe seleccionar un operador."); return; }
     if (!formData.maquinariaId) { await showError("Placa requerida", "Debe seleccionar una placa de maquinaria."); return; }
+
+    // Dentro de handleSubmit, después de validar operador/maquinaria:
+const tSel = (selectedMachineryType || "").toLowerCase();
+const vSel = (selectedVariant || "").toLowerCase();
+const needsTrailer =
+  (tSel === "vagoneta" && vSel === "carreta") ||
+  (tSel === "cabezal" && (vSel === "carreta" || vSel === "material"));
+
+if (needsTrailer && !formData.placaCarreta) {
+  await showError("Placa de carreta requerida", "Seleccione una placa de carreta.");
+  return;
+}
 
     // Validaciones específicas
     if (isMaterialFlow && !isFlatbedMaterial) {
@@ -1286,19 +1332,28 @@ function getDynamicFields() {
 
               {/* Placa carreta (si aplica) */}
               {(() => {
-                const opts = getTrailerOptions();
-                if (!opts.length) return null;
-                return (
-                  <div className="space-y-2">
-                    <Label>Placa carreta</Label>
-                    <Select value={formData.placaCarreta || ""} onValueChange={(v) => setFormData((p) => ({ ...p, placaCarreta: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar placa" /></SelectTrigger>
-                      <SelectContent>
-                        {opts.map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
+                {trailerOptions.length > 0 && (
+  <div className="space-y-2">
+    <Label>Placa carreta</Label>
+    <Select
+      value={formData.placaCarreta || ""}
+      onValueChange={(v) => setFormData((p) => ({ ...p, placaCarreta: v }))}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Seleccionar placa" />
+      </SelectTrigger>
+      <SelectContent>
+        {trailerOptions.map((it) => (
+          <SelectItem key={it.placa} value={it.placa}>
+            {it.placa}
+            {/* opcional: mostrar subtipo */}
+            {/* {it.materialTipo ? ` — ${it.materialTipo}` : ""} */}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+)}
               })()}
 
               {/* Placa maquinaria llevada (solo variante carreta) */}

@@ -5,13 +5,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import MachineryAdmin from "@/features/transporte/components/MachineryAdmin";
 import SourceCatalogAdmin from "@/features/catalog/SourceCatalogAdmin";
+import TrailersAdmin from "@/features/catalog/TrailersAdmin"; // nuevo
 
 export default function CatalogTabs() {
   const [tab, setTab] = useState("maquinaria");
   const isMachinery = tab === "maquinaria";
   const isRios = tab === "rios";
   const isTajos = tab === "tajos";
-
+  
   const base =
     "rounded-xl px-4 py-2 shadow-sm transition-colors border text-sm font-medium inline-flex items-center gap-2";
 
@@ -27,6 +28,11 @@ export default function CatalogTabs() {
     ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600"
     : "bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200";
 
+    const isCarretas = tab === "carretas";
+const carretasClasses = isCarretas
+  ? "bg-purple-500 text-white border-purple-600 hover:bg-purple-600"
+  : "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200";
+  
   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b border-gray-200 pb-2">
@@ -53,11 +59,20 @@ export default function CatalogTabs() {
         >
           ⛏ <span>Tajos</span>
         </Button>
-      </div>
+
+      <Button
+         variant="ghost"
+         onClick={() => setTab("carretas")}
+         className={`${base} ${carretasClasses}`}
+         >
+       🚚 <span>Carretas</span>
+      </Button>
+    </div>
 
       {isMachinery && <MachineryAdmin />}
       {isRios && <SourceCatalogAdmin tipo="rio" title="Catálogo de Ríos" />}
       {isTajos && <SourceCatalogAdmin tipo="tajo" title="Catálogo de Tajos" />}
+      {isCarretas && <TrailersAdmin />}
     </div>
   );
 }
