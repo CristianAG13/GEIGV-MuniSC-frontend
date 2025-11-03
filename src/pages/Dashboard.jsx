@@ -256,23 +256,51 @@ export default function Dashboard() {
       if (newOperator.userId) {
         try {
           console.log('=== ASIGNANDO ROL DE OPERARIO AL USUARIO ===');
-          const operarioRole = roles.find(r => r.name.toLowerCase() === 'operario');
+          console.log('Usuario ID seleccionado:', newOperator.userId);
+          console.log('Todos los roles disponibles:', roles);
+          
+          // Buscar el rol "operario" de diferentes maneras
+          let operarioRole = roles.find(r => r.name && r.name.toLowerCase() === 'operario');
+          
+          if (!operarioRole) {
+            // Intentar otras variantes del nombre
+            operarioRole = roles.find(r => 
+              r.name && (
+                r.name.toLowerCase() === 'operator' ||
+                r.name.toLowerCase() === 'operador' ||
+                r.name.toLowerCase().includes('operario')
+              )
+            );
+          }
+          
+          console.log('Rol de operario encontrado:', operarioRole);
           
           if (operarioRole) {
-            console.log('Rol de operario encontrado:', operarioRole);
-            await usersService.assignRoles(parseInt(newOperator.userId), [operarioRole.id]);
-            console.log('Rol asignado exitosamente al usuario ID:', newOperator.userId);
+            console.log('Asignando rol ID:', operarioRole.id, 'al usuario ID:', newOperator.userId);
+            
+            const assignResult = await usersService.assignRoles(parseInt(newOperator.userId), [operarioRole.id]);
+            console.log('Resultado de asignación de rol:', assignResult);
+            
+            // Verificar que se asignó correctamente
+            console.log('Esperando un momento antes de recargar datos...');
+            setTimeout(async () => {
+              await loadData();
+              console.log('Datos recargados después de asignar rol');
+            }, 1000);
+            
           } else {
-            console.warn('No se encontró el rol "operario" en la lista de roles');
-            showError('Advertencia', 'El operario fue creado pero no se pudo asignar el rol automáticamente');
+            console.error('No se encontró ningún rol de operario');
+            console.log('Roles disponibles:', roles.map(r => ({ id: r.id, name: r.name })));
+            showError('Advertencia', 'El operario fue creado pero no se encontró el rol "operario" para asignar automáticamente');
           }
         } catch (roleError) {
-          console.error('Error asignando rol de operario:', roleError);
-          showError('Advertencia', 'El operario fue creado pero hubo un error al asignar el rol automáticamente');
+          console.error('Error completo asignando rol de operario:', roleError);
+          console.error('Stack trace:', roleError.stack);
+          showError('Advertencia', `El operario fue creado pero hubo un error al asignar el rol: ${roleError.message}`);
         }
       }
 
-      await loadData();
+      // Recargar datos y limpiar formulario
       setShowCreateOperatorModal(false);
       setNewOperator({
         name: '',
@@ -281,6 +309,12 @@ export default function Dashboard() {
         phoneNumber: '',
         userId: ''
       });
+      
+      // Dar tiempo para que se procese la asignación de rol antes de recargar
+      setTimeout(async () => {
+        await loadData();
+        console.log('=== DATOS RECARGADOS DESPUÉS DE CREAR OPERARIO ===');
+      }, 1500);
       
       if (newOperator.userId) {
         showSuccess('Operario creado y rol asignado', 'El operario ha sido creado y el usuario ahora tiene rol de operario');
