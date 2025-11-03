@@ -246,7 +246,31 @@ export default function Dashboard() {
         operatorData.userId = parseInt(newOperator.userId);
       }
 
+      console.log('=== CREANDO OPERARIO ===');
+      console.log('Datos del operario:', operatorData);
+
       const createdOperator = await operatorsService.createOperator(operatorData);
+      console.log('Operario creado:', createdOperator);
+
+      // Si se asoció con un usuario, cambiar su rol a "operario"
+      if (newOperator.userId) {
+        try {
+          console.log('=== ASIGNANDO ROL DE OPERARIO AL USUARIO ===');
+          const operarioRole = roles.find(r => r.name.toLowerCase() === 'operario');
+          
+          if (operarioRole) {
+            console.log('Rol de operario encontrado:', operarioRole);
+            await usersService.assignRoles(parseInt(newOperator.userId), [operarioRole.id]);
+            console.log('Rol asignado exitosamente al usuario ID:', newOperator.userId);
+          } else {
+            console.warn('No se encontró el rol "operario" en la lista de roles');
+            showError('Advertencia', 'El operario fue creado pero no se pudo asignar el rol automáticamente');
+          }
+        } catch (roleError) {
+          console.error('Error asignando rol de operario:', roleError);
+          showError('Advertencia', 'El operario fue creado pero hubo un error al asignar el rol automáticamente');
+        }
+      }
 
       await loadData();
       setShowCreateOperatorModal(false);
@@ -258,7 +282,11 @@ export default function Dashboard() {
         userId: ''
       });
       
-      showSuccess('Operario creado', 'El operario ha sido creado exitosamente');
+      if (newOperator.userId) {
+        showSuccess('Operario creado y rol asignado', 'El operario ha sido creado y el usuario ahora tiene rol de operario');
+      } else {
+        showSuccess('Operario creado', 'El operario ha sido creado exitosamente');
+      }
     } catch (error) {
       showError('Error al crear operario', error.message);
     }
