@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import rolesService from '../services/rolesService';
 import usersService from '../services/usersService';
 import roleRequestService from '../services/roleRequestService';
+import operatorsService from '../services/operatorsService';
 import { useAuditLogger } from '../hooks/useAuditLogger';
 import { showSuccess, showError, confirmDelete, confirmAction } from '../utils/sweetAlert';
 import { clearNavigationCache } from '@/utils/refreshNavigation';
@@ -40,12 +41,20 @@ export default function Dashboard() {
   const [editingUser, setEditingUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateOperatorModal, setShowCreateOperatorModal] = useState(false);
   const [showRoleRequestModal, setShowRoleRequestModal] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
     lastname: '',
     email: '',
     password: ''
+  });
+  const [newOperator, setNewOperator] = useState({
+    name: '',
+    last: '',
+    identification: '',
+    phoneNumber: '',
+    userId: ''
   });
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
@@ -184,6 +193,66 @@ export default function Dashboard() {
       password: ''
     });
     setShowCreateModal(true);
+  };
+
+  const handleCreateOperator = () => {
+    setNewOperator({
+      name: '',
+      last: '',
+      identification: '',
+      phoneNumber: '',
+      userId: ''
+    });
+    setShowCreateOperatorModal(true);
+  };
+
+  const handleSaveNewOperator = async () => {
+    try {
+      // Validaciones básicas
+      if (!newOperator.name.trim() || !newOperator.last.trim() || !newOperator.identification.trim()) {
+        showError('Campos requeridos', 'Nombre, apellido e identificación son obligatorios');
+        return;
+      }
+
+      if (newOperator.identification.trim().length < 8) {
+        showError('Identificación inválida', 'La identificación debe tener al menos 8 caracteres');
+        return;
+      }
+
+      if (newOperator.phoneNumber.trim() && newOperator.phoneNumber.trim().length < 8) {
+        showError('Teléfono inválido', 'El teléfono debe tener al menos 8 caracteres');
+        return;
+      }
+
+      // Crear el operario
+      const operatorData = {
+        name: newOperator.name.trim(),
+        last: newOperator.last.trim(),
+        identification: newOperator.identification.trim(),
+        phoneNumber: newOperator.phoneNumber.trim() || null
+      };
+
+      // Si se seleccionó un usuario, incluirlo
+      if (newOperator.userId) {
+        operatorData.userId = parseInt(newOperator.userId);
+      }
+
+      const createdOperator = await operatorsService.createOperator(operatorData);
+
+      await loadData();
+      setShowCreateOperatorModal(false);
+      setNewOperator({
+        name: '',
+        last: '',
+        identification: '',
+        phoneNumber: '',
+        userId: ''
+      });
+      
+      showSuccess('Operario creado', 'El operario ha sido creado exitosamente');
+    } catch (error) {
+      showError('Error al crear operario', error.message);
+    }
   };
 
   const handleSaveNewUser = async () => {
@@ -617,13 +686,22 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Gestión de usuarios</h1>
-        <button 
-          onClick={handleCreateUser}
-          className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo usuario
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleCreateUser}
+            className="bg-santa-cruz-blue-600 hover:bg-santa-cruz-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo usuario
+          </button>
+          <button 
+            onClick={handleCreateOperator}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <HardHat className="w-4 h-4" />
+            Crear operario
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -1245,6 +1323,117 @@ export default function Dashboard() {
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Crear Usuario
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Create Operator Modal */}
+    {showCreateOperatorModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h2 className="text-lg font-bold mb-4">Crear Nuevo Operario</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre *
+              </label>
+              <input
+                type="text"
+                value={newOperator.name}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, name: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ingrese el nombre"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Apellido *
+              </label>
+              <input
+                type="text"
+                value={newOperator.last}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, last: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ingrese el apellido"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de Identificación *
+              </label>
+              <input
+                type="text"
+                value={newOperator.identification}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, identification: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ej: 12345678"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Teléfono
+              </label>
+              <input
+                type="text"
+                value={newOperator.phoneNumber}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, phoneNumber: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ej: 12345678"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Asociar con usuario (opcional)
+              </label>
+              <select
+                value={newOperator.userId}
+                onChange={(e) =>
+                  setNewOperator({ ...newOperator, userId: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Sin asociar</option>
+                {users.filter(user => !user.roles || user.roles.length === 0 || user.roles.some(role => 
+                  typeof role === 'string' ? role.toLowerCase() === 'invitado' : role.name?.toLowerCase() === 'invitado'
+                )).map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.email} - {user.name} {user.lastname}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Solo se muestran usuarios sin rol o con rol de invitado
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => setShowCreateOperatorModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveNewOperator}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Crear Operario
             </button>
           </div>
         </div>
