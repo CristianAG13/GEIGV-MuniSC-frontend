@@ -21,7 +21,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
     
     // Verificar cambios en el usuario cada 10 segundos si hay solicitudes pendientes
     const checkUserUpdates = setInterval(async () => {
-      const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+      const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') || 
                          user?.rol === 'invitado' || 
                          user?.role === 'invitado' || 
                          (!user?.rol && !user?.role);
@@ -208,7 +208,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
   console.log('user.roles:', user?.roles);
   
   // Verificar si el usuario es invitado o no tiene rol
-  const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado') || 
+  const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') || 
                     user?.rol === 'invitado' || 
                     user?.role === 'invitado';
   

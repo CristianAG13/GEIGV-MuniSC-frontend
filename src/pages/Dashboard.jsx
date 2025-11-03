@@ -110,7 +110,7 @@ export default function Dashboard() {
   
   // Verificar si el usuario ya tiene solicitudes de rol pendientes
   useEffect(() => {
-    if (user?.roles?.some(role => role.toLowerCase() === 'invitado')) {
+    if (user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado')) {
       (async () => {
         try {
           const result = await roleRequestService.getMyRequests();
@@ -395,7 +395,7 @@ export default function Dashboard() {
         </div>
 
         {/* Componente para solicitar rol si no tiene rol asignado - Solo para usuarios sin rol, no invitados */}
-        {!user?.rol && !user?.role && !user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+        {!user?.rol && !user?.role && !user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
           <RequestRoleComponent 
             user={user} 
             onRequestSent={async () => {
@@ -419,7 +419,7 @@ export default function Dashboard() {
         )}
         
         {/* Mensaje para usuarios con rol "invitado" */}
-        {user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+        {user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md mb-6">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -751,7 +751,7 @@ export default function Dashboard() {
 
   const renderContent = () => {
     // Verificar si el usuario es "invitado" y está intentando acceder a una sección que no sea dashboard
-    const isInvitado = user?.roles?.some(role => role.toLowerCase() === 'invitado');
+    const isInvitado = user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado');
     if (isInvitado && activeSection !== 'dashboard') {
       return <InvitadoRestrictionMessage />;
     }
@@ -1260,7 +1260,7 @@ export default function Dashboard() {
     )}
 
     {/* Modal para solicitud de cambio de rol - Solo para usuarios invitados */}
-    {showRoleRequestModal && user?.roles?.some(role => role.toLowerCase() === 'invitado') && (
+    {showRoleRequestModal && user?.roles?.some(role => typeof role === 'string' && role.toLowerCase() === 'invitado') && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
           <div className="flex items-center justify-between mb-4">

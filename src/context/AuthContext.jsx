@@ -42,7 +42,11 @@ const refreshUserFromBackend = async () => {
     if (result.success) {
       const normalizedUser = {
         ...result.data,
-        roles: result.data.roles?.map(r => r.name || r) || []
+        roles: result.data.roles?.map(r => {
+          if (typeof r === 'string') return r;
+          if (r && typeof r.name === 'string') return r.name;
+          return null;
+        }).filter(Boolean) || []
       };
       setUser(normalizedUser);
     } else {
@@ -64,7 +68,11 @@ const refreshUserFromBackend = async () => {
     if (result.success) {
       const normalizedUser = {
         ...result.data.user,
-        roles: result.data.user?.roles?.map(r => r.name || r) || []
+        roles: result.data.user?.roles?.map(r => {
+          if (typeof r === 'string') return r;
+          if (r && typeof r.name === 'string') return r.name;
+          return null;
+        }).filter(Boolean) || []
       };
       setUser(normalizedUser);
       

@@ -79,7 +79,7 @@ const RoleRequestsManagement = () => {
     // Obtener los detalles de la solicitud para verificar si es de operario
     const request = requests.find(req => req.id === requestId);
     
-    if (request?.requestedRole?.toLowerCase() === 'operario') {
+    if (typeof request?.requestedRole === 'string' && request.requestedRole.toLowerCase() === 'operario') {
       // Si es una solicitud de operario, mostrar el modal para datos adicionales
       setSelectedRequest(request);
       setShowOperatorModal(true);
@@ -351,7 +351,7 @@ const RoleRequestsManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        request.requestedRole?.toLowerCase() === 'operario' 
+                        typeof request.requestedRole === 'string' && request.requestedRole.toLowerCase() === 'operario' 
                           ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                           : 'bg-gray-100 text-gray-800 border border-gray-200'
                       }`}>
@@ -433,7 +433,7 @@ const RoleRequestsManagement = () => {
                 <label className="block text-sm font-medium text-gray-700">Rol Solicitado</label>
                 <p className="text-sm text-gray-900 mt-1">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    selectedRequest.requestedRole?.toLowerCase() === 'operario' 
+                    typeof selectedRequest?.requestedRole === 'string' && selectedRequest.requestedRole.toLowerCase() === 'operario' 
                       ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                       : 'bg-gray-100 text-gray-800 border border-gray-200'
                   }`}>

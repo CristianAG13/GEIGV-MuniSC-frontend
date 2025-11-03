@@ -6,13 +6,13 @@ class RoleRequestService {
   async requestRole(roleName, justification = '') {
     try {
       const payload = {
-        requestedRole: roleName.toLowerCase(), // Convertir a minúsculas como espera el backend
+        requestedRole: (roleName || '').toLowerCase(), // Convertir a minúsculas como espera el backend
         justification
       };
       
       console.log('RoleRequestService - enviando al backend:');
       console.log('- roleName original:', roleName);
-      console.log('- roleName.toLowerCase():', roleName.toLowerCase());
+      console.log('- roleName.toLowerCase():', (roleName || '').toLowerCase());
       console.log('- justification:', justification);
       console.log('- payload final:', payload);
       
