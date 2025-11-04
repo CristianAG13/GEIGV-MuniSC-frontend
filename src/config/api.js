@@ -25,6 +25,21 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // ⛔ Manejo de errores 403 (Permisos insuficientes)
+    if (error.response?.status === 403) {
+      const message = error.response?.data?.message || 'No tienes permisos para realizar esta acción';
+      console.warn('⛔ Acceso denegado (403):', message);
+      
+      // Importar dinámicamente SweetAlert para mostrar error
+      if (typeof window !== 'undefined') {
+        import('@/utils/sweetAlert').then(({ showError }) => {
+          showError('Acceso Denegado', message);
+        }).catch(err => {
+          console.error('Error al cargar sweetAlert:', err);
+        });
+      }
+    }
+
     // Si es 401 y no hemos reintentado ya
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

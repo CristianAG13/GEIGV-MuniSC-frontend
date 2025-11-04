@@ -13,6 +13,7 @@ import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, s
 import sourceService from "@/services/sourceService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLogger } from "@/hooks/useAuditLogger";
+import { useAuth } from "@/context/AuthContext";
 import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPickerDialog";
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 import { todayLocalISO, toISODateOnly } from "@/utils/date";
@@ -73,6 +74,14 @@ export default function CreateReportForm({
 
   const { toast } = useToast();
   const { logCreate } = useAuditLogger();
+  const { user } = useAuth();
+
+  // Verificar si el usuario es operario
+  const isOperario = useMemo(() => {
+    if (!user || !user.roles) return false;
+    const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
+    return userRoles.some(r => String(r).toLowerCase() === 'operario');
+  }, [user]);
 
   // ====== ESTADO ======
   const [loading, setLoading] = useState(false);
@@ -278,6 +287,15 @@ const getFuenteOptions = useCallback(() => {
       try {
         const operators = await operatorsService.getAllOperators();
         setOperatorsList(Array.isArray(operators) ? operators : []);
+        
+        // Si el usuario es operario, auto-asignar su operador
+        if (isOperario && user?.id && Array.isArray(operators)) {
+          // Buscar el operador asociado al usuario actual
+          const myOperator = operators.find(op => op.userId === user.id);
+          if (myOperator && mode === "create") {
+            setFormData(prev => ({ ...prev, operadorId: myOperator.id }));
+          }
+        }
       } catch (e) {
         console.error("[CreateReportForm] getAllOperators error:", e);
         toast({
@@ -287,7 +305,7 @@ const getFuenteOptions = useCallback(() => {
         });
       }
     })();
-  }, [toast]);
+  }, [toast, isOperario, user?.id, mode]);
 
   // limpiar fuente si ya no es válida para el tipo/variante
   useEffect(() => {
@@ -1291,8 +1309,11 @@ if (needsTrailer && !formData.placaCarreta) {
               <Select
                 value={formData.operadorId ? String(formData.operadorId) : ""}
                 onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
+                disabled={isOperario}
               >
-                <SelectTrigger><SelectValue placeholder="Seleccionar operador" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder={isOperario ? "Tu usuario de operador" : "Seleccionar operador"} />
+                </SelectTrigger>
                 <SelectContent>
                   {operatorsList.map((operator) => (
                     <SelectItem key={operator.id} value={String(operator.id)}>
@@ -1301,6 +1322,11 @@ if (needsTrailer && !formData.placaCarreta) {
                   ))}
                 </SelectContent>
               </Select>
+              {isOperario && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Como operario, solo puedes crear boletas con tu usuario de operador
+                </p>
+              )}
             </div>
             <div className="space-y-2">
         <Label>Fecha</Label>

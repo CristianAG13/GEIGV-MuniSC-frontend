@@ -26,6 +26,14 @@ import footerUrl from "@/assets/footer.png";
 
 import machineryService from "@/services/machineryService";
 import { fmtDMY, toISODateOnly, todayLocalISO } from "@/utils/date";
+import { useAuth } from "@/context/AuthContext";
+import { 
+  canEditReports, 
+  canDeleteReports, 
+  canViewDeletedReports, 
+  canRestoreReports,
+  filterReportsByPermission 
+} from "@/utils/permissions";
 
 /*-------------------Logos exportar pdf------------------*/
 const HEADER_URL = headerUrl;
@@ -771,6 +779,8 @@ export default function ReportsTable({
   rows,
  onEdit,
 }) {
+  const { user } = useAuth(); // 🔹 Obtener usuario actual
+  
   /* estado base */
   const [rowsMunicipal, setRowsMunicipal] = useState(municipalReports);
   const [rowsRental, setRowsRental] = useState(rentalReports);
@@ -1841,13 +1851,17 @@ console.log(
                 <Download className="w-4 h-4" />
                 PDF
               </Button>
-              <Button
-                variant="secondary"
-                className="whitespace-nowrap"
-                onClick={openDeleted}
-              >
-                Ver reportes eliminados
-              </Button>
+              
+              {/* 🔹 Solo superadmin puede ver reportes eliminados */}
+              {canViewDeletedReports(user) && (
+                <Button
+                  variant="secondary"
+                  className="whitespace-nowrap"
+                  onClick={openDeleted}
+                >
+                  Ver reportes eliminados
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -2125,23 +2139,30 @@ console.log(
                     >
                       <Eye size={18} />
                     </button>
-<button
-  className="p-2 rounded hover:bg-blue-50 text-blue-800"
-  title="Editar reporte"
-  onClick={() => handleOpenEdit(r.id)}   // <- antes decía row.id
->
-  <Edit2 className="w-4 h-4" />
-</button>
 
-                    <button
-                      type="button"
-                      onClick={() => askDelete(r)}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                      title="Eliminar"
-                      aria-label="Eliminar"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {/* 🔹 Solo mostrar editar si tiene permiso */}
+                    {canEditReports(user, r) && (
+                      <button
+                        className="p-2 rounded hover:bg-blue-50 text-blue-800"
+                        title="Editar reporte"
+                        onClick={() => handleOpenEdit(r.id)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {/* 🔹 Solo mostrar eliminar si tiene permiso */}
+                    {canDeleteReports(user, r) && (
+                      <button
+                        type="button"
+                        onClick={() => askDelete(r)}
+                        className="p-2 rounded-lg text-red-600 hover:bg-red-50"
+                        title="Eliminar"
+                        aria-label="Eliminar"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -2975,32 +2996,35 @@ const cellInputClass =
                         {r.deleteReason ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="secondary"
-                          onClick={async () => {
-                            try {
-                              let restored;
-                              if (isMunicipal) {
-                                restored = await machineryService.restoreReport(r.id);
-                                setRowsMunicipal((prev) => [
-                                  restored,
-                                  ...prev.filter((x) => x.id !== restored.id),
-                                ]);
-                              } else {
-                                restored = await machineryService.restoreRentalReport(r.id);
-                                setRowsRental((prev) => [
-                                  restored,
-                                  ...prev.filter((x) => x.id !== restored.id),
-                                ]);
+                        {/* 🔹 Solo superadmin puede restaurar reportes */}
+                        {canRestoreReports(user) && (
+                          <Button
+                            variant="secondary"
+                            onClick={async () => {
+                              try {
+                                let restored;
+                                if (isMunicipal) {
+                                  restored = await machineryService.restoreReport(r.id);
+                                  setRowsMunicipal((prev) => [
+                                    restored,
+                                    ...prev.filter((x) => x.id !== restored.id),
+                                  ]);
+                                } else {
+                                  restored = await machineryService.restoreRentalReport(r.id);
+                                  setRowsRental((prev) => [
+                                    restored,
+                                    ...prev.filter((x) => x.id !== restored.id),
+                                  ]);
+                                }
+                                setDeletedRows((prev) => prev.filter((x) => x.id !== r.id));
+                              } catch {
+                                alert("No se pudo restaurar.");
                               }
-                              setDeletedRows((prev) => prev.filter((x) => x.id !== r.id));
-                            } catch {
-                              alert("No se pudo restaurar.");
-                            }
-                          }}
-                        >
-                          Restaurar
-                        </Button>
+                            }}
+                          >
+                            Restaurar
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
