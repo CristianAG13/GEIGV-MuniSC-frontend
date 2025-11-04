@@ -73,7 +73,7 @@ export default function App() {
         <Route
           path="/auditoria/*"
           element={
-            <ProtectedRoute roles={["superadmin"]}>
+            <ProtectedRoute roles={["superadmin", "ingeniero"]}>
               <AuditoriaModule />
             </ProtectedRoute>
           }

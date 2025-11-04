@@ -43,17 +43,25 @@ const AuditoriaModule = () => {
     limit: 50
   });
 
-  // Verificar si el usuario es superadmin
+  // Verificar si el usuario es superadmin o ingeniero
   const isSuperAdmin = user?.roles && (
     user.roles.includes('superadmin') || 
     user.roles.includes('SuperAdmin') ||
     user.roles.includes('SUPERADMIN')
   );
 
+  const isIngeniero = user?.roles && (
+    user.roles.includes('ingeniero') ||
+    user.roles.includes('Ingeniero')
+  );
+
+  const canViewAudit = isSuperAdmin || isIngeniero;
+  const canEditAudit = isSuperAdmin; // Solo superadmin puede editar/eliminar
+
   
   // Función para cargar logs con filtros
   const loadAuditLogs = useCallback(async (filters) => {
-    if (!isSuperAdmin) {
+    if (!canViewAudit) {
       return;
     }
     
