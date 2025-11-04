@@ -290,7 +290,7 @@ export default function MachineryAdmin() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Catálogo de Maquinaria</CardTitle>
+        <CardTitle>Catálogo de maquinaria</CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-6">

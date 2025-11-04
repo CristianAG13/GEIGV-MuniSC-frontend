@@ -17,6 +17,7 @@ import HourAmPmPickerDialog from "@/features/transporte/components/HourAmPmPicke
 import { confirmAction, showSuccess, showError, showLoading, closeLoading } from "@/utils/sweetAlert";
 import { todayLocalISO, toISODateOnly } from "@/utils/date";
 import trailersService from "@/services/trailersService";
+import { Badge } from "@/components/ui/badge";
 
 
 /* ====== Helpers de tiempo/horas (JS) ====== */
@@ -1275,6 +1276,11 @@ if (needsTrailer && !formData.placaCarreta) {
   const computedTotalHours =
     formData.horaInicio && formData.horaFin ? computeWorkedHours(formData.horaInicio, formData.horaFin) : "";
 
+    const selectedTrailer = useMemo(
+  () => trailerOptions.find((it) => it.placa === formData.placaCarreta),
+  [trailerOptions, formData.placaCarreta]
+);
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -1372,9 +1378,8 @@ if (needsTrailer && !formData.placaCarreta) {
                 )}
               </div>
 
-              {/* Placa carreta (si aplica) */}
-              {(() => {
-                {trailerOptions.length > 0 && (
+{/* Placa carreta (si aplica) */}
+{trailerOptions.length > 0 && (
   <div className="space-y-2">
     <Label>Placa carreta</Label>
     <Select
@@ -1387,16 +1392,38 @@ if (needsTrailer && !formData.placaCarreta) {
       <SelectContent>
         {trailerOptions.map((it) => (
           <SelectItem key={it.placa} value={it.placa}>
-            {it.placa}
-            {/* opcional: mostrar subtipo */}
-            {/* {it.materialTipo ? ` — ${it.materialTipo}` : ""} */}
+            <div className="flex items-center justify-between w-full">
+              <span className="mr-3">{it.placa}</span>
+              {it.materialTipo && (
+                <span
+                  className={[
+                    "text-[10px] px-2 py-0.5 rounded-full",
+                    it.materialTipo === "plataforma"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-amber-100 text-amber-700"
+                  ].join(" ")}
+                >
+                  {it.materialTipo}
+                </span>
+              )}
+            </div>
           </SelectItem>
         ))}
       </SelectContent>
     </Select>
+
+    {/* Hint según subtipo seleccionado */}
+    {selectedTrailer && (
+      <p className="text-xs text-muted-foreground">
+        Subtipo: <b>{selectedTrailer.materialTipo ?? "—"}</b>
+        {selectedTrailer.materialTipo === "plataforma"
+          ? " — usará lista de «Material(es) transportados» (sin boletas)."
+          : " — usará boletas por viaje (m³, fuente, distrito y código camino por boleta)."}
+      </p>
+    )}
   </div>
 )}
-              })()}
+                  
 
               {/* Placa maquinaria llevada (solo variante carreta) */}
               {((selectedVariant || "").toLowerCase() === "carreta") && (
