@@ -30,7 +30,7 @@ export default function CatalogTabs() {
 
     const isCarretas = tab === "carretas";
 const carretasClasses = isCarretas
-  ? "bg-purple-500 text-white border-purple-600 hover:bg-purple-600"
+  ? "bg-purple-400 text-white border-purple-600 hover:bg-purple-600"
   : "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200";
   
   return (
@@ -70,8 +70,8 @@ const carretasClasses = isCarretas
     </div>
 
       {isMachinery && <MachineryAdmin />}
-      {isRios && <SourceCatalogAdmin tipo="rio" title="Catálogo de Ríos" />}
-      {isTajos && <SourceCatalogAdmin tipo="tajo" title="Catálogo de Tajos" />}
+      {isRios && <SourceCatalogAdmin tipo="rio" title="Catálogo de ríos" />}
+      {isTajos && <SourceCatalogAdmin tipo="tajo" title="Catálogo de tajos" />}
       {isCarretas && <TrailersAdmin />}
     </div>
   );
