@@ -470,13 +470,23 @@ const clampHoras = (raw) => {
 const sanitizeCantidad = (raw) =>
   String(raw || "").replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 
+
+// Fecha de hoy en **zona local** con formato YYYY-MM-DD
+function todayLocalISO() {
+  const now = new Date();
+  const tz = now.getTimezoneOffset() * 60000; // minutos -> ms
+  return new Date(now.getTime() - tz).toISOString().slice(0, 10);
+}
+
+
 export default function CreateRentalReportForm() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [operatorsList, setOperatorsList] = useState([]);
 
   const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split("T")[0],
+    // fecha: new Date().toISOString().split("T")[0],
+    fecha: todayLocalISO(),
     operadorId: "",
     tipoMaquinaria: "",
     placa: "",
@@ -527,6 +537,12 @@ export default function CreateRentalReportForm() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "fecha") {
+  const hoy = todayLocalISO();
+  // Si la nueva fecha es futura, forzamos a hoy y avisamos opcionalmente
+  const v = value > hoy ? hoy : value;
+  return setFormData((p) => ({ ...p, fecha: v }));
+}
     if (name === "horas") return setFormData((p) => ({ ...p, horas: clampHoras(value) }));
     if (name === "boleta") return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
     if (name === "boletaK") return setFormData((p) => ({ ...p, boletaK: onlyDigitsMax(value, 6) }));
@@ -591,6 +607,16 @@ export default function CreateRentalReportForm() {
       return;
     }
 
+    const hoy = todayLocalISO();
+if (formData.fecha > hoy) {
+  toast({
+    title: "Fecha inválida",
+    description: "Solo se permiten fechas de hoy o del pasado.",
+    variant: "destructive",
+  });
+  return;
+}
+
     const payload = {
       fecha: formData.fecha,
       operadorId: Number(formData.operadorId),
@@ -644,11 +670,11 @@ export default function CreateRentalReportForm() {
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div className="space-y-2">
                <Label htmlFor="fecha">Fecha</Label>
-               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} required />
+               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} max={todayLocalISO()} required />
              </div>
 
              <div className="space-y-2">
-               <Label>Operador</Label>
+               <Label> de</Label>
                 <Select 
                 value={formData.operadorId} 
                 onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}

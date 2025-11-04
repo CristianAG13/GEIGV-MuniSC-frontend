@@ -1438,7 +1438,7 @@ if (needsTrailer && !formData.placaCarreta) {
       </SelectContent>
     </Select>
 
-    {/* Hint según subtipo seleccionado */}
+{/* Hint según subtipo seleccionado */}
     {selectedTrailer && (
       <p className="text-xs text-muted-foreground">
         Subtipo: <b>{selectedTrailer.materialTipo ?? "—"}</b>
