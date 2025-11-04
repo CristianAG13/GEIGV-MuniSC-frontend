@@ -6,41 +6,46 @@ import {
 
 // ========================
 // CONFIG DE PERMISOS POR ROL
+// Basado en la tabla del backend:
+// - Gestionar usuarios: solo superadmin
+// - Gestionar roles: solo superadmin
+// - Aprobar solicitudes: solo superadmin
+// - Ver/editar operadores: solo superadmin (operario ve solo los suyos)
+// - Gestionar maquinaria: solo superadmin
+// - Crear/editar reportes: superadmin, ingeniero, inspector, operario (solo propios)
+// - Ver reportes eliminados: solo superadmin
+// - Restaurar reportes: solo superadmin
+// - Ver resúmenes: solo superadmin
 // ========================
 export const rolePermissions = {
-  user: ['dashboard'], // usuario normal solo ve su dashboard
-  operator: ['dashboard'], // operadores solo dashboard
+  user: ['dashboard'],
+  operator: ['dashboard'],
   ingeniero: [
     'dashboard', 
-    'usuarios', 
-    'transporte', 
-    'solicitudes-rol', 
-    'operadores'
+    'transporte', // ✅ Crear/editar reportes
+    'auditoria-view' // ✅ Solo visualización de auditoría
   ],
   superadmin: [
     'dashboard', 
-    'usuarios', 
-    'transporte', 
-    'solicitudes-rol', 
-    'operadores',
-    'auditoria'
+    'usuarios', // ✅ Gestionar usuarios
+    'transporte', // ✅ Crear/editar reportes
+    'solicitudes-rol', // ✅ Aprobar solicitudes
+    'operadores', // ✅ Ver/editar todos los operadores
+    'auditoria' // ✅ Acceso completo a auditoría (incluyendo resúmenes)
   ],
   guest: ['dashboard'],
-  invitado: ['dashboard'], // Usuario invitado solo tiene acceso al dashboard
+  invitado: ['dashboard'],
   inspector: [
     'dashboard', 
-    'transporte', 
-    'operadores'
+    'transporte' // ✅ Crear/editar reportes
   ],
   operario: [
     'dashboard',
-    'transporte'
+    'transporte' // ✅ Solo crear/editar sus propios reportes municipales
   ],
   manager: [
     'dashboard', 
-    'usuarios', 
-    'transporte', 
-    'operadores'
+    'transporte'
   ]
 };
 

@@ -91,32 +91,35 @@ export function TransporteModule() {
           Boleta municipal
         </button>
 
-       <button
-  onClick={() => setActiveTab("alquiler")}
-  className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
-    border-2  /* <-- borde visible */
-    ${
-      activeTab === "alquiler"
-        ? [
-            "text-white",
-            "border-blue-800",                           // borde más fuerte
-            "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
-            "shadow-md",
-            "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
-            "hover:from-blue-700 hover:to-blue-400"
-          ].join(" ")
-        : [
-            "text-gray-600",
-            "border-transparent",
-            "hover:text-blue-700",
-            "hover:bg-blue-50",
-            "hover:border-blue-300"
-          ].join(" ")
-    }`}
->
-          <Receipt className="w-4 h-4" /> {/* 👈 usa FileText para evitar crashes */}
-          Boleta alquiler
-        </button>
+        {/* Solo mostrar boleta de alquiler para roles que NO sean operario */}
+        {hasRole(["superadmin", "ingeniero", "inspector"]) && (
+          <button
+            onClick={() => setActiveTab("alquiler")}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-t-lg transition-colors
+              border-2  /* <-- borde visible */
+              ${
+                activeTab === "alquiler"
+                  ? [
+                      "text-white",
+                      "border-blue-800",                           // borde más fuerte
+                      "bg-gradient-to-b from-blue-700 to-blue-500",// centro más claro que bordes
+                      "shadow-md",
+                      "ring-1 ring-inset ring-blue-900/30",        // refuerzo del borde
+                      "hover:from-blue-700 hover:to-blue-400"
+                    ].join(" ")
+                  : [
+                      "text-gray-600",
+                      "border-transparent",
+                      "hover:text-blue-700",
+                      "hover:bg-blue-50",
+                      "hover:border-blue-300"
+                    ].join(" ")
+              }`}
+          >
+            <Receipt className="w-4 h-4" /> {/* 👈 usa FileText para evitar crashes */}
+            Boleta alquiler
+          </button>
+        )}
 
        <button
   onClick={() => setActiveTab("reportes")}
@@ -180,7 +183,9 @@ export function TransporteModule() {
           <CreateReportForm onGoToCatalog={() => setActiveTab("catalogo")} />
         )}
 
-        {activeTab === "alquiler" && <CreateRentalReportForm />}
+        {activeTab === "alquiler" && hasRole(["superadmin", "ingeniero", "inspector"]) && (
+          <CreateRentalReportForm />
+        )}
 
         {activeTab === "reportes" && (
           <ReportsTable 
