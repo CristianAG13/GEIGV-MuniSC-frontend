@@ -10,6 +10,12 @@ function normalizeEstacion(raw) {
   return null; // si no cumple el formato, que el backend lo valide
 }
 
+// --- helpers a nivel de módulo ---
+export function only3digits(v) {
+  const s = String(v || '').replace(/\D/g, '').slice(0, 3);
+  return s.length ? s : null;
+}
+
 function coalesceEstacionFromPairs(fd) {
   const desde =
     fd?.estacionDesde ?? fd?.estacionDesdeStr ?? fd?.detalles?.estacionDesde;
@@ -69,11 +75,11 @@ class MachineryService {
       // === CISTERNA === (plano o anidado en detalles/cisterna)
       cantidadLiquido: toNumOrNull(
         formData.cantidadLiquido ??
-          formData.cantidadAgua ??
-          formData.cantidad_agua ??
-          dIn.cantidadLiquido ??
-          dCis.cantidadLiquido ??
-          dCis.cantidad
+        formData.cantidadAgua ??
+        formData.cantidad_agua ??
+        dIn.cantidadLiquido ??
+        dCis.cantidadLiquido ??
+        dCis.cantidad
       ),
       placaCisterna:
         formData.placaCisterna ??
@@ -214,45 +220,41 @@ class MachineryService {
     return res.data;
   }
 
-  /* ============== Reports (Rental) ============== */
+  // ===== Reemplazar createRentalReport =====
   async createRentalReport(formData) {
+    const F = String(formData.fuente || "").trim().toUpperCase();
+
+    const only3digits = (v) => {
+      const s = String(v || "").replace(/\D/g, "").slice(0, 3);
+      return s.length ? s : null;
+    };
+
+    const normalizeNum = (v) => (
+      v == null || v === "" ? null : Number(String(v).replace(",", "."))
+    );
+
     const payload = {
-      fecha: formData.fecha,
-      operadorId: formData.operadorId,
-      tipoMaquinaria: formData.tipoMaquinaria, // vagoneta/cabezal/...
+      fecha: formData.fecha || null,
+      codigoCamino: only3digits(formData.codigoCamino),
+      distrito: formData.distrito || null,
+
+      operadorId: formData.operadorId ? Number(formData.operadorId) : null,
+      tipoMaquinaria: formData.tipoMaquinaria || null,
       placa: formData.placa || null,
       actividad: formData.actividad || null,
-      cantidad: formData.cantidad || null,
-      horas: Number(formData.horas) || null,
-      estacion: formData.estacion || null,
+      cantidad: normalizeNum(formData.cantidad),
+      horas: normalizeNum(formData.horas),
+      estacion: normalizeEstacion(formData.estacion || null),
 
-      // boletas según fuente:
-      boleta:
-        !["Ríos", "Tajo"].includes(formData.fuente) &&
-        formData.fuente !== "KYLCSA"
-          ? formData.boleta || null
-          : null,
-      boletaKylcsa:
-        formData.fuente === "KYLCSA" ? formData.boletaKylcsa || null : null,
+      // ✅ Si NO es KYLCSA, manda "boleta" normal (incluye RÍOS/TAJO)
+      boleta: F === "KYLCSA" ? null : (formData.boleta || null),
+
+      // ✅ Si es KYLCSA, usa boletaKylcsa
+      boletaKylcsa: F === "KYLCSA"
+        ? (formData.boletaKylcsa || formData.boletaK || null)
+        : null,
+
       fuente: formData.fuente || null,
-
-      // espejo municipal en `detalles`
-      detalles: {
-        codigoCamino: formData.codigoCamino || null,
-        distrito: formData.distrito || null,
-        tipoMaterial: formData.tipoMaterial || null,
-        cantidadMaterial: formData.cantidadMaterial
-          ? Number(formData.cantidadMaterial)
-          : null,
-
-        destino: formData.destino || null,
-        tipoCarga: formData.tipoCarga || null,
-        placaCarreta: formData.placaCarreta || null,
-        placaMaquinariaLlevada: formData.placaMaquinariaLlevada || null,
-
-        horaInicio: formData.horaInicio || null,
-        horaFin: formData.horaFin || null,
-      },
     };
 
     MachineryService.log("POST /machinery/rental-report payload", payload);

@@ -1,432 +1,3 @@
-
-// "use client";
-
-// import { useMemo, useState, useEffect } from "react";
-// import { Button } from "@/components/ui/button";
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-// import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label";
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// import { useToast } from "@/hooks/use-toast";
-// import machineryService from "@/services/machineryService";
-// import operatorsService from "@/services/operatorsService";
-// import { rentalSourceOptions } from "@/utils/districts";
-
-// /* ---- catálogos ---- */
-// const TIPOS_MAQUINARIA = [
-//   "vagoneta",
-//   "cisterna",
-//   "cabezal",
-//   "excavadora",
-//   "niveladora",
-//   "compactadora",
-//   "backhoe",
-//   "cargador",
-// ];
-
-// // dónde mostrar cada campo
-// const TIPOS_CON_CANTIDAD = new Set(["vagoneta", "cisterna", "cabezal"]);
-// const TIPOS_CON_ESTACION = new Set(["excavadora", "niveladora", "compactadora", "backhoe", "cargador"]);
-// const TIPOS_CON_FUENTE = new Set(["vagoneta", "cisterna", "cabezal"]);
-
-// const ACTIVIDADES_POR_TIPO = {
-//   vagoneta: ["Acarreo de material", "Riego de agua"],
-//   cabezal: ["Acarreo de material", "Riego de agua"],
-//   cisterna: ["Riego de agua", "Transporte de agua"],
-//   excavadora: ["Extracción y cargo de material", "Colocación de alcantarillas", "Limpieza"],
-//   niveladora: ["Limpieza", "Conformación", "Lastreado"],
-//   backhoe: [
-//     "Limpieza",
-//     "Colocación de alcantarillas",
-//     "Extensión de material",
-//     "Carga de material",
-//     "Excavación",
-//     "Extracción de material",
-//     "Demolición",
-//   ],
-//   compactadora: ["Compactación"],
-//   cargador: ["Cargar"],
-// };
-
-// /* ---- helpers ---- */
-// const onlyDigitsMax = (v, max) => String(v || "").replace(/\D/g, "").slice(0, max);
-
-// /** Horas: solo enteros 0–18 (string controlada) */
-// const clampHoras = (raw) => {
-//   const digits = String(raw || "").replace(/\D/g, "");
-//   if (!digits) return "";
-//   const n = Math.max(0, Math.min(18, Number(digits)));
-//   return String(n);
-// };
-
-// /** Cantidad: número positivo, permite un solo punto decimal */
-// const sanitizeCantidad = (raw) =>
-//   String(raw || "")
-//     .replace(/[^\d.]/g, "")
-//     .replace(/(\..*)\./g, "$1");
-
-// export default function CreateRentalReportForm() {
-//   const { toast } = useToast();
-//   const [loading, setLoading] = useState(false);
-//   const [operatorsList, setOperatorsList] = useState([]);
-
-//   const [formData, setFormData] = useState({
-//     fecha: new Date().toISOString().split("T")[0],
-//     operadorId: "",
-//     tipoMaquinaria: "",
-//     placa: "",
-//     actividad: "",
-//     cantidad: "", // <- visible solo para vagoneta/cisterna/cabezal
-//     horas: "", // <- string para controlar 0–18
-//     estacion: "", // <- visible solo para excavadora/niveladora/compactadora/backhoe/cargador
-//     boleta: "",
-//     fuente: "", // <- visible para vagoneta/cisterna/cabezal
-//   });
-
-//   const actividadOptions = useMemo(
-//     () => (formData.tipoMaquinaria ? ACTIVIDADES_POR_TIPO[formData.tipoMaquinaria] ?? [] : []),
-//     [formData.tipoMaquinaria]
-//   );
-
-//   // Determine fuente options based on machinery type
-//   const fuenteOptions = useMemo(() => {
-//     const tipoMaquinaria = formData.tipoMaquinaria?.toLowerCase();
-    
-//     if (!tipoMaquinaria || !TIPOS_CON_FUENTE.has(tipoMaquinaria)) {
-//       return [];
-//     }
-
-//     // For rental reports, use rentalSourceOptions
-//     const typeOptions = rentalSourceOptions[tipoMaquinaria];
-    
-//     if (typeOptions) {
-//       // For vagoneta and cabezal, check if activity suggests material transport
-//       if ((tipoMaquinaria === "vagoneta" || tipoMaquinaria === "cabezal") && 
-//           formData.actividad?.toLowerCase().includes("material")) {
-//         return typeOptions.material || [];
-//       }
-//       // For cisterna activities
-//       if (tipoMaquinaria === "cisterna" || 
-//           formData.actividad?.toLowerCase().includes("agua") || 
-//           formData.actividad?.toLowerCase().includes("riego")) {
-//         return typeOptions.cisterna || [];
-//       }
-//       // Default for the type
-//       if (typeOptions.material) {
-//         return typeOptions.material;
-//       }
-//     }
-
-//     return rentalSourceOptions.default || [];
-//   }, [formData.tipoMaquinaria, formData.actividad]);
-
-//   // flags de visibilidad
-//   const showCantidad = TIPOS_CON_CANTIDAD.has(formData.tipoMaquinaria);
-//   const showEstacion = TIPOS_CON_ESTACION.has(formData.tipoMaquinaria);
-//   const showFuente = TIPOS_CON_FUENTE.has(formData.tipoMaquinaria) && fuenteOptions.length > 0;
-
-//   // Cargar operadores al montar el componente
-//   useEffect(() => {
-//     const loadOperators = async () => {
-//       try {
-//         const operators = await operatorsService.getAllOperators();
-//         setOperatorsList(Array.isArray(operators) ? operators : []);
-//       } catch (error) {
-//         console.error("Error loading operators:", error);
-//         toast({
-//           title: "Error",
-//           description: "No se pudieron cargar los operadores.",
-//           variant: "destructive",
-//         });
-//       }
-//     };
-
-//     loadOperators();
-//   }, [toast]);
-
-//   const handleChange = (e) => {
-//     const { name, value } = e.target;
-
-//     if (name === "horas") {
-//       return setFormData((p) => ({ ...p, horas: clampHoras(value) }));
-//     }
-
-//     if (name === "boleta") {
-//       return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
-//     }
-
-//     if (name === "cantidad") {
-//       return setFormData((p) => ({ ...p, cantidad: sanitizeCantidad(value) }));
-//     }
-
-//     setFormData((p) => ({ ...p, [name]: value }));
-//   };
-
-//   const handleChangeTipo = (tipo) => {
-//     setFormData((p) => {
-//       const next = {
-//         ...p,
-//         tipoMaquinaria: tipo,
-//         actividad: "", // resetea actividad dependiente
-//       };
-//       // si el campo se va a ocultar, limpiamos su valor
-//       if (!TIPOS_CON_CANTIDAD.has(tipo)) next.cantidad = "";
-//       if (!TIPOS_CON_ESTACION.has(tipo)) next.estacion = "";
-//       if (!TIPOS_CON_FUENTE.has(tipo)) next.fuente = "";
-//       return next;
-//     });
-//   };
-
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     if (loading) return;
-
-//     // Validaciones mínimas
-//     if (!formData.operadorId) {
-//       toast({ title: "Operador requerido", description: "Selecciona un operador.", variant: "destructive" });
-//       return;
-//     }
-//     if (!formData.tipoMaquinaria) {
-//       toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
-//       return;
-//     }
-//     if (!formData.actividad) {
-//       toast({ title: "Actividad requerida", description: "Selecciona la actividad.", variant: "destructive" });
-//       return;
-//     }
-//     if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18) {
-//       toast({ title: "Horas inválidas", description: "Ingresa un entero entre 0 y 18.", variant: "destructive" });
-//       return;
-//     }
-//     if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
-//       toast({ title: "Boleta inválida", description: "Debe tener exactamente 6 dígitos (o dejar vacía).", variant: "destructive" });
-//       return;
-//     }
-
-//     const payload = {
-//       fecha: formData.fecha,
-//       operadorId: Number(formData.operadorId),
-//       tipoMaquinaria: formData.tipoMaquinaria,
-//       placa: formData.placa || null,
-//       actividad: formData.actividad,
-//       cantidad: showCantidad
-//         ? formData.cantidad === ""
-//           ? null
-//           : Number(formData.cantidad)
-//         : null,
-//       horas: Number(formData.horas),
-//       estacion: showEstacion ? formData.estacion || null : null,
-//       boleta: formData.boleta || null,
-//       fuente: showFuente ? formData.fuente || null : null,
-//     };
-
-//     try {
-//       setLoading(true);
-//       await machineryService.createRentalReport(payload);
-//       toast({ title: "Boleta de alquiler creada", description: "Se registró correctamente." });
-
-//       setFormData({
-//         fecha: new Date().toISOString().split("T")[0],
-//         operadorId: "",
-//         tipoMaquinaria: "",
-//         placa: "",
-//         actividad: "",
-//         cantidad: "",
-//         horas: "",
-//         estacion: "",
-//         boleta: "",
-//         fuente: "",
-//       });
-//     } catch (err) {
-//       console.error(err);
-//       toast({
-//         title: "Error al crear boleta",
-//         description: err?.response?.data?.message || "No se pudo guardar el registro.",
-//         variant: "destructive",
-//       });
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <Card className="w-full max-w-3xl mx-auto">
-//       <CardHeader>
-//         <CardTitle>Boleta de Alquiler</CardTitle>
-//         <CardDescription>Registra el alquiler de maquinaria externa</CardDescription>
-//       </CardHeader>
-
-//       <CardContent>
-//         <form onSubmit={handleSubmit} className="space-y-5">
-//           {/* Fila 1: Fecha / Operador / Tipo */}
-//           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-//             <div className="space-y-2">
-//               <Label htmlFor="fecha">Fecha</Label>
-//               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} required />
-//             </div>
-
-//             <div className="space-y-2">
-//               <Label>Operador</Label>
-//               <Select 
-//                 value={formData.operadorId} 
-//                 onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
-//               >
-//                 <SelectTrigger>
-//                   <SelectValue placeholder="Seleccionar operador" />
-//                 </SelectTrigger>
-//                 <SelectContent>
-//                   {operatorsList.map((operator) => (
-//                     <SelectItem key={operator.id} value={String(operator.id)}>
-//                       {operator.name} {operator.last} (ID: {operator.id})
-//                     </SelectItem>
-//                   ))}
-//                 </SelectContent>
-//               </Select>
-//             </div>
-
-//             <div className="space-y-2">
-//               <Label>Tipo de Maquinaria</Label>
-//               <Select value={formData.tipoMaquinaria} onValueChange={handleChangeTipo}>
-//                 <SelectTrigger>
-//                   <SelectValue placeholder="Seleccionar tipo" />
-//                 </SelectTrigger>
-//                 <SelectContent>
-//                   {TIPOS_MAQUINARIA.map((t) => (
-//                     <SelectItem key={t} value={t}>
-//                       {t}
-//                     </SelectItem>
-//                   ))}
-//                 </SelectContent>
-//               </Select>
-//             </div>
-//           </div>
-
-//           {/* Fila 2: Placa / (Cantidad condicional) / Horas */}
-//           <div className={`grid grid-cols-1 ${showCantidad ? "md:grid-cols-3" : "md:grid-cols-2"} gap-4`}>
-//             <div className="space-y-2">
-//               <Label htmlFor="placa">Placa</Label>
-//               <Input id="placa" name="placa" value={formData.placa} onChange={handleChange} placeholder="SM 1234" />
-//             </div>
-
-//             {showCantidad && (
-//               <div className="space-y-2">
-//                 <Label htmlFor="cantidad">Cantidad</Label>
-//                 <Input
-//                   id="cantidad"
-//                   name="cantidad"
-//                   inputMode="decimal"
-//                   placeholder="0.00"
-//                   value={formData.cantidad}
-//                   onChange={handleChange}
-//                 />
-//               </div>
-//             )}
-
-//             <div className="space-y-2">
-//               <Label htmlFor="horas">Horas</Label>
-//               <Input
-//                 id="horas"
-//                 name="horas"
-//                 inputMode="numeric"
-//                 pattern="\d*"
-//                 placeholder="0"
-//                 value={formData.horas}
-//                 onChange={handleChange}
-//               />
-//               <p className="text-xs text-muted-foreground">Solo enteros 0–18.</p>
-//             </div>
-//           </div>
-
-//           {/* Actividad (select dependiente) */}
-//           <div className="space-y-2">
-//             <Label>Actividad</Label>
-//             <Select
-//               value={formData.actividad}
-//               onValueChange={(v) => setFormData((p) => ({ ...p, actividad: v }))}
-//               disabled={!formData.tipoMaquinaria}
-//             >
-//               <SelectTrigger>
-//                 <SelectValue placeholder={formData.tipoMaquinaria ? "Seleccionar actividad" : "Elige un tipo primero"} />
-//               </SelectTrigger>
-//               <SelectContent>
-//                 {actividadOptions.map((a) => (
-//                   <SelectItem key={a} value={a}>
-//                     {a}
-//                   </SelectItem>
-//                 ))}
-//               </SelectContent>
-//             </Select>
-//           </div>
-
-//           {/* Fuente (condicional para ciertos tipos de maquinaria) */}
-//           {showFuente && (
-//             <div className="space-y-2">
-//               <Label>Fuente</Label>
-//               <Select
-//                 value={formData.fuente}
-//                 onValueChange={(v) => setFormData((p) => ({ ...p, fuente: v }))}
-//               >
-//                 <SelectTrigger>
-//                   <SelectValue placeholder="Seleccionar fuente" />
-//                 </SelectTrigger>
-//                 <SelectContent>
-//                   {fuenteOptions.map((fuente) => (
-//                     <SelectItem key={fuente} value={fuente}>
-//                       {fuente}
-//                     </SelectItem>
-//                   ))}
-//                 </SelectContent>
-//               </Select>
-//             </div>
-//           )}
-
-//           {/* Fila 3: Estación (condicional) / Boleta */}
-//           <div className={`grid grid-cols-1 ${showEstacion ? "md:grid-cols-2" : "md:grid-cols-1"} gap-4`}>
-//             {showEstacion && (
-//               <div className="space-y-2">
-//                 <Label htmlFor="estacion">Estación</Label>
-//                 <Input
-//                   id="estacion"
-//                   name="estacion"
-//                   value={formData.estacion}
-//                   onChange={handleChange}
-//                   placeholder="0-100"
-//                 />
-//               </div>
-//             )}
-
-//             <div className="space-y-2">
-//               <Label htmlFor="boleta">Boleta</Label>
-//               <Input
-//                 id="boleta"
-//                 name="boleta"
-//                 inputMode="numeric"
-//                 pattern="\d{6}"
-//                 maxLength={6}
-//                 placeholder="000000"
-//                 value={formData.boleta}
-//                 onChange={handleChange}
-//               />
-//             </div>
-//           </div>
-
-//           <Button type="submit" disabled={loading} className="w-full">
-//             {loading ? "Enviando..." : "Crear Boleta de Alquiler"}
-//           </Button>
-//         </form>
-//       </CardContent>
-//     </Card>
-//   );
-// }
-
-
-
-
-
-
-
-
-
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
@@ -439,25 +10,41 @@ import { useToast } from "@/hooks/use-toast";
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
 import { rentalSourceOptions } from "@/utils/districts";
-
+import { districts as districtList } from "@/utils/districts"; // si existe
 /* ---- catálogos ---- */
-const TIPOS_MAQUINARIA = ["vagoneta","cisterna","cabezal","excavadora","niveladora","compactadora","backhoe","cargador"];
+const TIPOS_MAQUINARIA = [
+  "vagoneta",
+  "cisterna",
+  "cabezal",
+  "excavadora",
+  "niveladora",
+  "compactadora",
+  "backhoe",
+  "cargador",
+];
 
-const TIPOS_CON_CANTIDAD = new Set(["vagoneta","cisterna","cabezal"]);
-const TIPOS_CON_ESTACION = new Set(["excavadora","niveladora","compactadora","backhoe","cargador"]);
-const TIPOS_CON_FUENTE = new Set(["vagoneta","cisterna","cabezal"]);
+/** Fuente y Cantidad aplican a vagoneta/cisterna/cabezal */
+const TIPOS_CON_FUENTE = new Set(["vagoneta", "cisterna", "cabezal"]);
+const TIPOS_CON_CANTIDAD = new Set(["vagoneta", "cisterna", "cabezal"]);
+
+/** tipos que usan ESTACIÓN N+M */
+const TIPOS_CON_ESTACION = new Set(["niveladora", "excavadora", "compactadora", "backhoe"]);
+
+/** tipos que usan BOLETA (solo estos) */
+const TIPOS_CON_BOLETA = new Set(["vagoneta", "cabezal"]);
+
+
 
 const ACTIVIDADES_POR_TIPO = {
   vagoneta: ["Acarreo de material", "Riego de agua"],
-  cabezal:  ["Acarreo de material", "Riego de agua"],
+  cabezal: ["Acarreo de material", "Riego de agua"],
   cisterna: ["Riego de agua", "Transporte de agua"],
-  excavadora: ["Extracción y cargo de material","Colocación de alcantarillas","Limpieza"],
-  niveladora: ["Limpieza","Conformación","Lastreado"],
-  backhoe: ["Limpieza","Colocación de alcantarillas","Extensión de material","Carga de material","Excavación","Extracción de material","Demolición"],
+  excavadora: ["Extracción y cargo de material", "Colocación de alcantarillas", "Limpieza"],
+  niveladora: ["Limpieza", "Conformación", "Lastreado"],
+  backhoe: ["Limpieza", "Colocación de alcantarillas", "Extensión de material", "Carga de material", "Excavación", "Extracción de material", "Demolición"],
   compactadora: ["Compactación"],
   cargador: ["Cargar"],
 };
-
 
 /* ---- helpers ---- */
 const onlyDigitsMax = (v, max) => String(v || "").replace(/\D/g, "").slice(0, max);
@@ -467,8 +54,37 @@ const clampHoras = (raw) => {
   const n = Math.max(0, Math.min(18, Number(digits)));
   return String(n);
 };
+/** número positivo con un solo punto decimal */
 const sanitizeCantidad = (raw) =>
   String(raw || "").replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
+
+/** Fecha local YYYY-MM-DD */
+function todayLocalISO() {
+  const now = new Date();
+  const tz = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - tz).toISOString().slice(0, 10);
+}
+
+const COLS = { 1: "md:grid-cols-1", 2: "md:grid-cols-2", 3: "md:grid-cols-3" };
+
+// --- helpers (arriba del componente) ---
+function normalizeFuenteRental(raw = "") {
+  const s = String(raw).trim();
+  if (!s) return { fuente: null, sub: null };
+
+  // "Río Santa Barbara" -> fuente="Ríos", sub="Santa Barbara"
+  if (/^r[ií]o\b/i.test(s)) return { fuente: "Ríos", sub: s.replace(/^r[ií]o\b/i, "").trim() || null };
+  // "Ríos" literal
+  if (/^r[ií]os\b/i.test(s)) return { fuente: "Ríos", sub: null };
+  // "Tajo" literal
+  if (/^tajo\b/i.test(s)) return { fuente: "Tajo", sub: null };
+  // "KYLCSA" literal
+  if (/^kylcsa$/i.test(s)) return { fuente: "KYLCSA", sub: null };
+
+  // por defecto, deja el texto como fuente (si backend lo permite)
+  return { fuente: s, sub: null };
+}
+
 
 export default function CreateRentalReportForm() {
   const { toast } = useToast();
@@ -476,17 +92,19 @@ export default function CreateRentalReportForm() {
   const [operatorsList, setOperatorsList] = useState([]);
 
   const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split("T")[0],
+    fecha: todayLocalISO(),
     operadorId: "",
     tipoMaquinaria: "",
     placa: "",
-    actividad: "",
     cantidad: "",
+    actividad: "",
     horas: "",
-    estacion: "",
     fuente: "",
-    boleta: "",     // municipal
-    boletaK: "",    // KYLCSA
+    boleta: "",   // municipal (6 dígitos)
+    boletaK: "",  // KYLCSA   (6 dígitos)
+    codigoCamino: "",
+    distrito: "",
+    estacion: "", // N+M
   });
 
   const actividadOptions = useMemo(
@@ -494,24 +112,53 @@ export default function CreateRentalReportForm() {
     [formData.tipoMaquinaria]
   );
 
+  // Fuente depende del tipo/actividad (solo vagoneta/cisterna/cabezal)
+  // Fuente depende del tipo/actividad (solo vagoneta/cisterna/cabezal)
   const fuenteOptions = useMemo(() => {
-    const tipo = formData.tipoMaquinaria?.toLowerCase();
+    const tipo = (formData.tipoMaquinaria || "").toLowerCase();
     if (!tipo || !TIPOS_CON_FUENTE.has(tipo)) return [];
 
-    const cfg = rentalSourceOptions[tipo];
-    if (cfg) {
-      if ((tipo === "vagoneta" || tipo === "cabezal") && formData.actividad?.toLowerCase().includes("material"))
-        return cfg.material || [];
-      if (tipo === "cisterna" || formData.actividad?.toLowerCase().includes("agua") || formData.actividad?.toLowerCase().includes("riego"))
-        return cfg.cisterna || [];
-      if (cfg.material) return cfg.material;
+    const act = (formData.actividad || "").toLowerCase();
+    const cfg = rentalSourceOptions?.[tipo] ?? null;
+
+    // helper: normaliza a array
+    const asArray = (x) =>
+      Array.isArray(x) ? x : (x && typeof x === "string" ? [x] : []);
+
+    // 1) Si el config ya es un array (p.ej. cisterna: ["Ríos", "Pozo", ...])
+    if (Array.isArray(cfg)) return cfg;
+
+    // 2) Si no hay config para el tipo, usa default si existe
+    if (!cfg) return asArray(rentalSourceOptions?.default) ?? [];
+
+    // 3) Objeto con llaves; decide por tipo/actividad
+    if (tipo === "cisterna") {
+      return asArray(cfg.cisterna ?? cfg.agua ?? cfg.default ?? rentalSourceOptions?.default);
     }
-    return rentalSourceOptions.default || [];
+
+    // vagoneta / cabezal
+    if (act.includes("material")) {
+      return asArray(cfg.material ?? rentalSourceOptions?.default);
+    }
+    if (act.includes("agua") || act.includes("riego") || act.includes("cisterna")) {
+      return asArray(cfg.cisterna ?? cfg.agua ?? rentalSourceOptions?.default);
+    }
+
+    // fallback razonable
+    return asArray(cfg.material ?? cfg.cisterna ?? rentalSourceOptions?.default);
   }, [formData.tipoMaquinaria, formData.actividad]);
 
-  const showCantidad = TIPOS_CON_CANTIDAD.has(formData.tipoMaquinaria);
-  const showEstacion = TIPOS_CON_ESTACION.has(formData.tipoMaquinaria);
+
   const showFuente = TIPOS_CON_FUENTE.has(formData.tipoMaquinaria) && fuenteOptions.length > 0;
+  const showCantidad = TIPOS_CON_CANTIDAD.has(formData.tipoMaquinaria);
+
+  const showEstacion = TIPOS_CON_ESTACION.has(formData.tipoMaquinaria);
+
+
+  // Habilitación de boleta según fuente
+  const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
+    ? ((formData.fuente || "").toUpperCase() === "KYLCSA" ? "kylcsa" : "municipal")
+    : "disabled";
 
   useEffect(() => {
     (async () => {
@@ -527,69 +174,129 @@ export default function CreateRentalReportForm() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "horas") return setFormData((p) => ({ ...p, horas: clampHoras(value) }));
-    if (name === "boleta") return setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
-    if (name === "boletaK") return setFormData((p) => ({ ...p, boletaK: onlyDigitsMax(value, 6) }));
-    if (name === "cantidad") return setFormData((p) => ({ ...p, cantidad: sanitizeCantidad(value) }));
+
+    if (name === "fecha") {
+      const hoy = todayLocalISO();
+      const v = value > hoy ? hoy : value;
+      setFormData((p) => ({ ...p, fecha: v }));
+      return;
+    }
+
+    if (name === "horas") {
+      setFormData((p) => ({ ...p, horas: clampHoras(value) }));
+      return;
+    }
+
+    if (name === "boleta") {
+      setFormData((p) => ({ ...p, boleta: onlyDigitsMax(value, 6) }));
+      return;
+    }
+
+    if (name === "boletaK") {
+      setFormData((p) => ({ ...p, boletaK: onlyDigitsMax(value, 6) }));
+      return;
+    }
+
+    if (name === "cantidad") {
+      setFormData((p) => ({ ...p, cantidad: sanitizeCantidad(value) }));
+      return;
+    }
+
+    if (name === "codigoCamino") {
+      setFormData((p) => ({ ...p, codigoCamino: onlyDigitsMax(value, 3) }));
+      return;
+    }
+
     setFormData((p) => ({ ...p, [name]: value }));
   };
 
+
   const handleChangeTipo = (tipo) => {
-    setFormData((p) => {
-      const next = { ...p, tipoMaquinaria: tipo, actividad: "" };
-      if (!TIPOS_CON_CANTIDAD.has(tipo)) next.cantidad = "";
-      if (!TIPOS_CON_ESTACION.has(tipo)) next.estacion = "";
-      if (!TIPOS_CON_FUENTE.has(tipo)) next.fuente = "";
-      return next;
-    });
+    setFormData((p) => ({
+      ...p,
+      tipoMaquinaria: tipo,
+      actividad: "",
+      fuente: "",
+      boleta: "",
+      boletaK: "",
+      estacion: TIPOS_CON_ESTACION.has(tipo) ? p.estacion : "",
+      ...(TIPOS_CON_CANTIDAD.has(tipo) ? {} : { cantidad: "" }),
+    }));
   };
 
   const handleFuenteChange = (v) => {
     setFormData((p) => ({
       ...p,
       fuente: v,
-      // si es Río/Tajo no hay boletas
-      boleta: (v === "Ríos" || v === "Tajo") ? "" : p.boleta,
-      boletaK: (v === "Ríos" || v === "Tajo") ? "" : p.boletaK,
+      // si cambia a KYLCSA, limpiamos la municipal; si cambia a otra, limpiamos la KYLCSA
+      boleta: v === "KYLCSA" ? "" : p.boleta,
+      boletaK: v === "KYLCSA" ? p.boletaK : "",
     }));
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
 
-    // Validaciones mínimas
-    if (!formData.operadorId) {
-      toast({ title: "Operador requerido", description: "Selecciona un operador.", variant: "destructive" });
-      return;
-    }
-    if (!formData.tipoMaquinaria) {
-      toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
-      return;
-    }
-    if (!formData.actividad) {
-      toast({ title: "Actividad requerida", description: "Selecciona la actividad.", variant: "destructive" });
-      return;
-    }
-    if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18) {
-      toast({ title: "Horas inválidas", description: "Ingresa un entero entre 0 y 18.", variant: "destructive" });
-      return;
-    }
+    if (!formData.operadorId) return toast({ title: "Encargado requerido", description: "Selecciona el encargado.", variant: "destructive" });
+    if (!formData.tipoMaquinaria) return toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
+    if (!formData.actividad) return toast({ title: "Actividad requerida", description: "Selecciona la actividad.", variant: "destructive" });
+    if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18)
+      return toast({ title: "Horas inválidas", description: "Ingresa un entero entre 0 y 18.", variant: "destructive" });
+
+    const hoy = todayLocalISO();
+    if (formData.fecha > hoy)
+      return toast({ title: "Fecha inválida", description: "Solo se permiten fechas de hoy o del pasado.", variant: "destructive" });
 
     // Reglas de boletas según fuente
-    if ((formData.fuente === "Ríos" || formData.fuente === "Tajo") && (formData.boleta || formData.boletaK)) {
-      toast({ title: "Sin boleta", description: "Con fuente Río o Tajo no se registra número de boleta.", variant: "destructive" });
-      return;
-    }
-    if (formData.fuente === "KYLCSA") {
-      if (!/^\d{6}$/.test(formData.boletaK || "")) {
-        toast({ title: "Boleta KYLCSA requerida", description: "Ingrese exactamente 6 dígitos.", variant: "destructive" });
-        return;
+    if (showFuente) {
+      if (formData.fuente === "KYLCSA") {
+        if (!/^\d{6}$/.test(formData.boletaK || "")) {
+          return toast({
+            title: "Boleta KYLCSA requerida",
+            description: "Ingrese exactamente 6 dígitos.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Municipal (incluye Río/Tajo u otras): si la escriben, debe tener 6 dígitos
+        if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
+          return toast({
+            title: "Boleta inválida",
+            description: "Debe tener exactamente 6 dígitos (o dejar vacía).",
+            variant: "destructive",
+          });
+        }
       }
-    } else if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
-      toast({ title: "Boleta inválida", description: "Debe tener exactamente 6 dígitos (o dejar vacía).", variant: "destructive" });
-      return;
     }
+
+    if (!/^\d{3}$/.test(String(formData.codigoCamino || ""))) {
+      return toast({
+        title: "Código de camino inválido",
+        description: "Debes ingresar exactamente 3 dígitos (ej. 015).",
+        variant: "destructive",
+      });
+    }
+    if (!formData.distrito) {
+      return toast({
+        title: "Distrito requerido",
+        description: "Selecciona un distrito.",
+        variant: "destructive",
+      });
+    }
+
+    // Normaliza la fuente para que el backend reciba "Ríos" | "Tajo" | "KYLCSA"
+    const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
+
+    // Valida cantidad (>0) cuando aplica (cisterna/vagoneta/cabezal)
+    if (showCantidad) {
+      const cant = Number(formData.cantidad);
+      if (!Number.isFinite(cant) || cant <= 0) {
+        return toast({ title: "Cantidad inválida", description: "Debe ser mayor a 0.", variant: "destructive" });
+      }
+    }
+
 
     const payload = {
       fecha: formData.fecha,
@@ -597,102 +304,220 @@ export default function CreateRentalReportForm() {
       tipoMaquinaria: formData.tipoMaquinaria,
       placa: formData.placa || null,
       actividad: formData.actividad,
-      cantidad: showCantidad ? (formData.cantidad === "" ? null : Number(formData.cantidad)) : null,
       horas: Number(formData.horas),
-      //estacion: showEstacion ? formData.estacion || null : null,
-      fuente: showFuente ? formData.fuente || null : null,
-      boleta: formData.fuente === "KYLCSA" ? null : (formData.boleta || null),
-      boletaKylcsa: formData.fuente === "KYLCSA" ? (formData.boletaK || null) : null,
+      cantidad: showCantidad ? (formData.cantidad === "" ? null : Number(formData.cantidad)) : null,
+
+      // ⬅️ aquí el cambio importante
+      fuente: showFuente ? (fuenteNorm || null) : null,
+
+      boleta: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
+        ? (formData.fuente === "KYLCSA" ? null : (formData.boleta || null))
+        : null,
+      boletaKylcsa: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
+        ? (formData.fuente === "KYLCSA" ? (formData.boletaK || null) : null)
+        : null,
+
+      codigoCamino: formData.codigoCamino,
+      distrito: formData.distrito,
+      estacion: showEstacion ? (formData.estacion || null) : null,
     };
 
     try {
       setLoading(true);
       await machineryService.createRentalReport(payload);
       toast({ title: "Boleta de alquiler creada", description: "Se registró correctamente." });
-
       setFormData({
-        fecha: new Date().toISOString().split("T")[0],
+        fecha: todayLocalISO(),
         operadorId: "",
         tipoMaquinaria: "",
         placa: "",
-        actividad: "",
         cantidad: "",
+        actividad: "",
         horas: "",
-        estacion: "",
         fuente: "",
         boleta: "",
         boletaK: "",
+        codigoCamino: "",
+        distrito: "",
+        estacion: "",
       });
     } catch (err) {
-      console.error(err);
-      toast({ title: "Error al crear boleta", description: err?.response?.data?.message || "No se pudo guardar el registro.", variant: "destructive" });
+      console.error("CREATE rental error ->", err?.response?.data || err);
+      toast({
+        title: "Error al crear boleta",
+        description: err?.response?.data?.message || "No se pudo guardar el registro.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+
+  const handleDistritoChange = (v) =>
+    setFormData((p) => ({ ...p, distrito: v }));
+
+
+  // ======= Cols por fila según visibilidad =======
+  const showBoletaMunicipal = boletaMode === "municipal";
+  const showBoletaK = boletaMode === "kylcsa";
+  const showAnyBoleta = showBoletaMunicipal || showBoletaK;
+
+  const row1Cols = 1 + (showAnyBoleta ? 1 : 0) + (showFuente ? 1 : 0); // Encargado + (Boleta?) + (Fuente?)
+  const row3Cols = showCantidad ? 2 : 1; // Cantidad? + Horas
 
   return (
-    <Card className="w-full max-w-3xl mx-auto">
+    <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <CardTitle>Boleta de alquiler</CardTitle>
         <CardDescription>Registra el alquiler de maquinaria externa</CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
-           {/* Fila 1: Fecha / Operador / Tipo */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             <div className="space-y-2">
-               <Label htmlFor="fecha">Fecha</Label>
-               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} required />
-             </div>
-
-             <div className="space-y-2">
-               <Label>Operador</Label>
-                <Select 
-                value={formData.operadorId} 
-                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar operador" />
-                </SelectTrigger>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ==== Fila 1: Encargado | (N° Boleta si aplica) | (Fuente si aplica) ==== */}
+          <div className={`grid grid-cols-1 ${COLS[row1Cols]} gap-4`}>
+            {/* Encargado */}
+            <div className="space-y-2">
+              <Label>Encargado</Label>
+              <Select value={formData.operadorId} onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar encargado" /></SelectTrigger>
                 <SelectContent>
-                  {operatorsList.map((operator) => (
-                    <SelectItem key={operator.id} value={String(operator.id)}>
-                      {operator.name} {operator.last} (ID: {operator.id})
+                  {operatorsList.map((op) => (
+                    <SelectItem key={op.id} value={String(op.id)}>
+                      {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* N.º de boleta (solo cuando aplica) */}
+            {showAnyBoleta && (
+              <div className="space-y-2">
+                <Label htmlFor="boleta">N.º de boleta</Label>
+                {showBoletaK ? (
+                  <Input
+                    id="boletaK"
+                    name="boletaK"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="000000 (KYLCSA)"
+                    value={formData.boletaK}
+                    onChange={handleChange}
+                  />
+                ) : (
+                  showBoletaMunicipal && (
+                    <Input
+                      id="boleta"
+                      name="boleta"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={formData.boleta}
+                      onChange={handleChange}
+                    />
+                  )
+                )}
+              </div>
+            )}
+
+            {/* Fuente (solo cuando aplica) */}
+            {showFuente && (
+              <div className="space-y-2">
+                <Label>Fuente</Label>
+                <Select value={formData.fuente} onValueChange={handleFuenteChange}>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar fuente" /></SelectTrigger>
+                  <SelectContent>
+                    {fuenteOptions.map((f) => (<SelectItem key={f} value={f}>{f}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* ==== Fila 2: Fecha | Tipo de maquinaria | Placa ==== */}
+          <div className={`grid grid-cols-1 ${COLS[3]} gap-4`}>
+            <div className="space-y-2">
+              <Label htmlFor="fecha">Fecha</Label>
+              <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} max={todayLocalISO()} required />
             </div>
 
             <div className="space-y-2">
-              <Label>Tipo de Maquinaria</Label>
+              <Label>Tipo de maquinaria</Label>
               <Select value={formData.tipoMaquinaria} onValueChange={handleChangeTipo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
                 <SelectContent>
-                  {TIPOS_MAQUINARIA.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
+                  {TIPOS_MAQUINARIA.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          {/* Fila 2: Placa / (Cantidad condicional) / Horas */}
-          <div className={`grid grid-cols-1 ${showCantidad ? "md:grid-cols-3" : "md:grid-cols-2"} gap-4`}>
             <div className="space-y-2">
               <Label htmlFor="placa">Placa</Label>
               <Input id="placa" name="placa" value={formData.placa} onChange={handleChange} placeholder="SM 1234" />
             </div>
+          </div>
 
+          {/* ==== Fila 2.1: Código de camino | Distrito ==== */}
+          <div className={`grid grid-cols-1 ${COLS[2]} gap-4`}>
+
+            <div className="space-y-2">
+              <Label>Distrito</Label>
+              <Select value={formData.distrito} onValueChange={handleDistritoChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar distrito" />
+                </SelectTrigger>
+                <SelectContent>
+                  {districtList.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="codigoCamino">Código de camino</Label>
+              <Input
+                id="codigoCamino"
+                name="codigoCamino"
+                inputMode="numeric"
+                pattern="[0-9]{3}"
+                maxLength={3}
+                placeholder="000"
+                value={formData.codigoCamino}
+                onChange={handleChange}
+              />
+              <p className="text-xs text-gray-500 mt-1">Debe tener exactamente 3 dígitos.</p>
+            </div>
+
+          </div>
+
+          {/* ==== Fila 2.2: Estación (N+M) si aplica ==== */}
+          {showEstacion && (
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="estacion">Estación (N+M)</Label>
+                <Input
+                  id="estacion"
+                  name="estacion"
+                  placeholder="Ej: 12+500"
+                  value={formData.estacion}
+                  onChange={handleChange}
+                />
+                <p className="text-xs text-gray-500 mt-1">Formato N+M, p. ej. 12+500.</p>
+              </div>
+            </div>
+          )}
+
+
+          {/* ==== Fila 3: Cantidad (si aplica) | Horas ==== */}
+          <div className={`grid grid-cols-1 ${COLS[row3Cols]} gap-4`}>
             {showCantidad && (
               <div className="space-y-2">
-                <Label htmlFor="cantidad">Cantidad de gondola</Label>
+                <Label htmlFor="cantidad">Cantidad de góndola</Label>
                 <Input
                   id="cantidad"
                   name="cantidad"
@@ -705,12 +530,12 @@ export default function CreateRentalReportForm() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="horas">Horas</Label>
+              <Label htmlFor="horas">Horas laboradas</Label>
               <Input
                 id="horas"
                 name="horas"
                 inputMode="numeric"
-                pattern="\d*"
+                pattern="[0-9]*"
                 placeholder="0"
                 value={formData.horas}
                 onChange={handleChange}
@@ -719,93 +544,44 @@ export default function CreateRentalReportForm() {
             </div>
           </div>
 
-          {/* Actividad (select dependiente) */}
-          <div className="space-y-2">
-            <Label>Actividad</Label>
-            <Select
-              value={formData.actividad}
-              onValueChange={(v) => setFormData((p) => ({ ...p, actividad: v }))}
-              disabled={!formData.tipoMaquinaria}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={formData.tipoMaquinaria ? "Seleccionar actividad" : "Elige un tipo primero"} />
-              </SelectTrigger>
-              <SelectContent>
-                {actividadOptions.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {a}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {/* Fuente */}
-          {showFuente && (
+          {/* ==== Fila 4: Tipo de actividad ==== */}
+          <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <Label>Fuente</Label>
-              <Select value={formData.fuente} onValueChange={handleFuenteChange}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar fuente" /></SelectTrigger>
+              <Label>Tipo de actividad</Label>
+              <Select
+                value={formData.actividad}
+                onValueChange={(v) => setFormData((p) => ({ ...p, actividad: v }))}
+                disabled={!formData.tipoMaquinaria}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={formData.tipoMaquinaria ? "Seleccionar actividad" : "Elige un tipo primero"} />
+                </SelectTrigger>
                 <SelectContent>
-                  {fuenteOptions.map((f) => (<SelectItem key={f} value={f}>{f}</SelectItem>))}
+                  {actividadOptions.map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-
-          {/* Estación + Boletas */}
-          <div className={`grid grid-cols-1 ${showEstacion ? "md:grid-cols-2" : "md:grid-cols-1"} gap-4`}>
-
-            {/* Boleta municipal (si fuente ≠ Río/Tajo/KYLCSA) */}
-            {formData.fuente && !["Ríos","Tajo","KYLCSA"].includes(formData.fuente) && (
-              <div className="space-y-2">
-                <Label htmlFor="boleta">Boleta</Label>
-                <Input id="boleta" name="boleta" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                       placeholder="000000" value={formData.boleta} onChange={handleChange} />
-              </div>
-            )}
-
-            {/* Boleta KYLCSA */}
-            {formData.fuente === "KYLCSA" && (
-              <div className="space-y-2">
-                <Label htmlFor="boletaK">Boleta KYLCSA</Label>
-                <Input id="boletaK" name="boletaK" inputMode="numeric" pattern="\d{6}" maxLength={6}
-                       placeholder="000000" value={formData.boletaK} onChange={handleChange} />
-              </div>
-            )}
           </div>
 
-           <Button
-  type="submit"
-  disabled={loading}
-  className={[
-    // centrar y tamaño
-    "flex items-center justify-center mx-auto",
-    "px-6 py-2.5 min-w-[14rem] w-fit",    // ← un poco más largo
-
-    // tipografía
-    "text-white font-semibold text-sm",
-
-    // borde + halo
-    "border-2 border-green-700",
-    "ring-1 ring-inset ring-green-900/25",
-
-    // color con gradiente (centro más claro)
-    "bg-gradient-to-b from-green-600 to-green-500",
-    "hover:from-green-600 hover:to-green-400",
-
-    // forma/sombra
-    "rounded-lg shadow-md hover:shadow-lg",
-
-    // estados
-    "disabled:opacity-60 disabled:cursor-not-allowed"
-  ].join(" ")}
->
-     {loading ? "Enviando..." : "Crear reporte"}
-</Button>
+          <Button
+            type="submit"
+            disabled={loading}
+            className={[
+              "flex items-center justify-center mx-auto",
+              "px-6 py-2.5 min-w-[14rem] w-fit",
+              "text-white font-semibold text-sm",
+              "border-2 border-green-700",
+              "ring-1 ring-inset ring-green-900/25",
+              "bg-gradient-to-b from-green-600 to-green-500",
+              "hover:from-green-600 hover:to-green-400",
+              "rounded-lg shadow-md hover:shadow-lg",
+              "disabled:opacity-60 disabled:cursor-not-allowed",
+            ].join(" ")}
+          >
+            {loading ? "Enviando..." : "Crear reporte"}
+          </Button>
         </form>
       </CardContent>
     </Card>
   );
 }
-
-
