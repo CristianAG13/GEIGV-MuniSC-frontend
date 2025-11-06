@@ -444,9 +444,12 @@ const updateBoleta = (idx, patch) => {
       <div key={idx} className="border rounded-xl p-3 space-y-3 bg-white">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">Boleta #{idx + 1}</div>
-          <Button type="button" variant="secondary" onClick={() => removeBoleta(idx)}>
-            Eliminar
-          </Button>
+          <Button type="button" variant="secondary" className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold px-4 py-2 rounded"
+         onClick={() => removeBoleta(idx)}
+          >
+           Eliminar
+        </Button>
+
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1546,7 +1549,12 @@ if (needsTrailer && !formData.placaCarreta) {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Boletas del día</h3>
-                <Button type="button" onClick={addBoleta}>+ Agregar boleta</Button>
+                <Button type="button" className="bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-semibold px-4 py-2 rounded"
+                 onClick={addBoleta}
+                >
+                + Agregar boleta
+              </Button>
+
               </div>
               {(formData.boletas || []).map(renderBoletaCard)}
             </div>

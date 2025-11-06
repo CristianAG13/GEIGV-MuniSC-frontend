@@ -1,84 +1,32 @@
+// /src/utils/sweetAlert.js
 import Swal from 'sweetalert2';
 
-/**
- * Configuración personalizada para SweetAlert2
- */
+/** Config por defecto */
 const defaultConfig = {
   confirmButtonColor: '#3b82f6',
   cancelButtonColor: '#6b7280',
   confirmButtonText: 'Aceptar',
   cancelButtonText: 'Cancelar',
-  showClass: {
-    popup: 'animate__animated animate__fadeInDown'
-  },
-  hideClass: {
-    popup: 'animate__animated animate__fadeOutUp'
-  }
+  showClass: { popup: 'animate__animated animate__fadeInDown' },
+  hideClass: { popup: 'animate__animated animate__fadeOutUp' },
 };
 
-/**
- * Alerta de éxito
- */
-export const showSuccess = (title, text = '', options = {}) => {
-  return Swal.fire({
-    ...defaultConfig,
-    icon: 'success',
-    title,
-    text,
-    confirmButtonText: 'Entendido',
-    timer: 3000,
-    timerProgressBar: true,
-    ...options
-  });
-};
+/** Básicas */
+export const showSuccess = (title, text = '', options = {}) =>
+  Swal.fire({ ...defaultConfig, icon: 'success', title, text, confirmButtonText: 'Entendido', timer: 3000, timerProgressBar: true, ...options });
 
-/**
- * Alerta de error
- */
-export const showError = (title, text = '', options = {}) => {
-  return Swal.fire({
-    ...defaultConfig,
-    icon: 'error',
-    title,
-    text,
-    confirmButtonText: 'Entendido',
-    ...options
-  });
-};
+export const showError = (title, text = '', options = {}) =>
+  Swal.fire({ ...defaultConfig, icon: 'error', title, text, confirmButtonText: 'Entendido', ...options });
 
-/**
- * Alerta de advertencia
- */
-export const showWarning = (title, text = '', options = {}) => {
-  return Swal.fire({
-    ...defaultConfig,
-    icon: 'warning',
-    title,
-    text,
-    confirmButtonText: 'Entendido',
-    ...options
-  });
-};
+export const showWarning = (title, text = '', options = {}) =>
+  Swal.fire({ ...defaultConfig, icon: 'warning', title, text, confirmButtonText: 'Entendido', ...options });
 
-/**
- * Alerta de información
- */
-export const showInfo = (title, text = '', options = {}) => {
-  return Swal.fire({
-    ...defaultConfig,
-    icon: 'info',
-    title,
-    text,
-    confirmButtonText: 'Entendido',
-    ...options
-  });
-};
+export const showInfo = (title, text = '', options = {}) =>
+  Swal.fire({ ...defaultConfig, icon: 'info', title, text, confirmButtonText: 'Entendido', ...options });
 
-/**
- * Confirmación de eliminación
- */
-export const confirmDelete = (itemName = 'este elemento', options = {}) => {
-  return Swal.fire({
+/** Confirms genéricos */
+export const confirmDelete = (itemName = 'este elemento', options = {}) =>
+  Swal.fire({
     ...defaultConfig,
     icon: 'warning',
     title: '¿Está seguro?',
@@ -88,15 +36,11 @@ export const confirmDelete = (itemName = 'este elemento', options = {}) => {
     confirmButtonText: 'Sí, eliminar',
     cancelButtonText: 'Cancelar',
     reverseButtons: true,
-    ...options
+    ...options,
   });
-};
 
-/**
- * Confirmación genérica
- */
-export const confirmAction = (title, text = '', options = {}) => {
-  return Swal.fire({
+export const confirmAction = (title, text = '', options = {}) =>
+  Swal.fire({
     ...defaultConfig,
     icon: 'question',
     title,
@@ -105,15 +49,12 @@ export const confirmAction = (title, text = '', options = {}) => {
     confirmButtonText: 'Sí, continuar',
     cancelButtonText: 'Cancelar',
     reverseButtons: true,
-    ...options
+    ...options,
   });
-};
 
-/**
- * Alerta con input de texto
- */
-export const promptText = (title, text = '', placeholder = '', options = {}) => {
-  return Swal.fire({
+/** Prompts */
+export const promptText = (title, text = '', placeholder = '', options = {}) =>
+  Swal.fire({
     ...defaultConfig,
     title,
     text,
@@ -123,19 +64,13 @@ export const promptText = (title, text = '', placeholder = '', options = {}) => 
     confirmButtonText: 'Aceptar',
     cancelButtonText: 'Cancelar',
     inputValidator: (value) => {
-      if (!value && options.required !== false) {
-        return 'Este campo es requerido';
-      }
+      if (!value && options.required !== false) return 'Este campo es requerido';
     },
-    ...options
+    ...options,
   });
-};
 
-/**
- * Alerta con textarea
- */
-export const promptTextarea = (title, text = '', placeholder = '', options = {}) => {
-  return Swal.fire({
+export const promptTextarea = (title, text = '', placeholder = '', options = {}) =>
+  Swal.fire({
     ...defaultConfig,
     title,
     text,
@@ -145,40 +80,18 @@ export const promptTextarea = (title, text = '', placeholder = '', options = {})
     confirmButtonText: 'Aceptar',
     cancelButtonText: 'Cancelar',
     inputValidator: (value) => {
-      if (!value && options.required !== false) {
-        return 'Este campo es requerido';
-      }
+      if (!value && options.required !== false) return 'Este campo es requerido';
     },
-    ...options
+    ...options,
   });
-};
 
-/**
- * Alerta de carga/loading
- */
-export const showLoading = (title = 'Procesando...', text = 'Por favor, espere') => {
-  return Swal.fire({
-    title,
-    text,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: false,
-    didOpen: () => {
-      Swal.showLoading();
-    }
-  });
-};
+/** Loading */
+export const showLoading = (title = 'Procesando...', text = 'Por favor, espere') =>
+  Swal.fire({ title, text, allowOutsideClick: false, allowEscapeKey: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
 
-/**
- * Cerrar alerta de carga
- */
-export const closeLoading = () => {
-  Swal.close();
-};
+export const closeLoading = () => Swal.close();
 
-/**
- * Toast notification (notificación pequeña)
- */
+/** Toast */
 export const showToast = (title, icon = 'success', position = 'top-end') => {
   const Toast = Swal.mixin({
     toast: true,
@@ -189,41 +102,27 @@ export const showToast = (title, icon = 'success', position = 'top-end') => {
     didOpen: (toast) => {
       toast.addEventListener('mouseenter', Swal.stopTimer);
       toast.addEventListener('mouseleave', Swal.resumeTimer);
-    }
+    },
   });
-
-  return Toast.fire({
-    icon,
-    title
-  });
+  return Toast.fire({ icon, title });
 };
 
-/**
- * Alerta de proceso completado con éxito
- */
-export const showProcessSuccess = (title, details = '', nextAction = null) => {
-  const config = {
+/** Extra */
+export const showProcessSuccess = (title, details = '', nextAction = null) =>
+  Swal.fire({
     ...defaultConfig,
     icon: 'success',
     title,
     text: details,
     confirmButtonText: nextAction ? nextAction.text : 'Continuar',
     timer: nextAction ? undefined : 3000,
-    timerProgressBar: !nextAction
-  };
-
-  return Swal.fire(config).then((result) => {
-    if (result.isConfirmed && nextAction && nextAction.callback) {
-      nextAction.callback();
-    }
+    timerProgressBar: !nextAction,
+  }).then((result) => {
+    if (result.isConfirmed && nextAction?.callback) nextAction.callback();
   });
-};
 
-/**
- * Alerta de confirmación para cambios importantes
- */
-export const confirmImportantAction = (title, details = '', actionType = 'cambio') => {
-  return Swal.fire({
+export const confirmImportantAction = (title, details = '', actionType = 'cambio') =>
+  Swal.fire({
     ...defaultConfig,
     icon: 'warning',
     title,
@@ -240,17 +139,11 @@ export const confirmImportantAction = (title, details = '', actionType = 'cambio
     confirmButtonText: 'Sí, continuar',
     cancelButtonText: 'Cancelar',
     reverseButtons: true,
-    focusCancel: true
+    focusCancel: true,
   });
-};
 
-/**
- * Alerta de validación de formulario
- */
-export const showValidationError = (errors = []) => {
-  const errorList = errors.map(error => `• ${error}`).join('<br>');
-  
-  return Swal.fire({
+export const showValidationError = (errors = []) =>
+  Swal.fire({
     ...defaultConfig,
     icon: 'error',
     title: 'Errores de validación',
@@ -258,14 +151,14 @@ export const showValidationError = (errors = []) => {
       <div class="text-left">
         <p class="mb-3">Por favor, corrija los siguientes errores:</p>
         <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-          <div class="text-sm text-red-800">${errorList}</div>
+          <div class="text-sm text-red-800">${errors.map(e => `• ${e}`).join('<br>')}</div>
         </div>
       </div>
     `,
-    confirmButtonText: 'Entendido'
+    confirmButtonText: 'Entendido',
   });
-};
 
+/** Export default agrupado (opcional) */
 export default {
   showSuccess,
   showError,
@@ -280,5 +173,5 @@ export default {
   showToast,
   showProcessSuccess,
   confirmImportantAction,
-  showValidationError
+  showValidationError,
 };
