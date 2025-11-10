@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Mail, ArrowLeft, CheckCircle } from "lucide-react"
+import { Mail, ArrowLeft, CheckCircle, Settings } from "lucide-react"
 import authService from "../services/authService"
 import { showSuccess, showError } from "../utils/sweetAlert"
+import BackendDiagnostic from "../components/BackendDiagnostic"
 
 
 const ForgotPasswordPage = () => {
@@ -13,6 +14,7 @@ const ForgotPasswordPage = () => {
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,7 +23,11 @@ const ForgotPasswordPage = () => {
     setSuccessMessage("")
 
     try {
+      console.log('🚀 Iniciando recuperación de contraseña para:', email);
+      
       const result = await authService.forgotPassword(email)
+      
+      console.log('📨 Resultado de forgot password:', result);
       
       if (result.success) {
         setSuccessMessage(result.message)
@@ -31,11 +37,35 @@ const ForgotPasswordPage = () => {
           result.message || `Hemos enviado las instrucciones para restablecer tu contraseña a ${email}`
         );
       } else {
-        showError('Error al enviar correo', result.error || "Error al enviar el correo. Intenta nuevamente.");
+        console.warn('❌ Error en forgot password:', result.error);
+        
+        // Mostrar información más detallada del error
+        let errorTitle = 'Error al enviar correo';
+        let errorMessage = result.error || "Error al enviar el correo. Intenta nuevamente.";
+        
+        // Personalizar mensaje según el tipo de error
+        if (result.errorCode === 'ECONNABORTED') {
+          errorTitle = 'Tiempo de espera agotado';
+          errorMessage = 'La operación tardó demasiado. El servidor puede estar ocupado configurando el correo. Intenta nuevamente en unos minutos.';
+        } else if (result.errorCode === 'ECONNREFUSED') {
+          errorTitle = 'Servidor no disponible';
+          errorMessage = 'No se puede conectar al servidor. Contacte al administrador del sistema.';
+        } else if (result.httpStatus === 404) {
+          errorTitle = 'Servicio no disponible';
+          errorMessage = 'La función de recuperación de contraseña no está configurada en el servidor.';
+        } else if (result.httpStatus === 500) {
+          errorTitle = 'Error del servidor';
+          errorMessage = 'Error interno del servidor. Es posible que el servicio de correo no esté configurado correctamente.';
+        }
+        
+        setError(errorMessage);
+        showError(errorTitle, errorMessage);
       }
     } catch (err) {
-      console.error("Error inesperado:", err)
-      showError('Error de conexión', 'Intenta nuevamente');
+      console.error("❌ Error inesperado en forgot password:", err);
+      const errorMsg = 'Error inesperado de conexión. Intenta nuevamente.';
+      setError(errorMsg);
+      showError('Error de conexión', errorMsg);
     } finally {
       setIsLoading(false)
     }
@@ -150,7 +180,25 @@ const ForgotPasswordPage = () => {
             Volver al login
           </Link>
         </div>
+
+        {/* Diagnostic Tool Toggle */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => setShowDiagnostic(!showDiagnostic)}
+            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            <Settings className="w-4 h-4 mr-1" />
+            {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico del Backend
+          </button>
+        </div>
       </div>
+
+      {/* Backend Diagnostic Tool */}
+      {showDiagnostic && (
+        <div className="mt-8">
+          <BackendDiagnostic />
+        </div>
+      )}
     </div>
   )
 }
