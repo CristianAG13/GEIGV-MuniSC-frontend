@@ -224,16 +224,40 @@ class AuthService {
   // Recuperar contraseña
   async forgotPassword(email) {
     try {
+      console.log('🔄 Enviando solicitud de recuperación de contraseña para:', email);
+      
       const response = await apiClient.post('/auth/forgot-password', {
         email,
       });
+
+      console.log('✅ Respuesta exitosa de forgot-password:', response.data);
 
       return {
         success: true,
         message: response.data.message || 'Instrucciones enviadas a su correo',
       };
     } catch (error) {
-      console.error('Error en forgot password:', error);
+      console.error('❌ Error en forgot password:', error);
+      
+      // Log detallado del error
+      if (error.response) {
+        console.error('📋 Response error details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      } else if (error.request) {
+        console.error('📡 Request error details:', {
+          code: error.code,
+          message: error.message,
+          timeout: error.config?.timeout,
+          url: error.config?.url,
+          method: error.config?.method
+        });
+      } else {
+        console.error('⚠️ Setup error:', error.message);
+      }
       
       let message = 'Error al procesar solicitud';
       
@@ -252,19 +276,25 @@ class AuthService {
         
         // Mensajes específicos por código de estado
         if (error.response.status === 404) {
-          message = 'Endpoint no encontrado. Verifique que el backend tenga la ruta /auth/forgot-password';
+          message = 'El endpoint de recuperación no está disponible en el servidor. Contacte al administrador.';
         } else if (error.response.status === 400) {
-          message = 'Correo electrónico inválido';
+          message = error.response.data?.message || 'Correo electrónico inválido o no registrado';
         } else if (error.response.status >= 500) {
-          message = 'Error del servidor. Intente más tarde.';
+          message = 'Error interno del servidor. El servicio de correo puede estar desconfigurado.';
         }
+      } else if (error.code === 'ECONNABORTED') {
+        message = 'La operación tardó demasiado tiempo. El servidor puede estar sobrecargado o el servicio de correo está lento.';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose en el puerto 3001.';
+        message = 'No se puede conectar al servidor. Verifique que el backend esté ejecutándose.';
+      } else if (error.code === 'ENOTFOUND') {
+        message = 'No se puede resolver la dirección del servidor. Verifique su conexión a internet.';
       }
 
       return {
         success: false,
         error: message,
+        errorCode: error.code,
+        httpStatus: error.response?.status
       };
     }
   }
