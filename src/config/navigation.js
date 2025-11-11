@@ -16,6 +16,8 @@ import {
 // - Ver reportes eliminados: solo superadmin
 // - Restaurar reportes: solo superadmin
 // - Ver resúmenes: solo superadmin
+// - Ver auditoría: superadmin, ingeniero, inspector
+// - Gestionar auditoría: solo superadmin
 // ========================
 export const rolePermissions = {
   user: ['dashboard'],
@@ -37,7 +39,8 @@ export const rolePermissions = {
   invitado: ['dashboard'],
   inspector: [
     'dashboard', 
-    'transporte' // ✅ Crear/editar reportes
+    'transporte', // ✅ Crear/editar reportes
+    'auditoria' // ✅ Ver auditoría del sistema
   ],
   operario: [
     'dashboard',

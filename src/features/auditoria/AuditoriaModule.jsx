@@ -43,7 +43,7 @@ const AuditoriaModule = () => {
     limit: 50
   });
 
-  // Verificar si el usuario es superadmin o ingeniero
+  // Verificar si el usuario es superadmin, ingeniero o inspector
   const isSuperAdmin = user?.roles && (
     user.roles.includes('superadmin') || 
     user.roles.includes('SuperAdmin') ||
@@ -55,7 +55,12 @@ const AuditoriaModule = () => {
     user.roles.includes('Ingeniero')
   );
 
-  const canViewAudit = isSuperAdmin || isIngeniero;
+  const isInspector = user?.roles && (
+    user.roles.includes('inspector') ||
+    user.roles.includes('Inspector')
+  );
+
+  const canViewAudit = isSuperAdmin || isIngeniero || isInspector;
   const canEditAudit = isSuperAdmin; // Solo superadmin puede editar/eliminar
 
   
@@ -197,11 +202,11 @@ const AuditoriaModule = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit]);
 
   // Función para cargar estadísticas
   const loadAuditStats = useCallback(async (dateRange = {}) => {
-    if (!isSuperAdmin) return;
+    if (!canViewAudit) return;
     
     setIsLoadingStats(true);
     
@@ -216,7 +221,7 @@ const AuditoriaModule = () => {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit]);
 
   // Manejar cambios en los filtros
   const handleFiltersChange = useCallback((newFilters) => {
@@ -586,14 +591,14 @@ const AuditoriaModule = () => {
 
   // Efecto inicial - cargar datos cuando el componente se monta
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (canViewAudit) {
       loadAuditLogs({ page: 1, limit: 50 });
       loadAuditStats();
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit]);
 
-  // Si no es superadmin, mostrar mensaje de acceso denegado
-  if (!isSuperAdmin) {
+  // Si no tiene permisos para ver auditoría, mostrar mensaje de acceso denegado
+  if (!canViewAudit) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card className="max-w-md mx-auto">
@@ -603,7 +608,7 @@ const AuditoriaModule = () => {
               Acceso Denegado
             </h2>
             <p className="text-gray-600 text-center mb-4">
-              Solo los superadministradores pueden acceder al módulo de auditoría.
+              Solo los superadministradores, ingenieros e inspectores pueden acceder al módulo de auditoría.
             </p>
             <Badge variant="destructive">
               Permisos insuficientes
@@ -630,7 +635,7 @@ const AuditoriaModule = () => {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-green-600 border-green-600">
             <Eye className="h-3 w-3 mr-1" />
-            Superadmin
+            {isSuperAdmin ? 'Superadmin' : isIngeniero ? 'Ingeniero' : isInspector ? 'Inspector' : 'Usuario'}
           </Badge>
           <Badge variant="outline">
             {pagination.total} registros totales

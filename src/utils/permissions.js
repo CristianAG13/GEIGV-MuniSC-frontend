@@ -56,6 +56,8 @@ export const getUserRole = (user) => {
  * Ver reportes eliminados| ✅         | ❌        | ❌        | ❌       | ❌
  * Restaurar reportes     | ✅         | ❌        | ❌        | ❌       | ❌
  * Ver resúmenes          | ✅         | ❌        | ❌        | ❌       | ❌
+ * Ver auditoría          | ✅         | ✅        | ✅        | ❌       | ❌
+ * Gestionar auditoría    | ✅         | ❌        | ❌        | ❌       | ❌
  */
 
 // ============ USUARIOS ============
@@ -158,7 +160,7 @@ export const canViewSummaries = (user) => {
 
 // ============ AUDITORÍA ============
 export const canViewAudit = (user) => {
-  return hasRole(user, ['superadmin', 'ingeniero']);
+  return hasRole(user, ['superadmin', 'ingeniero', 'inspector']);
 };
 
 export const canManageAudit = (user) => {
