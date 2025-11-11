@@ -56,6 +56,8 @@ export const getUserRole = (user) => {
  * Ver reportes eliminados| ✅         | ❌        | ❌        | ❌       | ❌
  * Restaurar reportes     | ✅         | ❌        | ❌        | ❌       | ❌
  * Ver resúmenes          | ✅         | ❌        | ❌        | ❌       | ❌
+ * Ver auditoría          | ✅         | ✅        | ✅        | ❌       | ❌
+ * Gestionar auditoría    | ✅         | ❌        | ❌        | ❌       | ❌
  */
 
 // ============ USUARIOS ============
@@ -158,11 +160,28 @@ export const canViewSummaries = (user) => {
 
 // ============ AUDITORÍA ============
 export const canViewAudit = (user) => {
-  return hasRole(user, ['superadmin', 'ingeniero']);
+  return hasRole(user, ['superadmin', 'ingeniero', 'inspector']);
 };
 
 export const canManageAudit = (user) => {
   return hasRole(user, 'superadmin');
+};
+
+// ============ ESTADÍSTICAS ============
+export const canViewStatistics = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero', 'inspector']);
+};
+
+export const canViewAdvancedStatistics = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
+};
+
+export const canViewSystemTrends = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
+};
+
+export const canViewAdvancedAuditStats = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
 };
 
 // ============ EXPORTACIÓN ============
@@ -213,6 +232,10 @@ export default {
   canViewSummaries,
   canViewAudit,
   canManageAudit,
+  canViewStatistics,
+  canViewAdvancedStatistics,
+  canViewSystemTrends,
+  canViewAdvancedAuditStats,
   canExportData,
   filterReportsByPermission,
 };
