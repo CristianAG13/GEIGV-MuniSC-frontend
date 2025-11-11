@@ -6,6 +6,7 @@ const operatorsService = {
   // Obtener todos los operadores
   getAllOperators: async () => {
     const response = await apiClient.get('/operators');
+    console.log("🔍 [DEBUG] Respuesta completa de operadores:", response.data);
     return response.data;
   },
 

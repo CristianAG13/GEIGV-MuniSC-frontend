@@ -103,6 +103,12 @@ export default function CreateReportForm({
   // Placas de carreta desde catálogo (cada item: { id, placa, tipoMaquinaria, categoria, materialTipo })
   const [trailerOptions, setTrailerOptions] = useState([]);
 
+  // Debug: monitorear cambios en formData
+  useEffect(() => {
+    console.log("🔍 [DEBUG] FormData cambió:", formData);
+    console.log("🔍 [DEBUG] OperadorId actual:", formData.operadorId);
+  }, [formData]);
+
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
   const [tajosList, setTajosList] = useState([]);
@@ -307,13 +313,28 @@ const getFuenteOptions = useCallback(() => {
         // Si el usuario es operario, auto-asignar su operador
         if (isOperario && user?.id && Array.isArray(operators)) {
           console.log("🔍 [DEBUG] Buscando operador para usuario ID:", user.id);
-          // Buscar el operador asociado al usuario actual
-          const myOperator = operators.find(op => op.userId === user.id);
+          console.log("🔍 [DEBUG] Todos los operadores:", operators.map(op => ({
+            id: op.id,
+            name: op.name,
+            userId: op.userId,
+            user_id: op.user_id
+          })));
+          
+          // Buscar el operador asociado al usuario actual - probar ambos campos
+          let myOperator = operators.find(op => op.userId === user.id);
+          if (!myOperator) {
+            myOperator = operators.find(op => op.user_id === user.id);
+            console.log("🔍 [DEBUG] Buscando con user_id, encontrado:", myOperator);
+          }
           console.log("🔍 [DEBUG] Operador encontrado:", myOperator);
           
           if (myOperator && mode === "create") {
             console.log("🔍 [DEBUG] Auto-asignando operador:", myOperator.id);
-            setFormData(prev => ({ ...prev, operadorId: myOperator.id }));
+            setFormData(prev => {
+              const newData = { ...prev, operadorId: myOperator.id };
+              console.log("🔍 [DEBUG] FormData actualizado:", newData);
+              return newData;
+            });
           } else {
             console.log("🔍 [DEBUG] No se auto-asignó operador. Razones:", {
               hasOperator: !!myOperator,
@@ -1339,8 +1360,15 @@ if (needsTrailer && !formData.placaCarreta) {
             <div className="space-y-2">
               <Label>Operador</Label>
               <Select
-                value={formData.operadorId ? String(formData.operadorId) : ""}
-                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
+                value={(() => {
+                  const value = formData.operadorId ? String(formData.operadorId) : "";
+                  console.log("🔍 [DEBUG] Select value:", value, "operadorId:", formData.operadorId);
+                  return value;
+                })()}
+                onValueChange={(v) => {
+                  console.log("🔍 [DEBUG] Select onChange:", v);
+                  setFormData((p) => ({ ...p, operadorId: Number(v) }));
+                }}
                 disabled={isOperario}
               >
                 <SelectTrigger>
