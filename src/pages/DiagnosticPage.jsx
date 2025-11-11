@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import StatisticsDiagnostic from '@/components/StatisticsDiagnostic';
 import BackendDiagnostic from '@/components/BackendDiagnostic';
+import OperatorDiagnostic from '@/components/OperatorDiagnostic';
 
 const DiagnosticPage = () => {
   return (
@@ -16,6 +17,9 @@ const DiagnosticPage = () => {
             </p>
           </CardContent>
         </Card>
+
+        {/* Diagnóstico de Operadores */}
+        <OperatorDiagnostic />
 
         {/* Diagnóstico de Estadísticas */}
         <StatisticsDiagnostic />
