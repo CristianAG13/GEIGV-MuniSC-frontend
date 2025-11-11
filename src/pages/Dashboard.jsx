@@ -17,6 +17,7 @@ import { clearNavigationCache } from '@/utils/refreshNavigation';
 import TransporteModule from '../features/transporte/TransporteModule';
 import { OperadoresModule } from '../features/operadores';
 import { AuditoriaModule } from '../features/auditoria';
+import EstadisticasModule from '../features/estadisticas/EstadisticasModule';
 
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
@@ -740,26 +741,49 @@ export default function Dashboard() {
           </div>
         )}
 
-         {/* Sistema de Análisis y Reportes */}
+        {/* Sistema de Análisis y Reportes */}
         <div className="mb-8">
           <h3 className="text-xl font-semibold text-gray-900 mb-4 border-l-4 border-santa-cruz-green-600 pl-3">
-            Análisis del sistema 
+            Análisis y Métricas del Sistema 
           </h3>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-lg font-semibold text-gray-900">Auditoría y Estadísticas</p>
-                <p className="text-sm text-gray-500 mt-2">Sistema completo de auditoría con estadísticas integradas y análisis detallado</p>
-                <button 
-                  onClick={() => setActiveSection('auditoria')}
-                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
-                >
-                  <Shield className="w-4 h-4 mr-2" />
-                  Acceder
-                </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Estadísticas */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">Estadísticas del Sistema</p>
+                  <p className="text-sm text-gray-500 mt-2">Dashboard completo con métricas, análisis de tendencias y estadísticas detalladas</p>
+                  <button 
+                    onClick={() => setActiveSection('estadisticas')}
+                    className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm inline-flex items-center"
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Ver Estadísticas
+                  </button>
+                </div>
+                <div className="p-3 bg-indigo-100 rounded-full">
+                  <BarChart3 className="w-8 h-8 text-indigo-600" />
+                </div>
               </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <Shield className="w-10 h-10 text-purple-600" />
+            </div>
+
+            {/* Auditoría */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">Auditoría del Sistema</p>
+                  <p className="text-sm text-gray-500 mt-2">Logs de auditoría, usuarios conectados y estadísticas avanzadas de seguridad</p>
+                  <button 
+                    onClick={() => setActiveSection('auditoria')}
+                    className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    Ver Auditoría
+                  </button>
+                </div>
+                <div className="p-3 bg-purple-100 rounded-full">
+                  <Shield className="w-8 h-8 text-purple-600" />
+                </div>
               </div>
             </div>
           </div>
@@ -950,7 +974,8 @@ export default function Dashboard() {
         return <TransporteModule />;
       case 'operadores':
         return <OperadoresModule />;
-
+      case 'estadisticas':
+        return <EstadisticasModule />;
       case 'configuracion':
         return <SweetAlertDemo />;
       case 'auditoria':

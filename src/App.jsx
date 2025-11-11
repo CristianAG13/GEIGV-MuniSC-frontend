@@ -12,6 +12,7 @@ import TokenExpirationWarning from "./components/TokenExpirationWarning.jsx";
 import TransporteModule from "./features/transporte/TransporteModule.jsx";
 import OperatorsPage from "./features/operadores/components/OperatorsIndex.jsx"; // <- si lo tienes
 import { AuditoriaModule } from "./features/auditoria/index.js";
+import DiagnosticPage from "./pages/DiagnosticPage.jsx";
 
  import CreateMachineryForm from "./features/transporte/components/forms/create-machinery-form.jsx";
 import CreateMaterialReportForm from "./features/transporte/components/forms/create-material-report-form.jsx";
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="catalogo" element={<CatalogTabs />} />
+        <Route path="/diagnostic" element={<DiagnosticPage />} />
         <Route 
   path="/maquinaria" 
   element={

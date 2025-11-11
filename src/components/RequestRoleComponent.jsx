@@ -206,8 +206,9 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
     const rr = request.requestedRole ?? request.role ?? null;
     if (!rr) return '';
     if (typeof rr === 'string') return rr;
-    if (typeof rr === 'object' && rr.name) return rr.name;
-    return '';
+    if (typeof rr === 'object' && rr.name) return String(rr.name);
+    if (typeof rr === 'object') return String(rr);
+    return String(rr || '');
   };
 
   // Verificar si el usuario ya tiene un rol asignado
@@ -363,7 +364,7 @@ const RequestRoleComponent = ({ user, onRequestSent }) => {
                       </div>
                       
                       <p className="text-sm font-medium text-gray-900 mb-1">
-                        Rol solicitado: <span className="text-blue-600">{getRequestedRoleName(request)}</span>
+                        Rol solicitado: <span className="text-blue-600">{String(getRequestedRoleName(request))}</span>
                       </p>
                       
                       {request.justification && (

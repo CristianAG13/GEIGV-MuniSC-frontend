@@ -4,28 +4,15 @@ import {
   Home, Users, Truck, UserCheck, HardHat, Shield, BarChart3
 } from 'lucide-react';
 
-// ========================
-// CONFIG DE PERMISOS POR ROL
-// Basado en la tabla del backend:
-// - Gestionar usuarios: solo superadmin
-// - Gestionar roles: solo superadmin
-// - Aprobar solicitudes: solo superadmin
-// - Ver/editar operadores: solo superadmin (operario ve solo los suyos)
-// - Gestionar maquinaria: solo superadmin
-// - Crear/editar reportes: superadmin, ingeniero, inspector, operario (solo propios)
-// - Ver reportes eliminados: solo superadmin
-// - Restaurar reportes: solo superadmin
-// - Ver resúmenes: solo superadmin
-// - Ver auditoría: superadmin, ingeniero, inspector
-// - Gestionar auditoría: solo superadmin
-// ========================
+
 export const rolePermissions = {
   user: ['dashboard'],
   operator: ['dashboard'],
   ingeniero: [
     'dashboard', 
     'transporte', // ✅ Crear/editar reportes
-    'auditoria' // ✅ Auditoría con estadísticas integradas
+    'estadisticas', // ✅ Dashboard de estadísticas completo
+    'auditoria' // ✅ Auditoría del sistema (logs y usuarios activos)
   ],
   superadmin: [
     'dashboard', 
@@ -33,14 +20,16 @@ export const rolePermissions = {
     'transporte', // ✅ Crear/editar reportes
     'solicitudes-rol', // ✅ Aprobar solicitudes
     'operadores', // ✅ Ver/editar todos los operadores
-    'auditoria' // ✅ Acceso completo a auditoría con estadísticas integradas
+    'estadisticas', // ✅ Dashboard de estadísticas completo
+    'auditoria' // ✅ Acceso completo a auditoría (logs, usuarios activos y estadísticas de auditoría)
   ],
   guest: ['dashboard'],
   invitado: ['dashboard'],
   inspector: [
     'dashboard', 
     'transporte', // ✅ Crear/editar reportes
-    'auditoria' // ✅ Ver auditoría del sistema con estadísticas básicas
+    'estadisticas', // ✅ Dashboard de estadísticas (básicas)
+    'auditoria' // ✅ Ver auditoría del sistema (logs y estadísticas básicas de auditoría)
   ],
   operario: [
     'dashboard',
@@ -103,11 +92,19 @@ export const sidebarData = {
 
   system: [
     { 
+      id: 'estadisticas', 
+      name: 'Estadísticas del Sistema', 
+      icon: BarChart3, 
+      permission: 'estadisticas',
+      description: 'Dashboard completo de métricas y análisis de tendencias',
+      category: 'system'
+    },
+    { 
       id: 'auditoria', 
-      name: 'Auditoría y Estadísticas', 
+      name: 'Auditoría del Sistema', 
       icon: Shield, 
       permission: 'auditoria',
-      description: 'Auditoría del sistema con estadísticas integradas y análisis completo',
+      description: 'Logs de auditoría y usuarios conectados al sistema',
       category: 'system'
     }
   ]
