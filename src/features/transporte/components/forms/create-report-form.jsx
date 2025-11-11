@@ -79,9 +79,20 @@ export default function CreateReportForm({
 
   // Verificar si el usuario es operario
   const isOperario = useMemo(() => {
-    if (!user || !user.roles) return false;
+    console.log("🔍 [DEBUG] Verificando rol operario para usuario:", user);
+    if (!user || !user.roles) {
+      console.log("🔍 [DEBUG] Usuario o roles no disponibles");
+      return false;
+    }
     const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
-    return userRoles.some(r => String(r).toLowerCase() === 'operario');
+    console.log("🔍 [DEBUG] Roles procesados:", userRoles);
+    const isOp = userRoles.some(r => {
+      const roleStr = String(r).toLowerCase();
+      console.log("🔍 [DEBUG] Evaluando rol:", r, "=>", roleStr);
+      return roleStr === 'operario';
+    });
+    console.log("🔍 [DEBUG] Resultado isOperario:", isOp);
+    return isOp;
   }, [user]);
 
   // ====== ESTADO ======
@@ -286,16 +297,37 @@ const getFuenteOptions = useCallback(() => {
   useEffect(() => {
     (async () => {
       try {
+        console.log("🔍 [DEBUG] Cargando operadores...");
+        console.log("🔍 [DEBUG] Usuario actual:", { id: user?.id, roles: user?.roles, isOperario });
+        
         const operators = await operatorsService.getAllOperators();
+        console.log("🔍 [DEBUG] Operadores obtenidos:", operators);
+        
         setOperatorsList(Array.isArray(operators) ? operators : []);
         
         // Si el usuario es operario, auto-asignar su operador
         if (isOperario && user?.id && Array.isArray(operators)) {
+          console.log("🔍 [DEBUG] Buscando operador para usuario ID:", user.id);
           // Buscar el operador asociado al usuario actual
           const myOperator = operators.find(op => op.userId === user.id);
+          console.log("🔍 [DEBUG] Operador encontrado:", myOperator);
+          
           if (myOperator && mode === "create") {
+            console.log("🔍 [DEBUG] Auto-asignando operador:", myOperator.id);
             setFormData(prev => ({ ...prev, operadorId: myOperator.id }));
+          } else {
+            console.log("🔍 [DEBUG] No se auto-asignó operador. Razones:", {
+              hasOperator: !!myOperator,
+              isCreateMode: mode === "create",
+              mode
+            });
           }
+        } else {
+          console.log("🔍 [DEBUG] No se ejecuta auto-asignación. Razones:", {
+            isOperario,
+            hasUserId: !!user?.id,
+            isArrayOperators: Array.isArray(operators)
+          });
         }
       } catch (e) {
         console.error("[CreateReportForm] getAllOperators error:", e);
