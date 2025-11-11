@@ -205,13 +205,13 @@ const OperatorsStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.operatorsByShift).map(([shift, count]) => {
+              {data.operatorsByShift && Object.entries(data.operatorsByShift).map(([shift, count]) => {
                 const config = shiftConfig[shift] || {
                   label: shift,
                   time: '',
                   color: 'bg-gray-100 text-gray-800'
                 };
-                const percentage = ((count / data.totalOperators) * 100).toFixed(1);
+                const percentage = data.totalOperators > 0 ? ((count / data.totalOperators) * 100).toFixed(1) : '0';
                 
                 return (
                   <div key={shift} className="flex items-center justify-between p-3 border rounded-lg">
@@ -247,13 +247,13 @@ const OperatorsStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.operatorsByExperience).map(([experience, count]) => {
+              {data.operatorsByExperience && Object.entries(data.operatorsByExperience).map(([experience, count]) => {
                 const config = experienceConfig[experience] || {
                   label: experience,
                   color: 'bg-gray-100 text-gray-800',
                   description: ''
                 };
-                const percentage = ((count / data.totalOperators) * 100).toFixed(1);
+                const percentage = data.totalOperators > 0 ? ((count / data.totalOperators) * 100).toFixed(1) : '0';
                 
                 return (
                   <div key={experience} className="flex items-center justify-between p-3 border rounded-lg">
