@@ -317,27 +317,42 @@ const getFuenteOptions = useCallback(() => {
         
         // Si el usuario es operario, auto-asignar su operador
         if (isOperario && user?.id && Array.isArray(operators)) {
-          console.log("🔍 [DEBUG] Buscando operador para usuario ID:", user.id);
+          console.log("🔍 [DEBUG] Buscando operador para usuario ID:", user.id, "tipo:", typeof user.id);
           console.log("🔍 [DEBUG] Todos los operadores:", operators.map(op => ({
             id: op.id,
             name: op.name,
             userId: op.userId,
-            user_id: op.user_id
+            user_id: op.user_id,
+            userIdType: typeof op.userId,
+            user_idType: typeof op.user_id
           })));
           
-          // Buscar el operador asociado al usuario actual - probar ambos campos
+          // Buscar el operador asociado al usuario actual - probar múltiples comparaciones
           let myOperator = operators.find(op => op.userId === user.id);
+          console.log("🔍 [DEBUG] Búsqueda 1 (userId ===):", myOperator);
+          
           if (!myOperator) {
             myOperator = operators.find(op => op.user_id === user.id);
-            console.log("🔍 [DEBUG] Buscando con user_id, encontrado:", myOperator);
+            console.log("🔍 [DEBUG] Búsqueda 2 (user_id ===):", myOperator);
           }
-          console.log("🔍 [DEBUG] Operador encontrado:", myOperator);
+          
+          if (!myOperator) {
+            myOperator = operators.find(op => String(op.userId) === String(user.id));
+            console.log("🔍 [DEBUG] Búsqueda 3 (String(userId) ===):", myOperator);
+          }
+          
+          if (!myOperator) {
+            myOperator = operators.find(op => String(op.user_id) === String(user.id));
+            console.log("🔍 [DEBUG] Búsqueda 4 (String(user_id) ===):", myOperator);
+          }
+          
+          console.log("🔍 [DEBUG] Operador FINAL encontrado:", myOperator);
           
           if (myOperator && mode === "create") {
             console.log("🔍 [DEBUG] Auto-asignando operador:", myOperator.id);
             setFormData(prev => {
-              const newData = { ...prev, operadorId: myOperator.id };
-              console.log("🔍 [DEBUG] FormData actualizado:", newData);
+              const newData = { ...prev, operadorId: String(myOperator.id) };
+              console.log("🔍 [DEBUG] FormData actualizado (como string):", newData);
               return newData;
             });
           } else {
@@ -1372,7 +1387,7 @@ if (needsTrailer && !formData.placaCarreta) {
                 })()}
                 onValueChange={(v) => {
                   console.log("🔍 [DEBUG] Select onChange:", v);
-                  setFormData((p) => ({ ...p, operadorId: Number(v) }));
+                  setFormData((p) => ({ ...p, operadorId: v }));
                 }}
                 disabled={isOperario}
               >
