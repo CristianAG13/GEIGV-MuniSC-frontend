@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
+import usersService from "@/services/usersService";
 import { machineryFields } from "@/utils/machinery-fields";
 import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions, rivers } from "@/utils/districts";
 import sourceService from "@/services/sourceService";
@@ -79,19 +80,14 @@ export default function CreateReportForm({
 
   // Verificar si el usuario es operario
   const isOperario = useMemo(() => {
-    console.log("🔍 [DEBUG] Verificando rol operario para usuario:", user);
     if (!user || !user.roles) {
-      console.log("🔍 [DEBUG] Usuario o roles no disponibles");
       return false;
     }
     const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
-    console.log("🔍 [DEBUG] Roles procesados:", userRoles);
     const isOp = userRoles.some(r => {
       const roleStr = String(r).toLowerCase();
-      console.log("🔍 [DEBUG] Evaluando rol:", r, "=>", roleStr);
       return roleStr === 'operario';
     });
-    console.log("🔍 [DEBUG] Resultado isOperario:", isOp);
     return isOp;
   }, [user]);
 
@@ -164,15 +160,7 @@ export default function CreateReportForm({
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
 
-  // Debug: monitorear cambios en formData (colocado después de la inicialización)
-  useEffect(() => {
-    try {
-      console.log("🔍 [DEBUG] FormData cambió:", formData);
-      console.log("🔍 [DEBUG] OperadorId actual:", formData?.operadorId);
-    } catch (err) {
-      console.warn("🔍 [DEBUG] Error al loggear formData:", err);
-    }
-  }, [formData]);
+
 
   // ====== DERIVADOS ======
   const isMaterialFlow = useMemo(() => {
@@ -308,38 +296,33 @@ const getFuenteOptions = useCallback(() => {
   useEffect(() => {
     (async () => {
       try {
-        console.log("🔍 [DEBUG] Cargando operadores...");
-        console.log("🔍 [DEBUG] Usuario actual:", { id: user?.id, roles: user?.roles, isOperario });
+        const allUsers = await usersService.getAllUsers();
         
-        const operators = await operatorsService.getAllOperators();
-        console.log("🔍 [DEBUG] Operadores obtenidos:", operators);
+        // Filtrar: Solo incluir usuarios que SÍ sean operarios (boleta municipal)
+        const operatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
+          // Buscar cualquier referencia a "operario"
+          const userString = JSON.stringify(user).toLowerCase();
+          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+          
+          return hasOperario; // Incluir solo si contiene "operario" en cualquier parte
+        }) : [];
         
-        setOperatorsList(Array.isArray(operators) ? operators : []);
+        setOperatorsList(operatorsOnly);
         
         // Si el usuario es operario, auto-asignar su operador usando endpoint específico
         if (isOperario && mode === "create") {
-          console.log("🔍 [DEBUG] Usuario es operario, obteniendo mi operador del backend...");
           try {
             const myOperatorResponse = await operatorsService.getMyOperator();
             if (myOperatorResponse.success && myOperatorResponse.data) {
               const myOperator = myOperatorResponse.data;
-              console.log("🔍 [DEBUG] Mi operador obtenido del backend:", myOperator);
-              
-              setFormData(prev => {
-                const newData = { ...prev, operadorId: String(myOperator.id) };
-                console.log("🔍 [DEBUG] Auto-asignando operador:", newData);
-                return newData;
-              });
-            } else {
-              console.log("🔍 [DEBUG] No se encontró operador asociado al usuario");
+              setFormData(prev => ({ ...prev, operadorId: String(myOperator.id) }));
             }
           } catch (myOpError) {
-            console.log("🔍 [DEBUG] Error al obtener mi operador:", myOpError);
             // Fallback: No mostrar error al usuario, simplemente no auto-asignar
           }
         }
       } catch (e) {
-        console.error("[CreateReportForm] getAllOperators error:", e);
+        console.error("[CreateReportForm] getAllUsers error:", e);
         toast({
           title: "No se pudieron cargar los operadores",
           description: "Verifica tu conexión.",
@@ -1086,7 +1069,7 @@ if (needsTrailer && !formData.placaCarreta) {
     }
 
     const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
-    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
+    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.lastname || selectedOperator.last}` : `ID: ${formData.operadorId}`;
 
     const res = await confirmAction(
       mode === "edit" ? "¿Guardar cambios del reporte?" : "¿Crear reporte?",
@@ -1372,9 +1355,9 @@ if (needsTrailer && !formData.placaCarreta) {
                   <SelectValue placeholder={isOperario ? "Tu usuario de operador" : "Seleccionar operador"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {operatorsList.map((operator) => (
-                    <SelectItem key={operator.id} value={String(operator.id)}>
-                      {operator.name} {operator.last} (ID: {operator.id})
+                  {operatorsList.map((user) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.name} {user.lastname || user.last} (ID: {user.id})
                     </SelectItem>
                   ))}
                 </SelectContent>

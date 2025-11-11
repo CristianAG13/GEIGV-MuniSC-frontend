@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
+import usersService from "@/services/usersService";
 import sourceService from "@/services/sourceService";
 
 import {
@@ -199,11 +200,21 @@ const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMat
   useEffect(() => {
     (async () => {
       try {
-        const operators = await operatorsService.getAllOperators();
-        setOperatorsList(Array.isArray(operators) ? operators : []);
+        const allUsers = await usersService.getAllUsers();
+        
+        // Filtrar: Solo incluir usuarios que NO sean operarios
+        const nonOperatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
+          // Buscar cualquier referencia a "operario"
+          const userString = JSON.stringify(user).toLowerCase();
+          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+          
+          return !hasOperario; // Excluir si contiene "operario" en cualquier parte
+        }) : [];
+        
+        setOperatorsList(nonOperatorsOnly);
       } catch (error) {
-        console.error(error);
-        toast({ title: "Error", description: "No se pudieron cargar los operadores.", variant: "destructive" });
+        console.error("[CreateRentalReportForm] getAllUsers error:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
       }
     })();
   }, [toast]);
@@ -744,9 +755,9 @@ return;
                   <SelectValue placeholder="Seleccionar encargado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {operatorsList.map((op) => (
-                    <SelectItem key={op.id} value={String(op.id)}>
-                      {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
+                  {operatorsList.map((user) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.name} {user.lastname || user.last} {user.identification ? `(${user.identification})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
