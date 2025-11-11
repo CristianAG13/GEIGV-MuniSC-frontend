@@ -837,11 +837,29 @@ export default function Dashboard() {
                         className="w-full text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Sin rol</option>
-                        {roles.map(role => (
-                          <option key={role.id} value={role.name}>
-                            {role.name}
-                          </option>
-                        ))}
+                        {roles
+                          .filter(role => {
+                            const roleName = role.name.toLowerCase();
+                            const userCurrentRole = user.roles && user.roles.length > 0 ? user.roles[0].name.toLowerCase() : '';
+                            
+                            // Si es operario y el usuario ya lo tiene, mostrarlo
+                            if ((roleName === 'operario' || roleName === 'operator') && 
+                                (userCurrentRole === 'operario' || userCurrentRole === 'operator')) {
+                              return true;
+                            }
+                            
+                            // Para otros casos, ocultar operario
+                            if (roleName === 'operario' || roleName === 'operator') {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
+                          .map(role => (
+                            <option key={role.id} value={role.name}>
+                              {role.name}
+                            </option>
+                          ))}
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap w-32">
