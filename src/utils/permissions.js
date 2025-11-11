@@ -167,6 +167,23 @@ export const canManageAudit = (user) => {
   return hasRole(user, 'superadmin');
 };
 
+// ============ ESTADÍSTICAS ============
+export const canViewStatistics = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero', 'inspector']);
+};
+
+export const canViewAdvancedStatistics = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
+};
+
+export const canViewSystemTrends = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
+};
+
+export const canViewAdvancedAuditStats = (user) => {
+  return hasRole(user, ['superadmin', 'ingeniero']);
+};
+
 // ============ EXPORTACIÓN ============
 export const canExportData = (user) => {
   // Todos pueden exportar datos que pueden ver
@@ -215,6 +232,10 @@ export default {
   canViewSummaries,
   canViewAudit,
   canManageAudit,
+  canViewStatistics,
+  canViewAdvancedStatistics,
+  canViewSystemTrends,
+  canViewAdvancedAuditStats,
   canExportData,
   filterReportsByPermission,
 };
