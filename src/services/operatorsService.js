@@ -6,6 +6,7 @@ const operatorsService = {
   // Obtener todos los operadores
   getAllOperators: async () => {
     const response = await apiClient.get('/operators');
+    console.log("🔍 [DEBUG] Respuesta completa de operadores:", response.data);
     return response.data;
   },
 
@@ -60,6 +61,12 @@ const operatorsService = {
   // Obtener reportes de un operador
   getReportsByOperator: async (id) => {
     const response = await apiClient.get(`/operators/${id}/reports`);
+    return response.data;
+  },
+
+  // Obtener el operador del usuario actual (para auto-asignación)
+  getMyOperator: async () => {
+    const response = await apiClient.get('/operators/my-operator');
     return response.data;
   }
 };

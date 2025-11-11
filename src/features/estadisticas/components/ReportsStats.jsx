@@ -211,12 +211,12 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.reportsByType).map(([type, count]) => {
+              {data.reportsByType && Object.entries(data.reportsByType).map(([type, count]) => {
                 const config = typeConfig[type] || {
                   label: type,
                   color: 'bg-gray-100 text-gray-800'
                 };
-                const percentage = ((count / data.totalReports) * 100).toFixed(1);
+                const percentage = data.totalReports > 0 ? ((count / data.totalReports) * 100).toFixed(1) : '0';
                 
                 return (
                   <div key={type} className="flex items-center justify-between p-3 border rounded-lg">
@@ -226,10 +226,15 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
                       </Badge>
                       <p className="text-xs text-gray-500 mt-1">{percentage}% del total</p>
                     </div>
-                    <span className="text-2xl font-bold text-gray-900">{count}</span>
+                    <span className="text-2xl font-bold text-gray-900">{count || 0}</span>
                   </div>
                 );
               })}
+              {!data.reportsByType && (
+                <div className="text-center py-4 text-gray-500">
+                  <p>No hay datos de tipos disponibles</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -244,14 +249,14 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.reportsByStatus).map(([status, count]) => {
+              {data.reportsByStatus && Object.entries(data.reportsByStatus).map(([status, count]) => {
                 const config = statusConfig[status] || {
                   label: status,
                   color: 'bg-gray-100 text-gray-800',
                   icon: AlertTriangle
                 };
                 const IconComponent = config.icon;
-                const percentage = ((count / data.totalReports) * 100).toFixed(1);
+                const percentage = data.totalReports > 0 ? ((count / data.totalReports) * 100).toFixed(1) : '0';
                 
                 return (
                   <div key={status} className="flex items-center justify-between p-3 border rounded-lg">
@@ -264,10 +269,15 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
                         <p className="text-xs text-gray-500 mt-1">{percentage}%</p>
                       </div>
                     </div>
-                    <span className="text-2xl font-bold text-gray-900">{count}</span>
+                    <span className="text-2xl font-bold text-gray-900">{count || 0}</span>
                   </div>
                 );
               })}
+              {!data.reportsByStatus && (
+                <div className="text-center py-4 text-gray-500">
+                  <p>No hay datos de estados disponibles</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -282,12 +292,12 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.reportsByPriority).map(([priority, count]) => {
+              {data.reportsByPriority && Object.entries(data.reportsByPriority).map(([priority, count]) => {
                 const config = priorityConfig[priority] || {
                   label: priority,
                   color: 'bg-gray-100 text-gray-800'
                 };
-                const percentage = ((count / data.totalReports) * 100).toFixed(1);
+                const percentage = data.totalReports > 0 ? ((count / data.totalReports) * 100).toFixed(1) : '0';
                 
                 return (
                   <div key={priority} className="flex items-center justify-between p-3 border rounded-lg">
@@ -297,10 +307,15 @@ const ReportsStats = ({ data, isLoading, onRefresh }) => {
                       </Badge>
                       <p className="text-xs text-gray-500 mt-1">{percentage}% del total</p>
                     </div>
-                    <span className="text-2xl font-bold text-gray-900">{count}</span>
+                    <span className="text-2xl font-bold text-gray-900">{count || 0}</span>
                   </div>
                 );
               })}
+              {!data.reportsByPriority && (
+                <div className="text-center py-4 text-gray-500">
+                  <p>No hay datos de prioridad disponibles</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

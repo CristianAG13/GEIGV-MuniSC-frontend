@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
+import usersService from "@/services/usersService";
 import { machineryFields } from "@/utils/machinery-fields";
 import { districts, materialTypes, activityTypes, cargoTypes, activityOptions, sourceOptions, rivers } from "@/utils/districts";
 import sourceService from "@/services/sourceService";
@@ -79,9 +80,15 @@ export default function CreateReportForm({
 
   // Verificar si el usuario es operario
   const isOperario = useMemo(() => {
-    if (!user || !user.roles) return false;
+    if (!user || !user.roles) {
+      return false;
+    }
     const userRoles = Array.isArray(user.roles) ? user.roles : [user.roles];
-    return userRoles.some(r => String(r).toLowerCase() === 'operario');
+    const isOp = userRoles.some(r => {
+      const roleStr = String(r).toLowerCase();
+      return roleStr === 'operario';
+    });
+    return isOp;
   }, [user]);
 
   // ====== ESTADO ======
@@ -92,6 +99,7 @@ export default function CreateReportForm({
   const [selectedVariant, setSelectedVariant] = useState("");
   // Placas de carreta desde catálogo (cada item: { id, placa, tipoMaquinaria, categoria, materialTipo })
   const [trailerOptions, setTrailerOptions] = useState([]);
+
 
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
@@ -151,6 +159,8 @@ export default function CreateReportForm({
     materialesOtros: "",
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
+
+
 
   // ====== DERIVADOS ======
   const isMaterialFlow = useMemo(() => {
@@ -286,19 +296,33 @@ const getFuenteOptions = useCallback(() => {
   useEffect(() => {
     (async () => {
       try {
-        const operators = await operatorsService.getAllOperators();
-        setOperatorsList(Array.isArray(operators) ? operators : []);
+        const allUsers = await usersService.getAllUsers();
         
-        // Si el usuario es operario, auto-asignar su operador
-        if (isOperario && user?.id && Array.isArray(operators)) {
-          // Buscar el operador asociado al usuario actual
-          const myOperator = operators.find(op => op.userId === user.id);
-          if (myOperator && mode === "create") {
-            setFormData(prev => ({ ...prev, operadorId: myOperator.id }));
+        // Filtrar: Solo incluir usuarios que SÍ sean operarios (boleta municipal)
+        const operatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
+          // Buscar cualquier referencia a "operario"
+          const userString = JSON.stringify(user).toLowerCase();
+          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+          
+          return hasOperario; // Incluir solo si contiene "operario" en cualquier parte
+        }) : [];
+        
+        setOperatorsList(operatorsOnly);
+        
+        // Si el usuario es operario, auto-asignar su operador usando endpoint específico
+        if (isOperario && mode === "create") {
+          try {
+            const myOperatorResponse = await operatorsService.getMyOperator();
+            if (myOperatorResponse.success && myOperatorResponse.data) {
+              const myOperator = myOperatorResponse.data;
+              setFormData(prev => ({ ...prev, operadorId: String(myOperator.id) }));
+            }
+          } catch (myOpError) {
+            // Fallback: No mostrar error al usuario, simplemente no auto-asignar
           }
         }
       } catch (e) {
-        console.error("[CreateReportForm] getAllOperators error:", e);
+        console.error("[CreateReportForm] getAllUsers error:", e);
         toast({
           title: "No se pudieron cargar los operadores",
           description: "Verifica tu conexión.",
@@ -1045,7 +1069,7 @@ if (needsTrailer && !formData.placaCarreta) {
     }
 
     const selectedOperator = operatorsList.find((op) => op.id === Number(formData.operadorId));
-    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.last}` : `ID: ${formData.operadorId}`;
+    const operatorName = selectedOperator ? `${selectedOperator.name} ${selectedOperator.lastname || selectedOperator.last}` : `ID: ${formData.operadorId}`;
 
     const res = await confirmAction(
       mode === "edit" ? "¿Guardar cambios del reporte?" : "¿Crear reporte?",
@@ -1316,17 +1340,24 @@ if (needsTrailer && !formData.placaCarreta) {
             <div className="space-y-2">
               <Label>Operador</Label>
               <Select
-                value={formData.operadorId ? String(formData.operadorId) : ""}
-                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: Number(v) }))}
+                value={(() => {
+                  const value = formData.operadorId ? String(formData.operadorId) : "";
+                  console.log("🔍 [DEBUG] Select value:", value, "operadorId:", formData.operadorId);
+                  return value;
+                })()}
+                onValueChange={(v) => {
+                  console.log("🔍 [DEBUG] Select onChange:", v);
+                  setFormData((p) => ({ ...p, operadorId: v }));
+                }}
                 disabled={isOperario}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={isOperario ? "Tu usuario de operador" : "Seleccionar operador"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {operatorsList.map((operator) => (
-                    <SelectItem key={operator.id} value={String(operator.id)}>
-                      {operator.name} {operator.last} (ID: {operator.id})
+                  {operatorsList.map((user) => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.name} {user.lastname || user.last} (ID: {user.id})
                     </SelectItem>
                   ))}
                 </SelectContent>

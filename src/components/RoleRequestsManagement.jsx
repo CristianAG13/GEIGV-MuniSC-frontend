@@ -215,8 +215,9 @@ const RoleRequestsManagement = () => {
     const rr = request.requestedRole ?? request.role ?? null;
     if (!rr) return '';
     if (typeof rr === 'string') return rr;
-    if (typeof rr === 'object' && rr.name) return rr.name;
-    return '';
+    if (typeof rr === 'object' && rr.name) return String(rr.name);
+    if (typeof rr === 'object') return String(rr);
+    return String(rr || '');
   };
 
   return (
@@ -366,7 +367,7 @@ const RoleRequestsManagement = () => {
                           ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                           : 'bg-gray-100 text-gray-800 border border-gray-200'
                       }`}>
-                        {getRequestedRoleName(request) || 'No especificado'}
+                        {String(getRequestedRoleName(request)) || 'No especificado'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -448,7 +449,7 @@ const RoleRequestsManagement = () => {
                       ? 'bg-blue-100 text-blue-800 border border-blue-200' 
                       : 'bg-gray-100 text-gray-800 border border-gray-200'
                   }`}>
-                    {getRequestedRoleName(selectedRequest) || 'No especificado'}
+                    {String(getRequestedRoleName(selectedRequest)) || 'No especificado'}
                   </span>
                 </p>
               </div>
