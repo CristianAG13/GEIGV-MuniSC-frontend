@@ -104,7 +104,6 @@ export default function CatalogDialog({ open, onOpenChange, tipoMaquinaria }) {
     try {
       const payload = {
         placa: placa.trim().toUpperCase(),
-        tipoMaquinaria,
         categoria,
         materialTipo: supportsMaterial && categoria === "material" ? materialTipo : undefined,
       };
@@ -137,8 +136,7 @@ export default function CatalogDialog({ open, onOpenChange, tipoMaquinaria }) {
     await trailersService.update(editingId, {
       placa: edit.placa,
       categoria: supportsMaterial ? edit.categoria : "carreta",
-      materialTipo:
-        supportsMaterial && edit.categoria === "material" ? edit.materialTipo : undefined,
+      materialTipo: supportsMaterial && edit.categoria === "material" ? edit.materialTipo : undefined,
     });
     await showSuccess("Actualizado", "Cambios guardados");
     cancelEdit();

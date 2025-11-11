@@ -93,9 +93,8 @@ export default function CabezalCatalogDialog({ open, onOpenChange }) {
     try {
       const payload = {
         placa: placa.trim().toUpperCase(),
-        tipoMaquinaria: "cabezal",
         categoria,
-        materialTipo: categoria === "material" ? materialTipo : undefined,
+        ...(categoria === "material" ? { materialTipo } : {}),
       };
       await trailersService.create(payload);
       setPlaca("");

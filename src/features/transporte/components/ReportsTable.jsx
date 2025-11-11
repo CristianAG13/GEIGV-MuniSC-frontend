@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
@@ -27,7 +26,12 @@ import footerUrl from "@/assets/footer.png";
 import machineryService from "@/services/machineryService";
 import { fmtDMY, toISODateOnly, todayLocalISO } from "@/utils/date";
 import { useAuth } from "@/context/AuthContext";
-import { confirmDelete as swalConfirmDelete, confirmAction as swalConfirmAction, showSuccess, showError, } from "@/utils/sweetAlert";
+import {
+  confirmDelete as swalConfirmDelete,
+  confirmAction as swalConfirmAction,
+  showSuccess,
+  showError,
+} from "@/utils/sweetAlert";
 
 import {
   canEditReports,
@@ -57,6 +61,7 @@ const STATION_TYPES = new Set([
   "excavadora",
   "compactadora",
   "backhoe",
+  "tractor",
 ]);
 
 // Tipos que muestran "Variante" (coinciden con los de km)
@@ -67,7 +72,6 @@ const KM_TYPES = ["vagoneta", "cabezal", "cisterna"];
 const isKmType = (t) => KM_TYPES.includes((t || "").toLowerCase());
 const medidorLabelFor = (t) =>
   t ? (isKmType(t) ? "Kilometraje" : "Horímetro") : "Medidor";
-
 
 /* ---------------- helpers genéricos ---------------- */
 const showText = (v) =>
@@ -98,7 +102,36 @@ function normalizeEstacion(raw) {
   s = s.replace(/[^\d+]/g, ""); // deja solo dígitos y '+'
   const m = s.match(/^(\d+)\+(\d+)$/);
   if (m) return `${Number(m[1])}+${Number(m[2])}`;
-  return null; // si no cumple el formato, que el backend lo valide
+  return null;
+}
+
+// ================= Helpers para payloads =================
+const toNull = (v) => (v === "" || v === undefined ? null : v);
+const toNumOrNull = (v) => {
+  if (v === "" || v === undefined || v === null) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+const only3digitsOrNull = (v) => {
+  const s = String(v || "").replace(/\D/g, "").slice(0, 3);
+  return s.length === 3 ? s : (s.length ? s : null);
+};
+
+// normaliza boletas del form (nombres y números)
+function normalizeBoletas(arr = []) {
+  return (Array.isArray(arr) ? arr : []).map((b) => ({
+    boleta: toNull(b?.boleta),
+    tipoMaterial: toNull(b?.tipoMaterial),
+    fuente: toNull(b?.fuente),
+    subFuente: toNull(b?.subFuente),
+    m3: toNumOrNull(b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen),
+    distrito: toNull(b?.distrito ?? b?.District),
+    codigoCamino: only3digitsOrNull(b?.codigoCamino ?? b?.codigo ?? b?.codigo_camino),
+  }));
+}
+
+function sumM3(boletas = []) {
+  return (boletas || []).reduce((acc, b) => acc + (Number(b?.m3) || 0), 0) || null;
 }
 
 const _numOrUndef = (v) => {
@@ -121,23 +154,14 @@ const isFlatbed8803 = (r) =>
   isMaterialFlow(r) &&
   String((r && r.detalles && r.detalles.placaCarreta) ?? r?.placaCarreta ?? "") === "SM 8803";
 
-
-// Une fuente + subfuente en un solo string bonito
+// Une fuente + subfuente
 function fuseFuente(b = {}) {
   const fuente = String(
-    b?.fuente ??
-    b?.fuenteAgua ??
-    b?.origenAgua ??
-    b?.rio ??
-    ""
+    b?.fuente ?? b?.fuenteAgua ?? b?.origenAgua ?? b?.rio ?? ""
   ).trim();
 
   const sub = String(
-    b?.subFuente ??
-    b?.subfuente ??
-    b?.subFuenteAgua ??
-    b?.sub_fuente ??
-    ""
+    b?.subFuente ?? b?.subfuente ?? b?.subFuenteAgua ?? b?.sub_fuente ?? ""
   ).trim();
 
   if (!fuente && !sub) return "—";
@@ -158,17 +182,16 @@ function fmtBoletaCompact(b = {}) {
   return `${num} | ${tipo} | ${fuente}${sub}`;
 }
 
-// armar una "boleta" a partir de los campos simples del reporte (cuando no hay arreglo)
+// armar una "boleta" simple a partir del reporte
 function buildSimpleBoletaFromReport(r) {
   const d = r?.detalles || {};
   const b = d?.boleta ?? r?.boleta ?? null;
-  if (!b) return null; // si no hay boleta simple, nada
-
+  if (!b) return null;
   return {
     boleta: b,
     tipoMaterial: d?.tipoMaterial ?? r?.tipoMaterial ?? "",
     fuente: readFuente(r) ?? "",
-    subFuente: "", // subfuente solo aplica a ríos/tajo en tus boletas de arreglo
+    subFuente: "",
   };
 }
 
@@ -177,26 +200,17 @@ function readFuente(r) {
   const d = r?.detalles || {};
 
   const f = _first(
-    d.fuente,
-    r?.fuente,
-    get(r, "detalles.fuenteAgua"),
-    get(r, "fuenteAgua"),
-    get(r, "detalles.origenAgua"),
-    get(r, "origenAgua"),
-    get(r, "detalles.rio"),
-    get(r, "rio"),
-    // por si vino anidado en material
-    get(r, "detalles.material.fuente"),
-    get(r, "material.fuente")
+    d.fuente, r?.fuente,
+    get(r, "detalles.fuenteAgua"), get(r, "fuenteAgua"),
+    get(r, "detalles.origenAgua"), get(r, "origenAgua"),
+    get(r, "detalles.rio"), get(r, "rio"),
+    get(r, "detalles.material.fuente"), get(r, "material.fuente")
   );
 
   const sub = _first(
-    d.subFuente,
-    r?.subFuente,
-    get(r, "detalles.subFuenteAgua"),
-    get(r, "subFuenteAgua"),
-    get(r, "detalles.subfuente"),
-    get(r, "subfuente")
+    d.subFuente, r?.subFuente,
+    get(r, "detalles.subFuenteAgua"), get(r, "subFuenteAgua"),
+    get(r, "detalles.subfuente"), get(r, "subfuente")
   );
 
   if (!_hasVal(f)) return null;
@@ -207,63 +221,37 @@ function readFuente(r) {
 function readPlacaCarreta(r) {
   const d = r?.detalles || {};
   return (
-    d.placaCarreta ??
-    d?.carreta?.placa ??
-    r?.placaCarreta ??
-    r?.placa_carreta ??
-    d?.placa_carreta ??
-    null
+    d.placaCarreta ?? d?.carreta?.placa ?? r?.placaCarreta ?? r?.placa_carreta ?? d?.placa_carreta ?? null
   );
 }
 
 function readPlacaCisterna(r) {
   const d = r?.detalles || {};
   return (
-    // claves “cisterna”
-    d.placaCisterna ??
-    r?.placaCisterna ??
-    d.cisternaPlaca ??           // alias frecuente
-    r?.cisternaPlaca ??          // alias frecuente
-    d?.cisterna?.placa ??
-    r?.placa_cisterna ??
-    d?.placa_cisterna ??
-    // fallbacks (a veces se guarda como carreta)
-    d.placaCarreta ??
-    r?.placaCarreta ??
-    d?.carreta?.placa ??
-    r?.placa_carreta ??
-    d?.placa_carreta ??
-    null
+    d.placaCisterna ?? r?.placaCisterna ??
+    d.cisternaPlaca ?? r?.cisternaPlaca ??
+    d?.cisterna?.placa ?? r?.placa_cisterna ?? d?.placa_cisterna ??
+    d.placaCarreta ?? r?.placaCarreta ?? d?.carreta?.placa ?? r?.placa_carreta ?? d?.placa_carreta ?? null
   );
 }
-
-
 
 /* ---------- Estación helpers ---------- */
 function _readStationPair(r) {
   const d = _first(
-    get(r, "estacionDesde"),
-    get(r, "estacion_desde"),
-    get(r, "detalles.estacionDesde"),
-    get(r, "detalles.estacion_desde"),
-    get(r, "estacion.desde"),
-    get(r, "detalles.estacion.desde")
+    get(r, "estacionDesde"), get(r, "estacion_desde"),
+    get(r, "detalles.estacionDesde"), get(r, "detalles.estacion_desde"),
+    get(r, "estacion.desde"), get(r, "detalles.estacion.desde")
   );
   const h = _first(
-    get(r, "estacionHasta"),
-    get(r, "estacion_hasta"),
-    get(r, "detalles.estacionHasta"),
-    get(r, "detalles.estacion_hasta"),
-    get(r, "estacion.hasta"),
-    get(r, "detalles.estacion.hasta")
+    get(r, "estacionHasta"), get(r, "estacion_hasta"),
+    get(r, "detalles.estacionHasta"), get(r, "detalles.estacion_hasta"),
+    get(r, "estacion.hasta"), get(r, "detalles.estacion.hasta")
   );
   return { d, h };
 }
 
-// Normaliza strings
 const _norm = (s) => String(s ?? "").trim();
 
-// De boletas -> distritos únicos (o el de nivel superior si existe)
 function getDistritosForSearch(r) {
   const top = _norm(r?.distrito);
   const out = new Set();
@@ -271,15 +259,14 @@ function getDistritosForSearch(r) {
 
   const boletas = getBoletasArr(r) || [];
   for (const b of boletas) {
-    const d = _norm(b?.distrito ?? b?.district);
+    const d = _norm(b?.distrito ?? b?.District);
     if (d) out.add(d);
   }
   return Array.from(out);
 }
 
-// De boletas -> códigos de camino únicos (o el de nivel superior si existe)
 function getCodigosForSearch(r) {
-  const normDigits = (x) => _norm(x).replace(/\D/g, ""); // solo dígitos
+  const normDigits = (x) => _norm(x).replace(/\D/g, "");
   const top = normDigits(r?.codigoCamino);
   const out = new Set();
   if (top) out.add(top);
@@ -312,8 +299,6 @@ const getType = (r) => {
 
 const getVar = (r) => {
   if (!r) return "";
-
-  // 1) campos directos
   const raw = pick(
     get(r, "variant"),
     get(r, "variante"),
@@ -325,15 +310,12 @@ const getVar = (r) => {
   );
   if (raw) return String(raw).toLowerCase().trim();
 
-  // 2) heurísticas "list-safe" (sin detalles.*)
   const actividad = String(r?.tipoActividad ?? r?.actividad ?? "").toLowerCase();
 
-  // a) cisterna: actividad con "agua"
   if (/(riego|transporte).*agua/.test(actividad) || actividad.includes("agua")) {
     return "cisterna";
   }
 
-  // b) carreta: campos superficiales y keywords
   const hasCarretaShallow =
     r?.placaCarreta != null ||
     r?.tipoCarga != null ||
@@ -347,14 +329,12 @@ const getVar = (r) => {
     actividad.includes("remolque") ||
     actividad.includes("tráiler") ||
     actividad.includes("trailer") ||
-    // muchas veces ponen "transporte" solo cuando es carreta
     (actividad.includes("transporte") && !actividad.includes("agua"));
 
   if (hasCarretaShallow || actividadCarreta) {
     return "carreta";
   }
 
-  // c) material (señales superficiales)
   const hasMaterialShallow =
     r?.tipoMaterial != null ||
     r?.cantidadMaterial != null ||
@@ -362,7 +342,6 @@ const getVar = (r) => {
     r?.totalCantidadMaterial != null;
   if (hasMaterialShallow) return "material";
 
-  // 3) heurísticas con detalles (por si viene el objeto completo)
   const hasCisternaDeep =
     get(r, "detalles.cisterna") != null ||
     get(r, "cisterna") != null ||
@@ -410,8 +389,8 @@ const getVar = (r) => {
 
 function flattenMunicipalReport(r) {
   const d = r && r.detalles ? r.detalles : {};
-  const t = getType(r);          // vagoneta, cabezal, cisterna, …
-  const v = getVar(r);           // material, carreta, cisterna, …
+  const t = getType(r);
+  const v = getVar(r);
 
   const read = (...paths) => {
     for (const p of paths) {
@@ -436,48 +415,29 @@ function flattenMunicipalReport(r) {
     Maquinaria: maquinariaTxt,
     TipoMaquinaria: t || null,
     Variante: v || null,
-
-    // medidores / horas
     Kilometraje: read("kilometraje", "detalles.kilometraje"),
     Horimetro: read("horimetro", "detalles.horimetro"),
     Diesel: read("diesel", "combustible"),
     HorasOrd: read("horasOrd", "horas_or"),
     HorasExt: read("horasExt", "horas_ext"),
-
-    // actividad / horario
     TipoActividad: read("tipoActividad", "actividad"),
     HoraInicio: read("horaInicio", "detalles.horaInicio"),
     HoraFin: read("horaFin", "detalles.horaFin"),
-
-    // admin
     Distrito: r.distrito ?? null,
     CodigoCamino: r.codigoCamino ?? null,
     Fecha: r.fecha ?? null,
-
-    // Estación unificada
     Estacion: (() => {
       const txt = toEstacionTxt(r);
       return txt === "—" ? null : txt;
     })(),
   };
 
-  // —— VARIANTE CARRETA ——
   if ((t === "vagoneta" || t === "cabezal") && v === "carreta") {
-    flat.PlacaCarreta = read(
-      "placaCarreta", "detalles.placaCarreta", "detalles.carreta.placa",
-      "placa_carreta", "detalles.placa_carreta"
-    );
-    flat.TipoCarga = read(
-      "tipoCarga", "detalles.tipoCarga", "detalles.carreta.tipoCarga",
-      "tipo_carga", "detalles.tipo_carga"
-    );
-    flat.Destino = read(
-      "destino", "detalles.destino", "detalles.carreta.destino",
-      "destino_carga", "detalles.destino_carga"
-    );
+    flat.PlacaCarreta = read("placaCarreta", "detalles.placaCarreta", "detalles.carreta.placa", "placa_carreta", "detalles.placa_carreta");
+    flat.TipoCarga = read("tipoCarga", "detalles.tipoCarga", "detalles.carreta.tipoCarga", "tipo_carga", "detalles.tipo_carga");
+    flat.Destino = read("destino", "detalles.destino", "detalles.carreta.destino", "destino_carga", "detalles.destino_carga");
   }
 
-  // —— CISTERNA (tipo o variante) ——
   const isCisternaTipo = t === "cisterna";
   const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
   if (isCisternaTipo || isCisternaVar) {
@@ -486,80 +446,59 @@ function flattenMunicipalReport(r) {
       "cantidad_agua", "detalles.cantidad_agua",
       "detalles.cisterna.cantidad", "detalles.cisterna.cantidadLiquido"
     );
-    flat.Fuente = readFuente(r) ?? read(
-      "detalles.cisterna.fuenteAgua", "fuenteAgua", "detalles.fuenteAgua"
-    );
+    flat.Fuente = readFuente(r) ?? read("detalles.cisterna.fuenteAgua", "fuenteAgua", "detalles.fuenteAgua");
     flat.PlacaCisterna = read(
       "placaCisterna", "detalles.placaCisterna",
       "cisternaPlaca", "placa_cisterna", "detalles.placa_cisterna",
       "detalles.cisterna.placa",
-      // fallbacks de carreta
       "placaCarreta", "detalles.placaCarreta",
       "placa_carreta", "detalles.placa_carreta",
       "detalles.carreta.placa"
     );
   }
 
-  // —— MATERIAL (además de boletas) ——
   if ((t === "vagoneta" || t === "cabezal") && v === "material") {
-    // 1) Lee campos "simples" (si el backend los sigue enviando)
     flat.TipoMaterial = get(r, "detalles.tipoMaterial") ?? r?.tipoMaterial ?? "";
-    flat.CantidadMaterial_m3 =
-      get(r, "detalles.cantidadMaterial") ?? r?.cantidadMaterial ?? "";
-    flat.BoletaSimple =
-      get(r, "detalles.boleta") ?? r?.boleta ?? "";
+    flat.CantidadMaterial_m3 = get(r, "detalles.cantidadMaterial") ?? r?.cantidadMaterial ?? "";
+    flat.BoletaSimple = get(r, "detalles.boleta") ?? r?.boleta ?? "";
     flat.Fuente = flat.Fuente ?? readFuente(r);
 
     flat.TotalDia_m3 =
-      get(r, "detalles.totalCantidadMaterial") ??
-      r?.totalCantidadMaterial ??
-      get(r, "detalles.totalM3") ??
-      r?.totalM3 ??
-      get(r, "detalles.total_m3") ??
-      r?.total_m3 ??
-      "";
+      get(r, "detalles.totalCantidadMaterial") ?? r?.totalCantidadMaterial ??
+      get(r, "detalles.totalM3") ?? r?.totalM3 ??
+      get(r, "detalles.total_m3") ?? r?.total_m3 ?? "";
 
-    // 2) Resumen por material (m³) a partir de boletas
     const breakdown = getMaterialBreakdown(r);
     const mats = Object.keys(breakdown);
 
-    // Mostrar "Materiales_m3" cuando hay MÁS de 1 material.
     if (mats.length > 1) {
-      flat.TipoMaterial = "";           // ocultar columna (la deja vacía)
-      flat.CantidadMaterial_m3 = "";    // ocultar columna (la deja vacía)
-      flat.Materiales_m3 = materialSummaryStr(breakdown); // ➜ Nueva columna compacta
+      flat.TipoMaterial = "";
+      flat.CantidadMaterial_m3 = "";
+      flat.Materiales_m3 = materialSummaryStr(breakdown);
     } else if (mats.length === 1) {
-      // Si solo hay 1 material, asegúralo en las columnas clásicas
       const mat = mats[0];
       if (!flat.TipoMaterial) flat.TipoMaterial = mat;
       if (!flat.CantidadMaterial_m3) flat.CantidadMaterial_m3 = breakdown[mat];
     }
 
-    // 3) “Boletas”: una sola columna multilínea (limpio y sin columnas vacías)
     const boletas = getBoletasArr(r) || [];
     const boletaToText = (b = {}) => {
       const num = b?.boleta ? `#${b.boleta}` : "—";
       const tipo = b?.tipoMaterial ? String(b.tipoMaterial) : "—";
       const fuente = b?.fuente ? String(b.fuente) : "—";
-      const sub = (fuente === "Ríos" || fuente === "Tajo") && b?.subFuente
-        ? ` | ${b.subFuente}`
-        : "";
-      // intenta agregar m³ por boleta, si existe
+      const sub = (fuente === "Ríos" || fuente === "Tajo") && b?.subFuente ? ` | ${b.subFuente}` : "";
       const qRaw = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen;
       const qStr = Number.isFinite(Number(qRaw)) ? ` | ${Number(qRaw)} m³` : "";
       return `${num} | ${tipo} | ${fuente}${sub}${qStr}`;
     };
 
-    // Si no hay arreglo de boletas pero sí una boleta simple, arma una de una
     let list = boletas;
     if (!Array.isArray(list) || list.length === 0) {
       const simple = buildSimpleBoletaFromReport(r);
       list = simple ? [simple] : [];
     }
 
-    // Flag: si quisieras "Boleta 1/2/3" en columnas separadas, pon true
     const MULTICOLUMN_MATERIAL = false;
-
     if (!MULTICOLUMN_MATERIAL) {
       flat.Boletas = list.map(boletaToText).join("\n");
     } else {
@@ -569,7 +508,6 @@ function flattenMunicipalReport(r) {
     }
   }
 
-  // común extra
   flat.PlacaMaquinariaLlevada = read(
     "placaMaquinariaLlevada", "detalles.placaMaquinariaLlevada",
     "placa_maquinaria_llevada", "detalles.placa_maquinaria_llevada"
@@ -577,7 +515,6 @@ function flattenMunicipalReport(r) {
 
   return flat;
 }
-
 
 /* --- helpers de boletas y totales (para el modal) --- */
 function getBoletasArr(r) {
@@ -634,24 +571,18 @@ const usesStation = (r) => {
   return STATION_TYPES.has(t) || _hasStationData(r);
 };
 
-
-
 /* --------- filas para export --------- */
 function buildMunicipalExportRow(r) {
   const t = getType(r);
   const operadorTxt = r?.operador
-    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""
-    }`
+    ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
     : r?.operadorId ?? "—";
 
   const maquinariaTxt = r?.maquinaria
-    ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""
-    }`
+    ? `${r.maquinaria?.tipo ?? ""}${r.maquinaria?.placa ? ` - ${r.maquinaria.placa}` : ""}`
     : r?.maquinariaId ?? "—";
 
-  const horasTxt = `${showNum(pick(r?.horasOrd, r?.horas_or))} / ${showNum(
-    pick(r?.horasExt, r?.horas_ext)
-  )}`;
+  const horasTxt = `${showNum(pick(r?.horasOrd, r?.horas_or))} / ${showNum(pick(r?.horasExt, r?.horas_ext))}`;
 
   const metricVal = isKmType(t)
     ? showNum(pick(r?.kilometraje, get(r, "detalles.kilometraje")))
@@ -696,24 +627,20 @@ const EXPORT_HEADERS_RENTAL = [
   "Fecha",
 ];
 
-
 // ====== Solo para RENTAL (JS puro) ======
 const RENTAL_TIPOS_CON_CANTIDAD = new Set(["vagoneta", "cisterna", "cabezal"]);
-const RENTAL_TIPOS_CON_ESTACION = new Set(["excavadora", "niveladora", "compactadora", "backhoe", "cargador"]);
+const RENTAL_TIPOS_CON_ESTACION = new Set(["excavadora", "niveladora", "compactadora", "backhoe", "cargador", "tractor"]);
 
 const showCantidadRental = (tipo) =>
   RENTAL_TIPOS_CON_CANTIDAD.has(String(tipo || "").toLowerCase());
 const showEstacionRental = (tipo) =>
   RENTAL_TIPOS_CON_ESTACION.has(String(tipo || "").toLowerCase());
 
-
 function saveXlsx(wb, base) {
   const name = `${base}_${todayLocalISO()}.xlsx`;
   XLSX.writeFile(wb, name);
 }
 
-
-// Etiquetas bonitas para headers (opcional)
 function pretty(key) {
   return String(key)
     .replaceAll("_", " ")
@@ -722,17 +649,14 @@ function pretty(key) {
     .trim();
 }
 
-// ¿Está vacío para exportar?
 function isEmptyVal(v) {
   return v === undefined || v === null || v === "" || (typeof v === "number" && Number.isNaN(v));
 }
 
-// Quita columnas donde TODAS las filas están vacías
 function pruneEmptyColumns(rows, headers) {
   return headers.filter((h) => rows.some((r) => !isEmptyVal(r[h])));
 }
 
-// Suma m³ por tipo de material a partir de boletas (tolera varios nombres)
 function getMaterialBreakdown(r) {
   const boletas = getBoletasArr(r) || [];
   const map = new Map();
@@ -745,7 +669,6 @@ function getMaterialBreakdown(r) {
     map.set(mat, (map.get(mat) || 0) + q);
   }
 
-  // Fallback si vino “simple”
   if (map.size === 0) {
     const mat = get(r, "detalles.tipoMaterial") ?? r?.tipoMaterial;
     const q = Number(get(r, "detalles.cantidadMaterial") ?? r?.cantidadMaterial);
@@ -755,13 +678,12 @@ function getMaterialBreakdown(r) {
   return Object.fromEntries(map);
 }
 
-// Texto multilínea "Material: m³"
 function materialSummaryStr(breakdown) {
   const entries = Object.entries(breakdown);
   return entries.length ? entries.map(([k, v]) => `${k}: ${v} m³`).join("\n") : "";
 }
 
-// Caja con el mismo estilo de las tarjetas del modal de VER (JS puro)
+// Caja simple
 const CardField = ({ label, children }) => (
   <div className="bg-white border rounded-lg p-3">
     <div className="text-xs text-gray-500">{label}</div>
@@ -769,7 +691,7 @@ const CardField = ({ label, children }) => (
   </div>
 );
 
-// --- Tarjeta "KV" con input embebido (idéntica a la de VER, pero editable) ---
+// --- Tarjeta "KV" editable ---
 function EditKV({
   label,
   value,
@@ -798,169 +720,289 @@ function EditKV({
 
 function RentalEditForm({ initialValues, setInitialValues, districts = [] }) {
   const setIV = (patch) => setInitialValues((prev) => ({ ...prev, ...patch }));
+  const setDet = (patch) =>
+    setInitialValues((prev) => ({ ...prev, detalles: { ...(prev?.detalles || {}), ...patch } }));
+
   const numero = (x) => (x === null || x === undefined ? "" : x);
 
   const tipo = (initialValues?.tipoMaquinaria || "").toLowerCase();
+  const variante = (initialValues?.variante || initialValues?.detalles?.variante || "").toLowerCase();
+
+  const isMaterialLike =
+    (tipo === "vagoneta" || tipo === "cabezal") &&
+    (variante === "material" ||
+      Array.isArray(initialValues?.detalles?.boletas) && initialValues.detalles.boletas.length > 0 ||
+      /material/i.test(String(initialValues?.actividad || "")));
+
   const muestraCantidad = showCantidadRental(tipo);
   const muestraEstacion = showEstacionRental(tipo);
 
   const showFuente = ["vagoneta", "cabezal", "cisterna"].includes(tipo);
-  const showBoleta = ["vagoneta", "cabezal"].includes(tipo);
+  const showBoletaSimple = ["vagoneta", "cabezal"].includes(tipo) && !isMaterialLike;
 
   const flatInput = "h-9 w-full border-none bg-transparent shadow-none px-0 focus-visible:ring-0 focus:outline-none";
 
-  // 🔽 handler para 3 dígitos exactos
   const onCodigoChange = (e) => {
     const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
     setIV({ codigoCamino: digits });
   };
 
+  // editor boletas
+  const boletas = Array.isArray(initialValues?.detalles?.boletas) ? initialValues.detalles.boletas : [];
+  const numberOrBlank = (x) => (x === null || x === undefined ? "" : x);
+
+  const updateBoleta = (idx, key, val) => {
+    setDet({ boletas: boletas.map((b, i) => (i === idx ? { ...b, [key]: val } : b)) });
+  };
+  const addBoleta = () =>
+    setDet({
+      boletas: [
+        ...boletas,
+        { boleta: "", tipoMaterial: "", fuente: "", subFuente: "", m3: "", distrito: "", codigoCamino: "" },
+      ],
+    });
+  const removeBoleta = (idx) => setDet({ boletas: boletas.filter((_, i) => i !== idx) });
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Operador</div>
-        <div className="mt-1">
-          {initialValues?.operadorId || "—"}
-        </div>
-      </div>
-
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Tipo maquinaria</div>
-        <Input
-          className={flatInput}
-          value={initialValues?.tipoMaquinaria || ""}
-          onChange={(e) => setIV({ tipoMaquinaria: e.target.value })}
-        />
-      </div>
-
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Placa</div>
-        <Input
-          className={flatInput}
-          value={initialValues?.placa || ""}
-          onChange={(e) => setIV({ placa: e.target.value })}
-        />
-      </div>
-
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Actividad</div>
-        <Input
-          className={flatInput}
-          value={initialValues?.actividad || ""}
-          onChange={(e) => setIV({ actividad: e.target.value })}
-        />
-      </div>
-
-      {muestraCantidad && (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-xs text-gray-500">Cantidad</div>
+          <div className="text-xs text-gray-500">Operador</div>
+          <div className="mt-1">{initialValues?.operadorId || "—"}</div>
+        </div>
+
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Tipo maquinaria</div>
+          <Input
+            className={flatInput}
+            value={initialValues?.tipoMaquinaria || ""}
+            onChange={(e) => setIV({ tipoMaquinaria: e.target.value })}
+          />
+        </div>
+
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Placa</div>
+          <Input
+            className={flatInput}
+            value={initialValues?.placa || ""}
+            onChange={(e) => setIV({ placa: e.target.value })}
+          />
+        </div>
+
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Actividad</div>
+          <Input
+            className={flatInput}
+            value={initialValues?.actividad || ""}
+            onChange={(e) => setIV({ actividad: e.target.value })}
+          />
+        </div>
+
+        {muestraCantidad && (
+          <div className="bg-white border rounded-lg p-3">
+            <div className="text-xs text-gray-500">Cantidad</div>
+            <Input
+              type="number"
+              step="0.01"
+              className={flatInput}
+              value={numero(initialValues?.cantidad)}
+              onChange={(e) => setIV({ cantidad: e.target.value })}
+            />
+          </div>
+        )}
+
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Horas (cantidad de horas)</div>
           <Input
             type="number"
             step="0.01"
             className={flatInput}
-            value={numero(initialValues?.cantidad)}
-            onChange={(e) => setIV({ cantidad: e.target.value })}
+            value={numero(initialValues?.horas)}
+            onChange={(e) => setIV({ horas: e.target.value })}
           />
         </div>
-      )}
 
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Horas (cantidad de horas)</div>
-        <Input
-          type="number"
-          step="0.01"
-          className={flatInput}
-          value={numero(initialValues?.horas)}
-          onChange={(e) => setIV({ horas: e.target.value })}
-        />
-      </div>
-
-      {muestraEstacion && (
-        <div className="bg-white border rounded-lg p-3">
-          <div className="text-xs text-gray-500">Estación (N+M)</div>
-          <Input
-            className={flatInput}
-            placeholder="Ej: 12+500"
-            value={initialValues?.estacion || ""}
-            onChange={(e) => setIV({ estacion: e.target.value })}
-          />
-        </div>
-      )}
-
-      {/* Fuente (vagoneta/cabezal/cisterna) + Boleta (solo vagoneta/cabezal) */}
-      {showFuente && (
-        <>
+        {muestraEstacion && (
           <div className="bg-white border rounded-lg p-3">
-            <div className="text-xs text-gray-500">Fuente</div>
+            <div className="text-xs text-gray-500">Estación (N+M)</div>
             <Input
               className={flatInput}
-              value={initialValues?.fuente || ""}
-              onChange={(e) => setIV({ fuente: e.target.value })}
+              placeholder="Ej: 12+500"
+              value={initialValues?.estacion || ""}
+              onChange={(e) => setIV({ estacion: e.target.value })}
             />
           </div>
+        )}
 
-          {showBoleta && (
-            (initialValues?.fuente || "").toUpperCase() === "KYLCSA" ? (
-              <div className="bg-white border rounded-lg p-3">
-                <div className="text-xs text-gray-500">Boleta KYLCSA</div>
-                <Input
-                  className={flatInput}
-                  value={initialValues?.boletaK || initialValues?.boletaKylcsa || ""}
-                  onChange={(e) => setIV({ boletaK: e.target.value })}
-                />
-              </div>
-            ) : (
-              <div className="bg-white border rounded-lg p-3">
-                <div className="text-xs text-gray-500">Boleta</div>
-                <Input
-                  className={flatInput}
-                  value={initialValues?.boleta || ""}
-                  onChange={(e) => setIV({ boleta: e.target.value })}
-                />
-              </div>
-            )
-          )}
-        </>
+        {/* Fuente + Boleta (solo si NO es material-like) */}
+        {showFuente && !isMaterialLike && (
+          <>
+            <div className="bg-white border rounded-lg p-3">
+              <div className="text-xs text-gray-500">Fuente</div>
+              <Input
+                className={flatInput}
+                value={initialValues?.fuente || ""}
+                onChange={(e) => setIV({ fuente: e.target.value })}
+              />
+            </div>
+
+            {showBoletaSimple && (
+              (initialValues?.fuente || "").toUpperCase() === "KYLCSA" ? (
+                <div className="bg-white border rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Boleta KYLCSA</div>
+                  <Input
+                    className={flatInput}
+                    value={initialValues?.boletaK || initialValues?.boletaKylcsa || ""}
+                    onChange={(e) => setIV({ boletaK: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <div className="bg-white border rounded-lg p-3">
+                  <div className="text-xs text-gray-500">Boleta</div>
+                  <Input
+                    className={flatInput}
+                    value={initialValues?.boleta || ""}
+                    onChange={(e) => setIV({ boleta: e.target.value })}
+                  />
+                </div>
+              )
+            )}
+          </>
+        )}
+
+        {/* Distrito y Código Camino */}
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Distrito</div>
+          <Select
+            value={initialValues?.distrito || ""}
+            onValueChange={(v) => setIV({ distrito: v })}
+          >
+            <SelectTrigger className="h-9 px-0 border-none shadow-none">
+              <SelectValue placeholder="Seleccionar distrito" />
+            </SelectTrigger>
+            <SelectContent>
+              {districts.map((d) => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="bg-white border rounded-lg p-3">
+          <div className="text-xs text-gray-500">Código Camino</div>
+          <Input
+            inputMode="numeric"
+            pattern="\d{3}"
+            placeholder="3 dígitos"
+            className={flatInput}
+            value={initialValues?.codigoCamino || ""}
+            onChange={onCodigoChange}
+          />
+        </div>
+
+        <div className="bg-white border rounded-lg p-3 md:col-span-2">
+          <div className="text-xs text-gray-500">Fecha</div>
+          <Input className={flatInput} value={initialValues?.fecha || ""} disabled />
+        </div>
+      </div>
+
+      {/* === Editor de boletas (solo material-like) === */}
+      {isMaterialLike && (
+        <div className="border rounded-lg">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="text-sm font-semibold">Detalles de Boleta</div>
+            <Button variant="secondary" onClick={addBoleta}>Agregar boleta</Button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-3 py-2">#</th>
+                  <th className="text-left px-3 py-2">Tipo material</th>
+                  <th className="text-left px-3 py-2">Fuente</th>
+                  <th className="text-left px-3 py-2">Sub-fuente</th>
+                  <th className="text-left px-3 py-2">m³</th>
+                  <th className="text-left px-3 py-2">Distrito</th>
+                  <th className="text-left px-3 py-2">Código Camino</th>
+                  <th className="text-left px-3 py-2">Boleta</th>
+                  <th className="text-right px-3 py-2">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {boletas.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-4 text-gray-500" colSpan={9}>Sin boletas.</td>
+                  </tr>
+                )}
+                {boletas.map((b, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="px-3 py-2">{i + 1}</td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.tipoMaterial || ""}
+                        onChange={(e) => updateBoleta(i, "tipoMaterial", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.fuente || ""}
+                        onChange={(e) => updateBoleta(i, "fuente", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.subFuente || ""}
+                        onChange={(e) => updateBoleta(i, "subFuente", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className={flatInput}
+                        value={numberOrBlank(b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen)}
+                        onChange={(e) => updateBoleta(i, "m3", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.distrito || b?.District || ""}
+                        onChange={(e) => updateBoleta(i, "distrito", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.codigoCamino || b?.codigo || b?.codigo_camino || ""}
+                        onChange={(e) => updateBoleta(i, "codigoCamino", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className={flatInput}
+                        value={b?.boleta || ""}
+                        onChange={(e) => updateBoleta(i, "boleta", e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="secondary" onClick={() => removeBoleta(i)}>Quitar</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
-
-      {/* 🔽 Distrito (selector como en municipal) */}
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Distrito</div>
-        <Select
-          value={initialValues?.distrito || ""}
-          onValueChange={(v) => setIV({ distrito: v })}
-        >
-          <SelectTrigger className="h-9 px-0 border-none shadow-none">
-            <SelectValue placeholder="Seleccionar distrito" />
-          </SelectTrigger>
-          <SelectContent>
-            {districts.map((d) => (
-              <SelectItem key={d} value={d}>{d}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* 🔽 Código Camino (3 dígitos exactos) */}
-      <div className="bg-white border rounded-lg p-3">
-        <div className="text-xs text-gray-500">Código Camino</div>
-        <Input
-          inputMode="numeric"
-          pattern="\d{3}"
-          placeholder="3 dígitos"
-          className={flatInput}
-          value={initialValues?.codigoCamino || ""}
-          onChange={onCodigoChange}
-        />
-      </div>
-
-      <div className="bg-white border rounded-lg p-3 md:col-span-2">
-        <div className="text-xs text-gray-500">Fecha</div>
-        <Input className={flatInput} value={initialValues?.fecha || ""} disabled />
-      </div>
     </div>
   );
 }
+
 
 /* ==================== componente principal ==================== */
 export default function ReportsTable({
@@ -970,9 +1012,8 @@ export default function ReportsTable({
   rows,
   onEdit,
 }) {
-  const { user } = useAuth(); // 🔹 Obtener usuario actual
+  const { user } = useAuth();
 
-  // KV compacto reutilizable para VER
   const KV = ({ label, value }) => (
     <div className="bg-white border rounded-lg p-3">
       <div className="text-xs text-gray-500">{label}</div>
@@ -982,13 +1023,19 @@ export default function ReportsTable({
     </div>
   );
 
-  // === Vista de Detalles para ALQUILER ===
   function RentalDetails({ r }) {
     const tipo = (r?.tipoMaquinaria || "").toLowerCase();
+    const variante = (r?.variante || r?.detalles?.variante || "").toLowerCase();
+    const isMaterialLike =
+      (tipo === "vagoneta" || tipo === "cabezal") &&
+      (variante === "material" ||
+        Array.isArray(getBoletasArr(r)) && getBoletasArr(r).length > 0 ||
+        /material/i.test(String(r?.actividad || "")));
+
     const muestraCantidad = showCantidadRental(tipo);
     const muestraEstacion = showEstacionRental(tipo);
     const showFuente = ["vagoneta", "cabezal", "cisterna"].includes(tipo);
-    const showBoleta = ["vagoneta", "cabezal"].includes(tipo);
+    const showBoletaSimple = ["vagoneta", "cabezal"].includes(tipo) && !isMaterialLike;
 
     const fuente = _first(r?.fuente, r?.detalles?.fuente);
     const boleta = readBoletaAny(r);
@@ -1001,6 +1048,12 @@ export default function ReportsTable({
         </div>
       );
 
+    // helpers de boletas
+    const boletas = getBoletasArr(r);
+    const breakdown = getMaterialBreakdown(r);
+    const entries = Object.entries(breakdown);
+    const total = entries.reduce((acc, [, v]) => acc + Number(v || 0), 0);
+
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1008,25 +1061,86 @@ export default function ReportsTable({
             label="Operador"
             value={
               r?.operador
-                ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
+                ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""
+                }`
                 : r?.operadorId
             }
           />
           <KV label="Tipo maquinaria" value={r?.tipoMaquinaria} />
           <KV label="Placa" value={r?.placa} />
           <KV label="Actividad" value={r?.actividad} />
-
           {muestraCantidad && <KV label="Cantidad" value={r?.cantidad} />}
           <KV label="Horas" value={r?.horas} />
           {muestraEstacion && <KV label="Estación" value={r?.estacion} />}
-
-          {showFuente && fuente && <KV label="Fuente" value={fuente} />}
-          {showBoleta && boleta && <KV label="Boleta" value={boleta} />}
-
           <KV label="Distrito" value={r?.distrito} />
           <KV label="Código Camino" value={r?.codigoCamino} />
           <KV label="Fecha" value={fmtDMY(r?.fecha)} />
+          {/* fuente y boleta simple (solo si NO es material) */}
+          {showFuente && fuente && !isMaterialLike && <KV label="Fuente" value={fuente} />}
+          {showBoletaSimple && boleta && !isMaterialLike && <KV label="Boleta" value={boleta} />}
         </div>
+
+        {/* === Material: tabla de boletas + totales === */}
+        {isMaterialLike && (
+          <div className="border rounded-lg p-3">
+            <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
+
+            {Array.isArray(boletas) && boletas.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-3 py-2">#</th>
+                      <th className="text-left px-3 py-2">Tipo material</th>
+                      <th className="text-left px-3 py-2">Fuente / Sub-fuente</th>
+                      <th className="text-left px-3 py-2">m³</th>
+                      <th className="text-left px-3 py-2">Distrito</th>
+                      <th className="text-left px-3 py-2">Código Camino</th>
+                      <th className="text-left px-3 py-2">Boleta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boletas.map((b, i) => {
+                      const m3 = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen ?? "";
+                      const distrito = b?.distrito ?? b?.District ?? "";
+                      const codigo = b?.codigoCamino ?? b?.CodigoCamino ?? b?.codigo_camino ?? "";
+                      return (
+                        <tr key={i} className="border-t">
+                          <td className="px-3 py-2">{i + 1}</td>
+                          <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
+                          <td className="px-3 py-2">{fuseFuente(b)}</td>
+                          <td className="px-3 py-2">{showNum(m3)}</td>
+                          <td className="px-3 py-2">{showText(distrito)}</td>
+                          <td className="px-3 py-2">{showText(codigo)}</td>
+                          <td className="px-3 py-2">{showText(b?.boleta)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">Sin boletas registradas.</div>
+            )}
+
+            {/* Totales por material */}
+            {entries.length > 0 && (
+              <div className="mt-3 p-3 border rounded-lg bg-gray-50">
+                <div className="text-sm font-semibold mb-2">Totales por material</div>
+                {entries.map(([mat, qty]) => (
+                  <div key={mat} className="flex justify-between text-sm py-0.5">
+                    <span>{mat}</span>
+                    <span>{qty} m³</span>
+                  </div>
+                ))}
+                <div className="border-t mt-2 pt-2 flex justify-between text-sm font-medium">
+                  <span>Total m³</span>
+                  <span>{total} m³</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1042,7 +1156,7 @@ export default function ReportsTable({
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false); // <-- opcional para loading
+  const [deleting, setDeleting] = useState(false);
 
   /* ver */
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1076,11 +1190,11 @@ export default function ReportsTable({
 
   const [page, setPage] = useState(1);
 
-  /* flags para autoselección */
+  const [adminAdvanced, setAdminAdvanced] = useState(false);
+
   const appliedDefaultType = useRef(false);
   const appliedDefaultVariant = useRef(false);
 
-  /* ámbito */
   const activeReports = useMemo(
     () => (isMunicipal ? rowsMunicipal : rowsRental),
     [isMunicipal, rowsMunicipal, rowsRental]
@@ -1130,13 +1244,26 @@ export default function ReportsTable({
     return rows;
   }, [activeReports, startDate, endDate, distritoFilter, codigoFilter, isMunicipal]);
 
+  /* ========= TIPOS DISPONIBLES ========= */
+  const tiposDisponiblesRental = useMemo(() => {
+    if (!isRental) return [];
+    const set = new Set();
+    rowsScope.forEach(r => {
+      const t = String(r?.tipoMaquinaria || "").toLowerCase();
+      if (t) set.add(t);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rowsScope, isRental]);
+
   const tiposDisponibles = useMemo(() => {
+    if (isRental) return tiposDisponiblesRental;
+
+    // MUNICIPAL
     const set = new Set();
     rowsScope.forEach((r) => {
       const t = getType(r);
       if (t) set.add(t);
     });
-    // ordenar por prioridad definida
     const arr = Array.from(set);
     arr.sort((a, b) => {
       const ia = TYPE_ORDER.indexOf(a);
@@ -1146,7 +1273,36 @@ export default function ReportsTable({
       return A - B || a.localeCompare(b);
     });
     return arr;
-  }, [rowsScope]);
+  }, [rowsScope, isRental, tiposDisponiblesRental]);
+
+  /* ========= VARIANTES (MUNICIPAL) ========= */
+  const variantesDisponibles = useMemo(() => {
+    if (!isMunicipal) return [];
+    const t = (typeFilter || "").toLowerCase();
+    return VARIANT_OPTIONS_BY_TYPE[t] ?? [];
+  }, [typeFilter, isMunicipal]);
+
+  /* ========= ACTIVIDADES (ALQUILER) ========= */
+  const actividadesPorTipoRental = useMemo(() => {
+    if (!isRental) return {};
+    const map = new Map();
+    rowsScope.forEach(r => {
+      const t = String(r?.tipoMaquinaria || "").toLowerCase();
+      const a = String(r?.actividad || "").trim();
+      if (!t || !a) return;
+      if (!map.has(t)) map.set(t, new Set());
+      map.get(t).add(a);
+    });
+    const out = {};
+    map.forEach((set, k) => (out[k] = Array.from(set).sort((a, b) => a.localeCompare(b))));
+    return out;
+  }, [rowsScope, isRental]);
+
+  const actividadesDisponibles = useMemo(() => {
+    if (!isRental) return [];
+    const t = String(typeFilter || "").toLowerCase();
+    return actividadesPorTipoRental[t] ?? [];
+  }, [isRental, typeFilter, actividadesPorTipoRental]);
 
   /* ---------- autoselección de TIPO al entrar en Municipales ---------- */
   useEffect(() => {
@@ -1169,13 +1325,7 @@ export default function ReportsTable({
     }
   }, [tiposDisponibles, typeFilter]);
 
-  /* ---------- autoselección de VARIANTE cuando el tipo es vagoneta / cabezal ---------- */
-  const variantesDisponibles = useMemo(() => {
-    if (!isMunicipal) return [];
-    const t = (typeFilter || "").toLowerCase();
-    return VARIANT_OPTIONS_BY_TYPE[t] ?? [];
-  }, [typeFilter, isMunicipal]);
-
+  /* ---------- autoselección de VARIANTE (municipal) ---------- */
   useEffect(() => {
     if (!isMunicipal) return;
 
@@ -1183,46 +1333,57 @@ export default function ReportsTable({
     const options = VARIANT_OPTIONS_BY_TYPE[t] || [];
 
     if (!VARIANT_TYPES.has(t)) {
-      // tipos sin variantes
       if (variantFilter) setVariantFilter("");
       appliedDefaultVariant.current = false;
       return;
     }
 
-    // si no hay variante aplicada o no es válida -> elegir por orden
     if (!options.includes(variantFilter) && options.length) {
-      const candidate =
-        VARIANT_ORDER.find((v) => options.includes(v)) || options[0];
+      const candidate = VARIANT_ORDER.find((v) => options.includes(v)) || options[0];
       setVariantFilter(candidate);
       setPage(1);
       appliedDefaultVariant.current = true;
     }
   }, [isMunicipal, typeFilter, variantesDisponibles]); // eslint-disable-line
 
-  const actividadesDisponibles = useMemo(() => {
-    if (isMunicipal) return [];
-    const set = new Set();
-    rowsScope.forEach((r) => {
-      if (r?.actividad && typeof r.actividad === "string") set.add(r.actividad);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [rowsScope, isMunicipal]);
+  /* ---------- autoselección en ALQUILER ---------- */
+  useEffect(() => {
+    if (!isRental) return;
+    if (!typeFilter && tiposDisponiblesRental.length) {
+      setTypeFilter(tiposDisponiblesRental[0]);
+      setPage(1);
+    }
+  }, [isRental, typeFilter, tiposDisponiblesRental]);
+
+  useEffect(() => {
+    if (!isRental) return;
+    const acts = actividadesPorTipoRental[String(typeFilter || "").toLowerCase()] || [];
+    if (!acts.length) {
+      if (actividadFilter) setActividadFilter("");
+      return;
+    }
+    if (!actividadFilter || !acts.includes(actividadFilter)) {
+      setActividadFilter(acts[0]);
+      setPage(1);
+    }
+  }, [isRental, typeFilter, actividadesPorTipoRental]);
 
   const filtered = useMemo(() => {
     let rows = rowsScope;
 
     if (typeFilter) {
       const t = typeFilter.toLowerCase();
-      rows = rows.filter((r) => getType(r) === t);
-
-      if (isMunicipal && VARIANT_TYPES.has(t)) {
-        // aplicar SIEMPRE la variante elegida/autoelegida
-        rows = rows.filter((r) => getVar(r) === variantFilter);
+      if (isMunicipal) {
+        rows = rows.filter((r) => getType(r) === t);
+        if (VARIANT_TYPES.has(t)) rows = rows.filter((r) => getVar(r) === variantFilter);
+      } else {
+        rows = rows.filter((r) => String(r?.tipoMaquinaria || "").toLowerCase() === t);
       }
     }
 
     if (isRental && actividadFilter)
       rows = rows.filter((r) => r?.actividad === actividadFilter);
+
     return rows;
   }, [
     rowsScope,
@@ -1233,7 +1394,7 @@ export default function ReportsTable({
     isRental,
   ]);
 
-  /* columnas compactas */
+  /* columnas */
   const COLUMNS_MUNICIPAL_BASE = [
     "ID",
     "Operador",
@@ -1258,32 +1419,22 @@ export default function ReportsTable({
 
     if (VARIANT_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Variante");
     if (STATION_TYPES.has(t)) insertAfter(cols, "Maquinaria", "Estación");
-    // if (VARIANT_TYPES.has(t) && (variantFilter || "").toLowerCase() === "cisterna") {
-    //   insertAfter(cols, "Maquinaria", "Placa cisterna");
-    // }
 
-    if (
-      (t === "cabezal" && (variantFilter || "").toLowerCase() === "cisterna") ||
-      t === "cisterna" // si algún día usas tipo 'cisterna'
-    ) {
+    // *** Cambio clave: solo cabezal + variante cisterna ***
+    if (t === "cabezal" && (variantFilter || "").toLowerCase() === "cisterna") {
       insertAfter(cols, "Maquinaria", "Placa cisterna");
     }
-
 
     return cols;
   }, [isMunicipal, typeFilter, variantFilter]);
 
-  /* celdas según columna */
   function cellValueMunicipal(r, col) {
     switch (col) {
       case "ID":
         return r.id;
       case "Operador":
         return r?.operador
-          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification
-            ? ` (${r.operador.identification})`
-            : ""
-          }`
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
           : r?.operadorId ?? "—";
       case "Maquinaria":
         if (r?.maquinaria) {
@@ -1292,56 +1443,47 @@ export default function ReportsTable({
           return `${tipo}${placa}`;
         }
         return r?.maquinariaId ?? "—";
-
       case "Placa cisterna":
         return showText(
-          // rutas de cisterna
           get(r, "detalles.placaCisterna") ||
           get(r, "placaCisterna") ||
-          get(r, "detalles.cisternaPlaca") ||   // 👈 NUEVO
-          get(r, "cisternaPlaca") ||            // 👈 NUEVO
+          get(r, "detalles.cisternaPlaca") ||
+          get(r, "cisternaPlaca") ||
           get(r, "detalles.cisterna.placa") ||
           get(r, "placa_cisterna") ||
           get(r, "detalles.placa_cisterna") ||
-          // fallbacks si el form la guardó como “carreta”
           get(r, "detalles.placaCarreta") ||
           get(r, "placaCarreta") ||
           get(r, "detalles.carreta.placa") ||
           get(r, "placa_carreta") ||
           get(r, "detalles.placa_carreta")
         );
-
       case "Variante":
         return getVar(r) || "—";
       case "Estación":
         return toEstacionTxt(r);
-
       case "Distrito": {
         const list = getDistritosForSearch(r);
-        // si hay varios, muéstralos separados por " · "
         return list.length ? list.join(" · ") : "—";
       }
       case "Código Camino": {
         const list = getCodigosForSearch(r);
         return list.length ? list.join(", ") : "—";
       }
-
       case "Fecha":
         return fmtDMY(r?.fecha);
       default:
         return "—";
     }
   }
+
   function cellValueRental(r, col) {
     switch (col) {
       case "ID":
         return r.id;
       case "Operador":
         return r?.operador
-          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification
-            ? ` (${r.operador.identification})`
-            : ""
-          }`
+          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
           : r?.operadorId ?? "—";
       case "Tipo Maquinaria":
         return showText(r?.tipoMaquinaria);
@@ -1385,10 +1527,10 @@ export default function ReportsTable({
       let rep, initial;
       if (isMunicipal) {
         rep = await machineryService.getReportById(row.id);
-        initial = mapReportToForm(rep);      // ya lo tienes
+        initial = mapReportToForm(rep);
       } else {
         rep = await machineryService.getRentalReportById(row.id);
-        initial = mapRentalToForm(rep);      // 👇 función nueva
+        initial = mapRentalToForm(rep);
       }
       setSelectedRow(rep);
       setEditingId(row.id);
@@ -1399,7 +1541,6 @@ export default function ReportsTable({
       alert("No se pudo abrir el reporte para editar.");
     }
   }
-
 
   /* -------- eliminar -------- */
   const askDelete = (row) => {
@@ -1427,7 +1568,6 @@ export default function ReportsTable({
     }
   };
 
-
   /* -------- eliminados -------- */
   const openDeleted = async () => {
     try {
@@ -1450,8 +1590,8 @@ export default function ReportsTable({
       actividad: rep?.tipoActividad ?? rep?.actividad ?? "",
       horasOrd: rep?.horasOrd ?? rep?.horas_or ?? "",
       horasExt: rep?.horasExt ?? rep?.horas_ext ?? "",
-      horaInicio: rep?.horaInicio ?? d?.horaInicio ?? "",
-      horaFin: rep?.horaFin ?? d?.horaFin ?? "",
+      horaInicio: d?.horaInicio ?? rep?.horaInicio ?? "",
+      horaFin: d?.horaFin ?? rep?.horaFin ?? "",
       fecha: rep?.fecha ?? "",
       kilometraje: rep?.kilometraje ?? d?.kilometraje ?? "",
       horimetro: rep?.horimetro ?? d?.horimetro ?? "",
@@ -1464,7 +1604,7 @@ export default function ReportsTable({
     };
   }
 
-  // Mapea RENTAL (alquiler) al formulario de alquiler
+  // Mapea RENTAL al formulario
   function mapRentalToForm(rep) {
     return {
       operadorId: rep?.operadorId ?? rep?.operador?.id ?? "",
@@ -1475,17 +1615,22 @@ export default function ReportsTable({
       horas: rep?.horas ?? "",
       estacion: rep?.estacion ?? "",
       fuente: rep?.fuente ?? rep?.detalles?.fuente ?? "",
-      boleta: readBoletaAny(rep) ?? "",            // <- ahora sí toma boleta/boletaNumero
+      boleta: readBoletaAny(rep) ?? "",
       boletaK: rep?.boletaKylcsa ?? rep?.detalles?.boletaKylcsa ?? "",
       fecha: rep?.fecha ?? "",
       codigoCamino: rep?.codigoCamino ?? rep?.codigo_camino ?? rep?.detalles?.codigoCamino ?? "",
       distrito: rep?.distrito ?? rep?.detalles?.distrito ?? "",
+      // 👇 importante para el editor
+      detalles: {
+        ...(rep?.detalles || {}),
+        boletas: getBoletasArr(rep) || [],
+        variante: rep?.variante ?? rep?.detalles?.variante ?? "",
+      },
+      variante: rep?.variante ?? rep?.detalles?.variante ?? "",
     };
   }
 
-
-  // --- Helpers específicos ALQUILER ---
-
+  // Helpers ALQUILER
   const readBoletaRental = (r) =>
     _first(
       r?.boleta, r?.detalles?.boleta,
@@ -1502,10 +1647,9 @@ export default function ReportsTable({
       r?.detalles?.boletaKylcsa, r?.detalles?.boletaK
     );
 
-
   // ELIMINAR con SweetAlert
   const handleDeleteWithSwal = async (row) => {
-    const res = await swalConfirmDelete(`el reporte #${row.id}`); // ← antes decía confirmDelete(...)
+    const res = await swalConfirmDelete(`el reporte #${row.id}`);
     if (!res.isConfirmed) return;
 
     try {
@@ -1528,7 +1672,7 @@ export default function ReportsTable({
     const res = await swalConfirmAction(
       "¿Restaurar reporte?",
       `El reporte #${row.id} volverá a la lista.`
-    ); // ← antes decía confirmAction(...)
+    );
     if (!res.isConfirmed) return;
 
     try {
@@ -1548,16 +1692,88 @@ export default function ReportsTable({
     }
   };
 
+  // ====== Construir payload MUNICIPAL (versión completa, única) ======
+  function buildMunicipalPayload(iv, selectedRow) {
+    const r = selectedRow || {};
+    const t = getType(r);
+    const v = getVar(r);
+
+    const isCarretaVar = (t === "vagoneta" || t === "cabezal") && v === "carreta";
+    const isMaterialVar = (t === "vagoneta" || t === "cabezal") && v === "material";
+    const isCisterna = t === "cisterna" || ((t === "vagoneta" || t === "cabezal") && v === "cisterna");
+
+    const detallesPrev = (r && r.detalles) || {};
+    const detalles = { ...detallesPrev };
+
+    detalles.horaInicio = toNull(iv.horaInicio);
+    detalles.horaFin = toNull(iv.horaFin);
+
+    if (isCisterna) {
+      if (iv?.detalles?.cantidadLiquido !== undefined)
+        detalles.cantidadLiquido = toNumOrNull(iv.detalles.cantidadLiquido);
+      if (iv?.detalles?.fuente !== undefined)
+        detalles.fuente = toNull(iv.detalles.fuente);
+
+      if (t === "cabezal" && v === "cisterna") {
+        const placaCis = iv?.detalles?.placaCisterna ?? iv?.detalles?.cisternaPlaca;
+        detalles.placaCisterna = toNull(placaCis);
+      }
+    }
+
+    if (isCarretaVar) {
+      if (iv?.placaCarreta !== undefined)
+        detalles.placaCarreta = toNull(iv.placaCarreta);
+      if (iv?.detalles?.tipoCarga !== undefined)
+        detalles.tipoCarga = toNull(iv.detalles.tipoCarga);
+      if (iv?.detalles?.destino !== undefined)
+        detalles.destino = toNull(iv.detalles.destino);
+    }
+
+    if (isMaterialVar) {
+      const boletas = normalizeBoletas(iv?.detalles?.boletas);
+      detalles.boletas = boletas;
+      detalles.totalCantidadMaterial = sumM3(boletas);
+    }
+
+    const payload = {
+      tipoActividad: toNull(iv.actividad),
+      actividad: toNull(iv.actividad),
+      horasOrd: toNumOrNull(iv.horasOrd),
+      horasExt: toNumOrNull(iv.horasExt),
+      kilometraje: toNumOrNull(iv.kilometraje),
+      horimetro: toNumOrNull(iv.horimetro),
+      diesel: toNumOrNull(iv.diesel),
+      fecha: toNull(iv.fecha),
+      codigoCamino: only3digitsOrNull(iv.codigoCamino),
+      distrito: toNull(iv.distrito),
+      estacion: normalizeEstacion(toNull(iv.estacion)),
+      detalles,
+    };
+
+    // espejos para compatibilidad en listados antiguos
+    payload.horaInicio = detalles.horaInicio ?? iv.horaInicio ?? null;
+    payload.horaFin = detalles.horaFin ?? iv.horaFin ?? null;
+
+    if (detalles.kilometraje != null) payload.kilometraje = detalles.kilometraje;
+    if (detalles.horimetro != null) payload.horimetro = detalles.horimetro;
+
+    if (payload.horasOrd != null) payload.horas_or = payload.horasOrd;
+    if (payload.horasExt != null) payload.horas_ext = payload.horasExt;
+    if (payload.diesel != null) payload.combustible = payload.diesel;
+
+    return payload;
+  }
+
   async function handleSaveEdit() {
     if (!editingId || !initialValues) return;
     try {
       setSaving(true);
 
       if (isMunicipal) {
-        const updated = await machineryService.updateReport(editingId, { ...initialValues });
-        setRowsMunicipal((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        const payload = buildMunicipalPayload(initialValues, selectedRow);
+        const updated = await machineryService.updateReport(editingId, payload);
+        setRowsMunicipal(prev => prev.map(r => (r.id === updated.id ? updated : r)));
       } else {
-        // ======== Alquiler ========
         const dig3 = (s) => /^\d{3}$/.test(String(s || ""));
         if (initialValues.codigoCamino && !dig3(initialValues.codigoCamino)) {
           await showError("Código de camino inválido", "Debes ingresar exactamente 3 dígitos (ej. 015).");
@@ -1567,18 +1783,18 @@ export default function ReportsTable({
         const showCantidad = showCantidadRental(initialValues.tipoMaquinaria);
         const showEstacion = showEstacionRental(initialValues.tipoMaquinaria);
 
-        const toNull = (v) => (v === "" || v === undefined ? null : v);
-        const toNumOrNull = (v) => {
-          if (v === "" || v === undefined || v === null) return null;
-          const n = Number(String(v).replace(",", "."));
-          return Number.isFinite(n) ? n : null;
-        };
-        const only3digits = (v) => {
-          const s = String(v || "").replace(/\D/g, "").slice(0, 3);
-          return s.length ? s : null;
-        };
-
         const isK = (initialValues.fuente || "").toUpperCase() === "KYLCSA";
+        const isMaterialLike =
+          (String(initialValues.tipoMaquinaria).toLowerCase() === "vagoneta" ||
+            String(initialValues.tipoMaquinaria).toLowerCase() === "cabezal") &&
+          (
+            String(initialValues?.variante || initialValues?.detalles?.variante || "").toLowerCase() === "material" ||
+            (Array.isArray(initialValues?.detalles?.boletas) && initialValues.detalles.boletas.length > 0) ||
+            /material/i.test(String(initialValues?.actividad || ""))
+          );
+
+        const boletasNorm = isMaterialLike ? normalizeBoletas(initialValues?.detalles?.boletas) : [];
+        const totalM3Day = isMaterialLike ? sumM3(boletasNorm) : null;
 
         const payload = {
           operadorId: initialValues.operadorId ? Number(initialValues.operadorId) : null,
@@ -1588,14 +1804,15 @@ export default function ReportsTable({
           cantidad: showCantidad ? toNumOrNull(initialValues.cantidad) : null,
           horas: toNumOrNull(initialValues.horas),
           estacion: showEstacion ? normalizeEstacion(toNull(initialValues.estacion)) : null,
-          fuente: toNull(initialValues.fuente),
-          boleta: isK ? null : toNull(initialValues.boleta),                 // <- aquí
-          boletaKylcsa: isK ? toNull(initialValues.boletaK || initialValues.boletaKylcsa) : null, // <- y aquí
+          fuente: !isMaterialLike ? toNull(initialValues.fuente) : null,
+          boleta: (!isMaterialLike && !isK) ? toNull(initialValues.boleta) : null,
+          boletaKylcsa: (!isMaterialLike && isK) ? toNull(initialValues.boletaK || initialValues.boletaKylcsa) : null,
           fecha: toNull(initialValues.fecha),
-          codigoCamino: only3digits(initialValues.codigoCamino),
+          codigoCamino: only3digitsOrNull(initialValues.codigoCamino),
           distrito: toNull(initialValues.distrito),
+          // 👇 mandar arreglo y total dentro de detalles cuando material
+          detalles: isMaterialLike ? { ...(initialValues.detalles || {}), boletas: boletasNorm, totalCantidadMaterial: totalM3Day, variante: "material" } : (initialValues.detalles || undefined),
         };
-
 
         const updated = await machineryService.updateRentalReport(editingId, payload);
         setRowsRental((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
@@ -1645,11 +1862,9 @@ export default function ReportsTable({
       TipoActividad: pick(r?.tipoActividad, r?.actividad) ?? "",
       HoraInicio: pick(r?.horaInicio, d?.horaInicio) ?? "",
       HoraFin: pick(r?.horaFin, d?.horaFin) ?? "",
-
       Fecha: fmtDMY(r?.fecha),
       Estacion: usesStation(r) ? toEstacionTxt(r) : "",
       PlacaMaquinariaLlevada: d?.placaMaquinariaLlevada ?? r?.placaMaquinariaLlevada ?? "",
-      // “simples” (se ocultarán si hay >1 material)
       TipoMaterial: d?.tipoMaterial ?? r?.tipoMaterial ?? "",
       CantidadMaterial_m3: d?.cantidadMaterial ?? r?.cantidadMaterial ?? "",
       BoletaSimple: d?.boleta ?? r?.boleta ?? "",
@@ -1657,35 +1872,23 @@ export default function ReportsTable({
       TotalDia_m3: getTotalM3(r) ?? "",
       Distrito: getDistritosForSearch(r).join(" · ") || "",
       CodigoCamino: getCodigosForSearch(r).join(", ") || "",
-
     };
 
-    // Para material en cabezal/vagoneta: si existe placa de carreta, expórtala
     if ((t === "vagoneta" || t === "cabezal") && v === "material") {
       const placaCarretaMat = readPlacaCarreta(r);
-      if (placaCarretaMat) {
-        flat.PlacaCarreta = placaCarretaMat;
-      }
-    }
-
-    // ==== Material: decidir entre columnas clásicas VS resumen por material ====
-    const isMaterialVar = (t === "vagoneta" || t === "cabezal") && v === "material";
-    if (isMaterialVar) {
+      if (placaCarretaMat) flat.PlacaCarreta = placaCarretaMat;
       const breakdown = getMaterialBreakdown(r);
       const mats = Object.keys(breakdown);
       if (mats.length > 1) {
-        // hay varios materiales -> oculta columnas clásicas y crea “Materiales (m³)”
         flat.TipoMaterial = "";
         flat.CantidadMaterial_m3 = "";
-        flat.Materiales_m3 = materialSummaryStr(breakdown); // NUEVA columna compacta
+        flat.Materiales_m3 = materialSummaryStr(breakdown);
       } else if (mats.length === 1) {
-        // un solo material -> asegura las clásicas
         const mat = mats[0];
         if (!flat.TipoMaterial) flat.TipoMaterial = mat;
         if (!flat.CantidadMaterial_m3) flat.CantidadMaterial_m3 = breakdown[mat];
       }
 
-      // Boletas compactas: Boleta 1/2/3 ... o una sola columna “Boletas”
       let list = getBoletasArr(r);
       if (!Array.isArray(list) || list.length === 0) {
         const simple = {
@@ -1710,19 +1913,14 @@ export default function ReportsTable({
       }
     }
 
-    // Carreta
     if ((t === "vagoneta" || t === "cabezal") && v === "carreta") {
       flat.PlacaCarreta = d?.placaCarreta ?? d?.carreta?.placa ?? r?.placaCarreta ?? r?.placa_carreta ?? "";
       flat.TipoCarga = d?.tipoCarga ?? r?.tipoCarga ?? "";
       flat.Destino = d?.destino ?? r?.destino ?? "";
     }
 
-    // Cisterna (tipo o variante)
-    // Cisterna (solo mostrar placa cuando es cabezal + variante cisterna)
     const isCisternaTipo = t === "cisterna";
     const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
-
-    // Cantidad y fuente sí las seteamos para ambos casos (tipo o variante)
     if (isCisternaTipo || isCisternaVar) {
       flat.CantidadAgua_m3 =
         d?.cantidadLiquido ?? r?.cantidadLiquido ??
@@ -1730,25 +1928,20 @@ export default function ReportsTable({
       flat.Fuente = flat.Fuente || readFuente(r) || "";
     }
 
-    // 🚩Placa cisterna: SOLO cuando es cabezal + variante cisterna
     if (t === "cabezal" && v === "cisterna") {
       const placaCis = (
         d?.placaCisterna ?? r?.placaCisterna ??
-        d?.cisternaPlaca ?? r?.cisternaPlaca ??   // por si vino con este alias
+        d?.cisternaPlaca ?? r?.cisternaPlaca ??
         d?.cisterna?.placa ??
         r?.placa_cisterna ?? d?.placa_cisterna ??
-        // fallbacks si el form la guardó como “carreta”
         d?.placaCarreta ?? r?.placaCarreta ??
-        d?.carreta?.placa ?? r?.placa_carreta ?? d?.placa_carreta ??
-        null
+        d?.carreta?.placa ?? r?.placa_carreta ?? d?.placa_carreta ?? null
       );
       flat.PlacaCisterna = placaCis ?? "";
     }
 
-
     return flat;
   }
-
 
   function buildFlatRowRental(r) {
     const operadorTxt = r?.operador
@@ -1774,14 +1967,10 @@ export default function ReportsTable({
   }
 
   const exportExcel = () => {
-    // 1) Aplana reportes
     let rows = isMunicipal
       ? filtered.map(buildFlatRowMunicipal)
       : filtered.map(buildFlatRowRental);
 
-    // 2) Normalización global de boletas:
-    //    - Si alguna fila tiene 2+ boletas => eliminar la columna "Boletas" para todas
-    //    - Si ninguna tiene 2+ => eliminar "Boleta 1/2/3" si quedaron
     const maxBoletas = rows.reduce((m, r) => {
       const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
       return Math.max(m, n);
@@ -1789,7 +1978,7 @@ export default function ReportsTable({
 
     if (maxBoletas > 0) {
       rows = rows.map(r => {
-        const { Boletas, ...rest } = r; // quita "Boletas"
+        const { Boletas, ...rest } = r;
         return rest;
       });
     } else {
@@ -1802,14 +1991,10 @@ export default function ReportsTable({
       });
     }
 
-    // 3) Headers dinámicos y prune de columnas 100% vacías
     let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
     headers = pruneEmptyColumns(rows, headers);
-
-    // 👉 Ocultar columnas clásicas de material (siempre)
     headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
 
-    // 4) AOA -> XLSX
     const aoa = [
       headers.map(pretty),
       ...rows.map(row => headers.map(h => (isEmptyVal(row[h]) ? "" : row[h]))),
@@ -1824,25 +2009,11 @@ export default function ReportsTable({
     );
   };
 
-
   const exportPDF = () => {
-    // 1) Aplana reportes
     let rows = isMunicipal
       ? filtered.map(buildFlatRowMunicipal)
       : filtered.map(buildFlatRowRental);
 
-    console.log(
-      "Debug PDF PlacaCisterna:",
-      rows.map(r => ({ id: r.ID, tipo: r.TipoMaquinaria, var: r.Variante, placa: r.PlacaCisterna }))
-    );
-
-    console.log(
-      rows
-        .filter(r => r.TipoMaquinaria === "cabezal" && r.Variante === "cisterna")
-        .map(r => ({ id: r.ID, placa: r.PlacaCisterna, fuente: r.Fuente, cantidad: r.CantidadAgua_m3 }))
-    );
-
-    // 2) Normalización global de boletas (idéntico a Excel)
     const maxBoletas = rows.reduce((m, r) => {
       const n = Object.keys(r).filter(k => /^Boleta \d+$/.test(k)).length;
       return Math.max(m, n);
@@ -1850,7 +2021,7 @@ export default function ReportsTable({
 
     if (maxBoletas > 0) {
       rows = rows.map(r => {
-        const { Boletas, ...rest } = r; // quita "Boletas"
+        const { Boletas, ...rest } = r;
         return rest;
       });
     } else {
@@ -1863,23 +2034,16 @@ export default function ReportsTable({
       });
     }
 
-    // 3) Headers visibles y prune de columnas 100% vacías
     let headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
     headers = pruneEmptyColumns(rows, headers);
-
-    // Ocultar columnas clásicas de material (siempre)
     headers = headers.filter(h => h !== "TipoMaterial" && h !== "CantidadMaterial_m3");
 
-    // 4) Helpers
     const toHTML = (v) => (isEmptyVal(v) ? "—" : String(v).replace(/\n/g, "<br>"));
     const headerAbs = new URL(HEADER_URL, window.location.origin).toString();
     const footerAbs = new URL(FOOTER_URL, window.location.origin).toString();
 
-    // 5) CSS (defínelo ANTES de usarlo en el HTML)
-    // === 1) Configurables ===
-    const ROWS_PER_PAGE = 9; // ← filas por página
+    const ROWS_PER_PAGE = 9;
 
-    // Anchuras por columna (usa los headers BONITOS)
     const COL_WIDTHS = {
       "Tipo": "54px",
       "ID": "30px",
@@ -1897,7 +2061,7 @@ export default function ReportsTable({
       "Hora Fin": "46px",
       "Distrito": "65px",
       "Código Camino": "55px",
-      "Codigo Camino": "48px", // por si llega sin tilde
+      "Codigo Camino": "48px",
       "Fecha": "65px",
       "Total Dia m³": "40px",
       "Materiales m³": "83px",
@@ -1907,21 +2071,16 @@ export default function ReportsTable({
       "Boleta 3": "88px",
       "Boleta 4": "88px",
       "Boleta 5": "88px",
-      "Cantidad Agua m³": "100px",   // ← dale aire a esta columna
+      "Cantidad Agua m³": "100px",
       "Fuente": "80px",
-      // ← opcional: un poco más ancha
       "Estacion": "50px",
       "Horimetro": "60px",
-
       "Placa Cisterna": "80px",
       "Placa Carreta": "60px",
       "Placa Maquinaria Llevada": "65px",
       "Tipo Carga": "60px",
       "Destino": "60px"
-
-
     };
-
 
     const NUMERIC_COLS = new Set([
       "ID", "Kilometraje", "Horímetro", "Horimetro", "Diesel",
@@ -1929,102 +2088,34 @@ export default function ReportsTable({
       "Fecha", "Total Día m³", "Total Dia m³"
     ]);
 
-    // Crea el colgroup usando los anchos configurados
-    const colgroup = `
-  <colgroup>
-    ${headers.map(h => {
-      // si usas pretty(h), puedes mirar COL_WIDTHS[pretty(h)]
-      const key = h;  // o const key = pretty(h);
-      const w = COL_WIDTHS[key] || "54px";   // ancho por defecto
-      return `<col style="width:${w}; min-width:${w}">`;
-    }).join("")}
-  </colgroup>
-`;
-
-
-    // ======================= CSS (reemplaza tu const head) =======================
     const head = `
 <style>
-  :root{
-    --footer-h: 30px;
-    --gap-bottom: 8px;
-    --margin-x: 18mm;
-  }
-  @page{
-    size: A4 landscape;
-    margin: 14mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x);
-  }
-  html,body{
-    margin:0; padding:0;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-
-  /* Footer fijo */
-  footer{
-    position: fixed; left: var(--margin-x); right: var(--margin-x); bottom: 0;
-    height: var(--footer-h);
-    display:flex; align-items:center; justify-content:center;
-    background:#fff; z-index:5; transform: translateZ(0);
-  }
+  :root{ --footer-h: 30px; --gap-bottom: 8px; --margin-x: 18mm; }
+  @page{ size: A4 landscape; margin: 14mm var(--margin-x) calc(var(--footer-h) + var(--gap-bottom)) var(--margin-x); }
+  html,body{ margin:0; padding:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  footer{ position: fixed; left: var(--margin-x); right: var(--margin-x); bottom: 0; height: var(--footer-h); display:flex; align-items:center; justify-content:center; background:#fff; z-index:5; transform: translateZ(0); }
   footer img{ height: calc(var(--footer-h) - 2px); width:auto; object-fit:contain; display:block; }
-
   main{ padding-bottom: calc(var(--footer-h) + var(--gap-bottom)); }
-
-  /* ===== Tabla compacta ===== */
   table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px; }
-  thead{ display: table-header-group; } /* se repite */
-
-  /* logos header */
+  thead{ display: table-header-group; }
   .logo-row td{ border:none; padding:0 0 10px; background:#fff; }
   .logo-wrap{ display:flex; align-items:center; justify-content:center; }
-  .logo-wrap img{ height:80px; object-fit:contain; } /* ← tamaño del header */
-
-  /* encabezados */
-  thead .cols th{
-    background:#f3f4f6; border:1px solid #e5e7eb; padding:4px 4px; line-height:1.1; vertical-align:bottom;
-  }
-  thead .cols .th{
-    white-space:normal; word-break:normal; overflow-wrap:break-word; hyphens:auto;
-  }
-
-  /* celdas */
-  tbody td{
-    border:1px solid #eef2f7; padding:4px 4px; line-height:1.80; vertical-align:top;
-    word-break:break-word; white-space:normal; hyphens:auto;
-  }
+  .logo-wrap img{ height:80px; object-fit:contain; }
+  thead .cols th{ background:#f3f4f6; border:1px solid #e5e7eb; padding:4px 4px; line-height:1.1; vertical-align:bottom; }
+  thead .cols .th{ white-space:normal; word-break:normal; overflow-wrap:break-word; hyphens:auto; }
+  tbody td{ border:1px solid #eef2f7; padding:4px 4px; line-height:1.80; vertical-align:top; word-break:break-word; white-space:normal; hyphens:auto; }
   tbody tr:nth-child(even) td{ background:#fafafa; }
-
-  /* numéricas centradas */
   .num{ text-align:center; }
-
-  /* salto cada N filas */
   .break-row{ page-break-after: always; }
   .break-row td{ border:none; padding:0; height:0; }
-
-  /* cortes limpios */
   thead tr, thead th{ break-inside:avoid; page-break-inside:avoid; }
   tbody tr{ break-inside:auto; page-break-inside:auto; }
-
-  .pdf-wrap{ 
-  display: flex; 
-  justify-content: center;   /* centra horizontalmente */
-}
+  .pdf-wrap{ display:flex; justify-content:center; }
 </style>`;
 
-    // ======================= Construcción de headers =======================
-    // OJO: 'headers' aquí son tus claves RAW (sin pretty). Creamos dos arrays:
-    const headersRaw = headers.slice();              // para leer datos
-    const headersPretty = headersRaw.map(h => pretty(h)); // para mostrar y medir ancho
+    const headersRaw = headers.slice();
+    const headersPretty = headersRaw.map(h => pretty(h));
 
-    // colgroup por header BONITO (así aplican tus anchos)
-    const colgroupHTML = `<colgroup>${headersPretty.map(hNice => {
-      const w = COL_WIDTHS[hNice] || "auto";
-      return `<col style="width:${w}">`;
-    }).join("")
-      }</colgroup>`;
-
-    // THEAD: texto bonito, y clase numérica según el bonito
     const thead = `
   <tr class="logo-row">
     <td colspan="${headersRaw.length}">
@@ -2039,8 +2130,6 @@ export default function ReportsTable({
     }).join("")}
   </tr>`;
 
-    // ======================= TBODY: usa tus 'rows' aplanados =======================
-    // (ANTES lo había puesto sobre 'filtered' por error)
     const tbody = (() => {
       const out = [];
       rows.forEach((rowObj, idx) => {
@@ -2060,14 +2149,12 @@ export default function ReportsTable({
       return out.join("");
     })();
 
-    // ======================= HTML final =======================
     const html = `
 <html>
   <head>${head}</head>
   <body>
     <main>
       <table>
-        ${colgroupHTML}
         <thead>${thead}</thead>
         <tbody>${tbody}</tbody>
       </table>
@@ -2076,8 +2163,6 @@ export default function ReportsTable({
   </body>
 </html>`;
 
-
-    // 8) Abrir/Imprimir
     const win = window.open("", "_blank");
     if (!win) { alert("Bloqueado por el navegador. Habilita pop-ups para exportar."); return; }
     win.document.open(); win.document.write(html); win.document.close();
@@ -2089,13 +2174,10 @@ export default function ReportsTable({
 
     waitImages().then(() => { win.focus(); win.print(); });
     win.onafterprint = () => { try { win.close(); } catch { } };
-
   };
 
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-
-  /* ---------------- render ---------------- */
   return (
     <div className="space-y-4 max-w-[1500px] mx-auto px-4">
       {/* Pestañas */}
@@ -2143,9 +2225,8 @@ export default function ReportsTable({
         </button>
       </div>
 
-      {/* === Panel de Filtros (colapsable) === */}
+      {/* Panel Filtros */}
       <div className="rounded-2xl border bg-white">
-        {/* Header del panel */}
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <FilterIcon className="h-5 w-5 text-gray-700" />
@@ -2157,7 +2238,6 @@ export default function ReportsTable({
             </div>
           </div>
 
-          {/* Acciones derecha */}
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button
               variant="secondary"
@@ -2203,7 +2283,6 @@ export default function ReportsTable({
                 PDF
               </Button>
 
-              {/* 🔹 Solo superadmin puede ver reportes eliminados */}
               {canViewDeletedReports(user) && (
                 <Button
                   variant="secondary"
@@ -2218,7 +2297,6 @@ export default function ReportsTable({
         </div>
       </div>
 
-      {/* Cuerpo colapsable */}
       {filtersOpen && (
         <div className="px-4 pb-4">
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
@@ -2249,7 +2327,6 @@ export default function ReportsTable({
               />
             </div>
 
-            {/* Solo municipal: código + distrito */}
             {isMunicipal && (
               <>
                 <div className="w-28">
@@ -2360,14 +2437,12 @@ export default function ReportsTable({
                       <SelectValue placeholder="Variante" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(
-                        VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] ||
-                        []
-                      ).map((v) => (
-                        <SelectItem key={v} value={v}>
-                          {v}
-                        </SelectItem>
-                      ))}
+                      {(VARIANT_OPTIONS_BY_TYPE[(typeFilter || "").toLowerCase()] || [])
+                        .map((v) => (
+                          <SelectItem key={v} value={v}>
+                            {v}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2491,7 +2566,6 @@ export default function ReportsTable({
                       <Eye size={18} />
                     </button>
 
-                    {/* 🔹 Solo mostrar editar si tiene permiso */}
                     {canEditReports(user, r) && (
                       <button
                         className="p-2 rounded hover:bg-blue-50 text-blue-800"
@@ -2502,7 +2576,6 @@ export default function ReportsTable({
                       </button>
                     )}
 
-                    {/* 🔹 Solo mostrar eliminar si tiene permiso */}
                     {canDeleteReports(user, r) && (
                       <button
                         type="button"
@@ -2513,8 +2586,6 @@ export default function ReportsTable({
                       >
                         <Trash2 size={18} />
                       </button>
-
-
                     )}
                   </div>
                 </td>
@@ -2571,23 +2642,18 @@ export default function ReportsTable({
             </DialogDescription>
           </DialogHeader>
 
-
           {selectedRow && (
             isRental
               ? <RentalDetails r={selectedRow} />
               : (() => {
-                // ⬇️ deja tal cual aquí tu bloque municipal actual (el IIFE que ya tienes)
-                //    NO lo borres; solo queda dentro de esta rama del "municipal".
                 const r = selectedRow;
                 const t = getType(r);
                 const v = getVar(r);
                 const d = r.detalles || {};
                 const kmType = isKmType(t);
-                // banderas
                 const showVariante = t === "vagoneta" || t === "cabezal";
                 const showEstacion = STATION_TYPES.has(t) || _hasStationData(r);
 
-                // fuente si cisterna (tipo/variante)
                 const fuenteTxt =
                   t === "cisterna" || ((t === "vagoneta" || t === "cabezal") && v === "cisterna")
                     ? readFuente(r)
@@ -2600,7 +2666,6 @@ export default function ReportsTable({
                   </div>
                 );
 
-                // justo antes de armar el array `base` o inmediatamente después:
                 let addedFuente = false;
                 const pushFuente = (v) => {
                   if (addedFuente) return;
@@ -2625,24 +2690,24 @@ export default function ReportsTable({
                   },
                   {
                     label: kmType ? "Kilometraje" : "Horímetro",
-                    value: kmType ? (r?.kilometraje ?? d?.kilometraje) : (r?.horimetro ?? d?.horimetro),
+                    value: kmType ? (d?.kilometraje ?? r?.kilometraje) : (d?.horimetro ?? r?.horimetro),
                   },
                   { label: "Tipo actividad", value: r?.tipoActividad ?? r?.actividad },
                   {
                     label: "Horario",
                     value: (() => {
-                      const ini = r?.horaInicio ?? d?.horaInicio;
-                      const fin = r?.horaFin ?? d?.horaFin;
+                      const ini = d?.horaInicio ?? r?.horaInicio;
+                      const fin = d?.horaFin ?? r?.horaFin;
                       return ini || fin ? `${ini ?? "—"} – ${fin ?? "—"}` : null;
                     })(),
                   },
-                  { label: "Diésel", value: r?.diesel ?? r?.combustible },
+                  { label: "Diésel", value: (d?.diesel ?? r?.diesel ?? r?.combustible) },
                   {
                     label: "Horas (Ord/Ext)",
                     value:
-                      (r?.horasOrd ?? r?.horas_or ?? null) !== null ||
-                        (r?.horasExt ?? r?.horas_ext ?? null) !== null
-                        ? `${r?.horasOrd ?? r?.horas_or ?? "—"} / ${r?.horasExt ?? r?.horas_ext ?? "—"}`
+                      (d?.horasOrd ?? r?.horasOrd ?? r?.horas_or ?? null) !== null ||
+                        (d?.horasExt ?? r?.horasExt ?? r?.horas_ext ?? null) !== null
+                        ? `${(d?.horasOrd ?? r?.horasOrd ?? r?.horas_or ?? "—")} / ${(d?.horasExt ?? r?.horasExt ?? r?.horas_ext ?? "—")}`
                         : null,
                   },
                   { label: "Distrito", value: r?.distrito },
@@ -2650,11 +2715,9 @@ export default function ReportsTable({
                   { label: "Fecha", value: fmtDMY(r?.fecha) },
                 ];
 
-
                 if (showVariante) base.push({ label: "Variante", value: v || null });
                 if (showEstacion) base.push({ label: "Estación", value: toEstacionTxt(r) });
 
-                // helper de lectura múltiple
                 const read = (...paths) => {
                   for (const p of paths) {
                     const val = get(r, p);
@@ -2663,7 +2726,6 @@ export default function ReportsTable({
                   return null;
                 };
 
-                // placa maquinaria llevada
                 const placaMaqLlevada = read(
                   "placaMaquinariaLlevada",
                   "detalles.placaMaquinariaLlevada",
@@ -2672,14 +2734,12 @@ export default function ReportsTable({
                 );
                 if (placaMaqLlevada) base.push({ label: "Placa maq. llevada", value: placaMaqLlevada });
 
-                // carreta
                 if ((t === "vagoneta" || t === "cabezal") && v === "carreta") {
                   base.push({ label: "Placa carreta", value: read("placaCarreta", "detalles.placaCarreta", "placa_carreta", "detalles.placa_carreta") ?? "—" });
                   base.push({ label: "Tipo de carga", value: read("tipoCarga", "detalles.tipoCarga", "tipo_carga", "detalles.tipo_carga") ?? "—" });
                   base.push({ label: "Destino", value: read("destino", "detalles.destino", "destino_carga", "detalles.destino_carga") ?? "—" });
                 }
 
-                // cabezal/vagoneta con variante material -> también mostrar placa de carreta si existe
                 if ((t === "vagoneta" || t === "cabezal") && v === "material") {
                   const placaCarretaMat = readPlacaCarreta(r);
                   if (placaCarretaMat) {
@@ -2687,12 +2747,18 @@ export default function ReportsTable({
                   }
                 }
 
-                // dentro del bloque cisterna del modal VER
-                if (t === "cabezal" && v === "cisterna" && placaCisterna) {
-                  base.push({ label: "Placa cisterna", value: placaCisterna });
+                if (t === "cabezal" && v === "cisterna") {
+                  const placaCisterna = read(
+                    "placaCisterna", "detalles.placaCisterna",
+                    "placa_cisterna", "detalles.placa_cisterna",
+                    "detalles.cisterna.placa",
+                    "placaCarreta", "detalles.placaCarreta",
+                    "placa_carreta", "detalles.placa_carreta",
+                    "detalles.carreta.placa"
+                  );
+                  if (placaCisterna) base.push({ label: "Placa cisterna", value: placaCisterna });
                 }
 
-                // cisterna (tipo/variante)
                 const isCisternaTipo = t === "cisterna";
                 const isCisternaVar = (t === "vagoneta" || t === "cabezal") && v === "cisterna";
                 if (isCisternaTipo || isCisternaVar) {
@@ -2704,62 +2770,29 @@ export default function ReportsTable({
                   const fuenteAgua =
                     readFuente(r) ??
                     read("detalles.cisterna.fuenteAgua", "fuenteAgua", "detalles.fuenteAgua");
-                  const placaCisterna = read(
-                    "placaCisterna", "detalles.placaCisterna",
-                    "placa_cisterna", "detalles.placa_cisterna",
-                    "detalles.cisterna.placa",
-                    // fallbacks de carreta
-                    "placaCarreta", "detalles.placaCarreta",
-                    "placa_carreta", "detalles.placa_carreta",
-                    "detalles.carreta.placa"
-                  );
                   base.push({ label: "Cantidad agua (m³)", value: cantidadAgua ?? "—" });
-                  // ✅ ahora (solo si hay valor y evitando duplicados)
                   pushFuente(fuenteAgua);
-
-                  if (placaCisterna) base.push({ label: "Placa cisterna", value: placaCisterna });
                 }
 
-                // --- al final del armado de `base`, justo antes del return del modal ---
                 const isMaterialVar =
                   (t === "vagoneta" || t === "cabezal") && v === "material";
 
-                // helper local por si no lo tienes aquí
                 const hasVal = (x) => x !== undefined && x !== null && String(x).trim() !== "";
-
-                // por defecto: elimina tarjetas totalmente vacías (excepto si el valor es 0)
                 let baseFiltered = base.filter(k => hasVal(k.value) || k.value === 0);
 
-                // regla especial para vagoneta/cabezal variante 'material':
                 if (isMaterialVar) {
                   baseFiltered = baseFiltered.filter(k => {
-                    // quita siempre Distrito y Código Camino (ya van en boletas)
                     if (k.label === "Distrito") return false;
                     if (k.label === "Código Camino") return false;
-
                     return true;
                   });
                 }
 
-                // material (campos simples)
-                if ((t === "vagoneta" || t === "cabezal") && v === "material") {
-                  const tipoMaterial = read("tipoMaterial", "detalles.tipoMaterial");
-                  const cantidadMaterial = read("cantidadMaterial", "detalles.cantidadMaterial");
-                  const boletaSimple = read("boleta", "detalles.boleta");
-                  if (tipoMaterial) base.push({ label: "Tipo material", value: tipoMaterial });
-                  if (cantidadMaterial) base.push({ label: "Cantidad (m³)", value: cantidadMaterial });
-                  if (boletaSimple) base.push({ label: "Boleta", value: boletaSimple });
-                  // ✅ ahora
-                  pushFuente(readFuente(r));
-                }
-
-                // helpers boletas/tabla
                 const isRioOTajo = (f) => f === "Ríos" || f === "Tajo";
                 const showBoletas = showVariante && v === "material" && !isFlatbed8803(r);
                 const fmtFuente = (b = {}) =>
                   isRioOTajo(b?.fuente) ? `${b.fuente}${b?.subFuente ? ` – ${b.subFuente}` : ""}` : (b?.fuente || "—");
 
-                // 👇 claves que te faltaban:
                 const boletas = getBoletasArr(r);
                 const totalM3 = getTotalM3(r);
 
@@ -2771,22 +2804,10 @@ export default function ReportsTable({
                       ))}
                     </div>
 
-
                     {showBoletas && (
                       <div className="border rounded-lg p-3">
                         <div className="text-sm font-semibold mb-2">Detalles de Boleta</div>
 
-                        {/* total del día
-            <div className="mb-3">
-              <div className="bg-white border rounded-lg p-3">
-                <div className="text-xs text-gray-500">
-                  Total m<sup>3</sup> del día
-                </div>
-                <div className="font-medium">{showNum(totalM3)}</div>
-              </div>
-            </div> */}
-
-                        {/* tabla de boletas */}
                         {Array.isArray(boletas) && boletas.length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
@@ -2804,7 +2825,6 @@ export default function ReportsTable({
 
                               <tbody>
                                 {boletas.map((b, i) => {
-                                  // intenta leer m3 desde varias claves
                                   const m3 = b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen ?? "";
                                   const distrito = b?.distrito ?? b?.Distrito ?? "";
                                   const codigo = b?.codigoCamino ?? b?.CodigoCamino ?? b?.codigo_camino ?? "";
@@ -2813,7 +2833,7 @@ export default function ReportsTable({
                                     <tr key={i} className="border-t">
                                       <td className="px-3 py-2">{i + 1}</td>
                                       <td className="px-3 py-2">{showText(b?.tipoMaterial)}</td>
-                                      <td className="px-3 py-2">{fuseFuente(b)}</td> {/* 👈 aquí va combinada */}
+                                      <td className="px-3 py-2">{fuseFuente(b)}</td>
                                       <td className="px-3 py-2">{showNum(m3)}</td>
                                       <td className="px-3 py-2">{showText(distrito)}</td>
                                       <td className="px-3 py-2">{showText(codigo)}</td>
@@ -2822,15 +2842,12 @@ export default function ReportsTable({
                                   );
                                 })}
                               </tbody>
-
-
                             </table>
                           </div>
                         ) : (
                           <div className="text-sm text-gray-500">Sin boletas registradas.</div>
                         )}
 
-                        {/* totales por material */}
                         {(() => {
                           const breakdown = getMaterialBreakdown(r);
                           const entries = Object.entries(breakdown);
@@ -2855,11 +2872,8 @@ export default function ReportsTable({
                       </div>
                     )}
 
-                    {/* Plataforma SM 8803: no hay boletas; lista materiales transportados */}
                     {isFlatbed8803(r) && (
                       <div className="mt-4 space-y-2">
-
-                        {/* En 8803, distrito y código vienen del root del reporte */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="bg-white border rounded-lg p-3">
                             <div className="text-xs text-gray-500">Distrito</div>
@@ -2894,11 +2908,8 @@ export default function ReportsTable({
                 );
               })()
           )}
-
-
         </DialogContent>
       </Dialog>
-
 
       {/* ===== Modal EDITAR ===== */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -2906,6 +2917,21 @@ export default function ReportsTable({
           <DialogHeader>
             <DialogTitle>Editar reporte {editingId ? `#${editingId}` : ""}</DialogTitle>
             <DialogDescription>Modifica los campos necesarios.</DialogDescription>
+
+            {canEditReports(user, selectedRow) && (
+              <div className="mt-2 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  {adminAdvanced ? "Modo avanzado (admin) activado" : "Modo normal"}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => setAdminAdvanced(v => !v)}
+                  className="h-8"
+                >
+                  {adminAdvanced ? "Desactivar avanzado" : "Activar avanzado"}
+                </Button>
+              </div>
+            )}
           </DialogHeader>
 
           {initialValues && (
@@ -2917,7 +2943,6 @@ export default function ReportsTable({
                   districts={districts}
                 />
 
-                {/* ⬇️ Footer de acciones para ALQUILER */}
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     variant="secondary"
@@ -2953,7 +2978,6 @@ export default function ReportsTable({
                 setInitialValues((prev) => ({ ...prev, detalles: { ...(prev?.detalles || {}), ...patch } }));
               const numberOrBlank = (x) => (x === null || x === undefined ? "" : x);
 
-              // Tarjeta idéntica a VER
               const FieldBox = ({ label, children, className = "" }) => (
                 <div className={`bg-white border rounded-lg p-3 ${className}`}>
                   <div className="text-xs text-gray-500">{label}</div>
@@ -2961,16 +2985,9 @@ export default function ReportsTable({
                 </div>
               );
 
-              // Input plano (sin bordes propios, usa el borde del FieldBox)
               const flatInputClass =
                 "h-8 w-full border-none bg-transparent shadow-none px-0 focus-visible:ring-0 focus:outline-none";
 
-              // Input para celdas de tabla (boletas), liso
-              const cellInputClass =
-                "h-8 w-full text-sm px-2 border border-gray-300 rounded-md shadow-none focus-visible:ring-1 focus-visible:ring-blue-500";
-
-
-              // Colección de boletas editable
               const boletas = Array.isArray(initialValues?.detalles?.boletas)
                 ? initialValues.detalles.boletas
                 : [];
@@ -2984,12 +3001,20 @@ export default function ReportsTable({
 
               return (
                 <div className="space-y-5">
-                  {/* ====== Cabecera con el mismo layout que VER ====== */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FieldBox label="Operador">
                       {r?.operador
                         ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
                         : r?.operadorId || "—"}
+                    </FieldBox>
+
+                    <FieldBox label="Tipo maquinaria (texto)">
+                      <Input
+                        className={flatInputClass}
+                        value={initialValues?.tipoMaquinaria ?? selectedRow?.tipoMaquinaria ?? selectedRow?.maquinaria?.tipo ?? ""}
+                        onChange={(e) => setIV({ tipoMaquinaria: e.target.value })}
+                        placeholder="Ej: vagoneta, cabezal, cisterna, excavadora..."
+                      />
                     </FieldBox>
 
                     <FieldBox label="Maquinaria">
@@ -3019,7 +3044,6 @@ export default function ReportsTable({
                       />
                     </FieldBox>
 
-                    {/* Horario en una sola tarjeta (inicio – fin) */}
                     <FieldBox label="Horario">
                       <div className="flex items-center gap-3">
                         <Input
@@ -3038,8 +3062,6 @@ export default function ReportsTable({
                       </div>
                     </FieldBox>
 
-
-                    {/* Diésel solo para maquinaria de carretera (no excavadora, etc.) */}
                     {(t === "vagoneta" || t === "cabezal" || t === "cisterna") && (
                       <FieldBox label="Diésel">
                         <Input
@@ -3051,7 +3073,6 @@ export default function ReportsTable({
                         />
                       </FieldBox>
                     )}
-
 
                     <FieldBox label="Horas (Ord/Ext)">
                       <div className="flex items-center gap-2">
@@ -3077,10 +3098,8 @@ export default function ReportsTable({
                       <Input value={initialValues.fecha || ""} disabled className={flatInputClass} />
                     </FieldBox>
 
-                    {/* Variante solo aplica a vagoneta/cabezal */}
                     {(t === "vagoneta" || t === "cabezal") && (<FieldBox label="Variante">{getVar(r) || "—"}</FieldBox>)}
 
-                    {/* Estación cuando aplique */}
                     {showStation && (
                       <FieldBox label="Estación (N+M)">
                         <Input
@@ -3092,7 +3111,6 @@ export default function ReportsTable({
                       </FieldBox>
                     )}
 
-                    {/* Código & Distrito: sólo si NO es variante material */}
                     {!isMaterialVar && (
                       <>
                         <FieldBox label="Código Camino">
@@ -3113,7 +3131,6 @@ export default function ReportsTable({
                       </>
                     )}
 
-                    {/* Placa Carreta arriba: solo si la variante es carreta */}
                     {isCarretaVar && (
                       <FieldBox label="Placa carreta" className="md:col-span-2">
                         <Input
@@ -3156,11 +3173,8 @@ export default function ReportsTable({
                         </div>
                       </FieldBox>
                     )}
-
-
                   </div>
 
-                  {/* ====== Boletas (tabla PLANA, sin cards) ====== */}
                   {isMaterialVar && !isFlatbed8803(r) && (
                     <div className="border rounded-lg">
                       <div className="flex items-center justify-between px-3 py-2">
@@ -3209,7 +3223,6 @@ export default function ReportsTable({
                                 <td className="px-3 py-2">
                                   <Input
                                     className={flatInputClass}
-
                                     value={b?.subFuente || ""}
                                     onChange={(e) => updateBoleta(i, "subFuente", e.target.value)}
                                   />
@@ -3219,7 +3232,6 @@ export default function ReportsTable({
                                     type="number"
                                     step="0.01"
                                     className={flatInputClass}
-
                                     value={numberOrBlank(b?.m3 ?? b?.cantidad ?? b?.metros3 ?? b?.volumen)}
                                     onChange={(e) => updateBoleta(i, "m3", e.target.value)}
                                   />
@@ -3227,7 +3239,6 @@ export default function ReportsTable({
                                 <td className="px-3 py-2">
                                   <Input
                                     className={flatInputClass}
-
                                     value={b?.distrito || b?.District || ""}
                                     onChange={(e) => updateBoleta(i, "distrito", e.target.value)}
                                   />
@@ -3235,7 +3246,6 @@ export default function ReportsTable({
                                 <td className="px-3 py-2">
                                   <Input
                                     className={flatInputClass}
-
                                     value={b?.codigoCamino || b?.codigo || b?.codigo_camino || ""}
                                     onChange={(e) => updateBoleta(i, "codigoCamino", e.target.value)}
                                   />
@@ -3243,7 +3253,6 @@ export default function ReportsTable({
                                 <td className="px-3 py-2">
                                   <Input
                                     className={flatInputClass}
-
                                     value={b?.boleta || ""}
                                     onChange={(e) => updateBoleta(i, "boleta", e.target.value)}
                                   />
@@ -3259,7 +3268,6 @@ export default function ReportsTable({
                     </div>
                   )}
 
-                  {/* Acciones */}
                   <div className="flex justify-end gap-2 pt-2">
                     <Button
                       variant="secondary"
@@ -3345,7 +3353,6 @@ export default function ReportsTable({
         </DialogContent>
       </Dialog>
 
-
       {/* Eliminados */}
       <Dialog open={deletedOpen} onOpenChange={setDeletedOpen}>
         <DialogContent className="max-w-4xl">
@@ -3385,12 +3392,10 @@ export default function ReportsTable({
                         {r.deleteReason ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {/* 🔹 Solo superadmin puede restaurar reportes */}
                         {canRestoreReports(user) && (
                           <Button variant="secondary" onClick={() => handleRestoreWithSwal(r)}>
                             Restaurar
                           </Button>
-
                         )}
                       </td>
                     </tr>
@@ -3409,6 +3414,5 @@ export default function ReportsTable({
         </DialogContent>
       </Dialog>
     </div>
-
   );
 }

@@ -131,11 +131,15 @@ const debouncedQ = useDebounced(q, 350);   // versión con retardo para llamadas
 
     try {
       const payload = {
-        placa: p,
-        tipoMaquinaria: tm,
-        categoria: tm === "vagoneta" ? "carreta" : categoria,
-        materialTipo:
-          tm === "cabezal" && categoria === "material" ? materialTipo : undefined,
+         placa: p,
+         tipoMaquinaria: tm, 
+   // en carretas, vagoneta siempre es "carreta"; en cabezal respeta la UI
+   categoria: tm === "vagoneta" ? "carreta" : categoria,
+   // normaliza materialTipo solo si la categoría es material
+   ...(tm === "cabezal" && categoria === "material"
+     ? { materialTipo: materialTipo === "fino" ? "plataforma" : materialTipo }
+     : {}),
+
       };
       await trailersService.create(payload);
       setPlaca("");
@@ -149,7 +153,8 @@ const debouncedQ = useDebounced(q, 350);   // versión con retardo para llamadas
     const handleCancelCreate = async () => {
     const res = await confirmAction("¿Cancelar?", "Se limpiará el formulario.");
     if (!res.isConfirmed) return;
-    setNombre("");
+    //setNombre("");
+    setPlaca("");
   };
   
   // Edit
@@ -177,12 +182,11 @@ const debouncedQ = useDebounced(q, 350);   // versión con retardo para llamadas
 
     const payload = {
       placa: (edit.placa || "").trim().toUpperCase(),
-      tipoMaquinaria: tm, // respetamos el tab actual
       categoria: tm === "vagoneta" ? "carreta" : edit.categoria,
-      materialTipo:
-        tm === "cabezal" && (edit.categoria || categoria) === "material"
-          ? edit.materialTipo ?? "desecho"
-          : undefined,
+      ...(tm === "cabezal" &&
+      (edit.categoria || categoria) === "material"
+     ? { materialTipo: (edit.materialTipo ?? "desecho") === "fino" ? "plataforma" : (edit.materialTipo ?? "desecho") }
+     : {}),
     };
 
     try {
@@ -320,7 +324,7 @@ const segOff =
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="desecho">Material desecho (arena/tierra..)</SelectItem>
-              <SelectItem value="fino">Material fino (cemento/block..)</SelectItem>
+              <SelectItem value="plataforma">Material fino (cemento/block..)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -503,9 +507,7 @@ const segOff =
                                 <SelectItem value="desecho">
                                   desecho
                                 </SelectItem>
-                                <SelectItem value="fino">
-                                  fino
-                                </SelectItem>
+                                <SelectItem value="plataforma">plataforma</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
