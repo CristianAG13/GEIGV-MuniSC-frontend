@@ -316,59 +316,27 @@ const getFuenteOptions = useCallback(() => {
         
         setOperatorsList(Array.isArray(operators) ? operators : []);
         
-        // Si el usuario es operario, auto-asignar su operador
-        if (isOperario && user?.id && Array.isArray(operators)) {
-          console.log("🔍 [DEBUG] Buscando operador para usuario ID:", user.id, "tipo:", typeof user.id);
-          console.log("🔍 [DEBUG] Todos los operadores:", operators.map(op => ({
-            id: op.id,
-            name: op.name,
-            userId: op.userId,
-            user_id: op.user_id,
-            userIdType: typeof op.userId,
-            user_idType: typeof op.user_id
-          })));
-          
-          // Buscar el operador asociado al usuario actual - probar múltiples comparaciones
-          let myOperator = operators.find(op => op.userId === user.id);
-          console.log("🔍 [DEBUG] Búsqueda 1 (userId ===):", myOperator);
-          
-          if (!myOperator) {
-            myOperator = operators.find(op => op.user_id === user.id);
-            console.log("🔍 [DEBUG] Búsqueda 2 (user_id ===):", myOperator);
+        // Si el usuario es operario, auto-asignar su operador usando endpoint específico
+        if (isOperario && mode === "create") {
+          console.log("🔍 [DEBUG] Usuario es operario, obteniendo mi operador del backend...");
+          try {
+            const myOperatorResponse = await operatorsService.getMyOperator();
+            if (myOperatorResponse.success && myOperatorResponse.data) {
+              const myOperator = myOperatorResponse.data;
+              console.log("🔍 [DEBUG] Mi operador obtenido del backend:", myOperator);
+              
+              setFormData(prev => {
+                const newData = { ...prev, operadorId: String(myOperator.id) };
+                console.log("🔍 [DEBUG] Auto-asignando operador:", newData);
+                return newData;
+              });
+            } else {
+              console.log("🔍 [DEBUG] No se encontró operador asociado al usuario");
+            }
+          } catch (myOpError) {
+            console.log("🔍 [DEBUG] Error al obtener mi operador:", myOpError);
+            // Fallback: No mostrar error al usuario, simplemente no auto-asignar
           }
-          
-          if (!myOperator) {
-            myOperator = operators.find(op => String(op.userId) === String(user.id));
-            console.log("🔍 [DEBUG] Búsqueda 3 (String(userId) ===):", myOperator);
-          }
-          
-          if (!myOperator) {
-            myOperator = operators.find(op => String(op.user_id) === String(user.id));
-            console.log("🔍 [DEBUG] Búsqueda 4 (String(user_id) ===):", myOperator);
-          }
-          
-          console.log("🔍 [DEBUG] Operador FINAL encontrado:", myOperator);
-          
-          if (myOperator && mode === "create") {
-            console.log("🔍 [DEBUG] Auto-asignando operador:", myOperator.id);
-            setFormData(prev => {
-              const newData = { ...prev, operadorId: String(myOperator.id) };
-              console.log("🔍 [DEBUG] FormData actualizado (como string):", newData);
-              return newData;
-            });
-          } else {
-            console.log("🔍 [DEBUG] No se auto-asignó operador. Razones:", {
-              hasOperator: !!myOperator,
-              isCreateMode: mode === "create",
-              mode
-            });
-          }
-        } else {
-          console.log("🔍 [DEBUG] No se ejecuta auto-asignación. Razones:", {
-            isOperario,
-            hasUserId: !!user?.id,
-            isArrayOperators: Array.isArray(operators)
-          });
         }
       } catch (e) {
         console.error("[CreateReportForm] getAllOperators error:", e);
