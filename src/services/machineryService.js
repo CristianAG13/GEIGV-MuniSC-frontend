@@ -221,46 +221,45 @@ class MachineryService {
   }
 
   // ===== Reemplazar createRentalReport =====
-  async createRentalReport(formData) {
-    const F = String(formData.fuente || "").trim().toUpperCase();
+ // machineryService.js
+async createRentalReport(formData) {
+  const F = String(formData.fuente || "").trim().toUpperCase();
 
-    const only3digits = (v) => {
-      const s = String(v || "").replace(/\D/g, "").slice(0, 3);
-      return s.length ? s : null;
-    };
+  const only3digits = (v) => {
+    const s = String(v || "").replace(/\D/g, "").slice(0, 3);
+    return s.length ? s : null;
+  };
+  const normalizeNum = (v) => (v == null || v === "" ? null : Number(String(v).replace(",", ".")));
 
-    const normalizeNum = (v) => (
-      v == null || v === "" ? null : Number(String(v).replace(",", "."))
-    );
+  const payload = {
+    fecha: formData.fecha || null,
+    codigoCamino: only3digits(formData.codigoCamino),
+    distrito: formData.distrito || null,
 
-    const payload = {
-      fecha: formData.fecha || null,
-      codigoCamino: only3digits(formData.codigoCamino),
-      distrito: formData.distrito || null,
+    operadorId: formData.operadorId ? Number(formData.operadorId) : null,
+    tipoMaquinaria: formData.tipoMaquinaria || null,
+    placa: formData.placa || null,
+    actividad: formData.actividad || null,
+    cantidad: normalizeNum(formData.cantidad),
+    horas: normalizeNum(formData.horas),
+    estacion: normalizeEstacion(formData.estacion || null),
 
-      operadorId: formData.operadorId ? Number(formData.operadorId) : null,
-      tipoMaquinaria: formData.tipoMaquinaria || null,
-      placa: formData.placa || null,
-      actividad: formData.actividad || null,
-      cantidad: normalizeNum(formData.cantidad),
-      horas: normalizeNum(formData.horas),
-      estacion: normalizeEstacion(formData.estacion || null),
+    // boleta/boletaKylcsa siguen funcionando para flujos simples:
+    boleta: F === "KYLCSA" ? null : (formData.boleta || null),
+    boletaKylcsa: F === "KYLCSA" ? (formData.boletaKylcsa || formData.boletaK || null) : null,
 
-      // ✅ Si NO es KYLCSA, manda "boleta" normal (incluye RÍOS/TAJO)
-      boleta: F === "KYLCSA" ? null : (formData.boleta || null),
+    fuente: formData.fuente || null,
+  };
 
-      // ✅ Si es KYLCSA, usa boletaKylcsa
-      boletaKylcsa: F === "KYLCSA"
-        ? (formData.boletaKylcsa || formData.boletaK || null)
-        : null,
-
-      fuente: formData.fuente || null,
-    };
-
-    MachineryService.log("POST /machinery/rental-report payload", payload);
-    const res = await apiClient.post("/machinery/rental-report", payload);
-    return res.data;
+  // ✅ NUEVO: si viene un objeto detalles, lo incluimos tal cual
+  if (formData.detalles && typeof formData.detalles === "object") {
+    payload.detalles = formData.detalles;
   }
+
+  MachineryService.log("POST /machinery/rental-report payload", payload);
+  const res = await apiClient.post("/machinery/rental-report", payload);
+  return res.data;
+}
 
   async updateRentalReport(id, dto) {
     const res = await apiClient.patch(`/machinery/rental-report/${id}`, dto);
