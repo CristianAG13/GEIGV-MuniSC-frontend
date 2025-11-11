@@ -103,11 +103,6 @@ export default function CreateReportForm({
   // Placas de carreta desde catálogo (cada item: { id, placa, tipoMaquinaria, categoria, materialTipo })
   const [trailerOptions, setTrailerOptions] = useState([]);
 
-  // Debug: monitorear cambios en formData
-  useEffect(() => {
-    console.log("🔍 [DEBUG] FormData cambió:", formData);
-    console.log("🔍 [DEBUG] OperadorId actual:", formData.operadorId);
-  }, [formData]);
 
   // Catálogos dinámicos
   const [riosList, setRiosList] = useState([]);
@@ -167,6 +162,16 @@ export default function CreateReportForm({
     materialesOtros: "",
   };
   const [formData, setFormData] = useState(INITIAL_FORM);
+
+  // Debug: monitorear cambios en formData (colocado después de la inicialización)
+  useEffect(() => {
+    try {
+      console.log("🔍 [DEBUG] FormData cambió:", formData);
+      console.log("🔍 [DEBUG] OperadorId actual:", formData?.operadorId);
+    } catch (err) {
+      console.warn("🔍 [DEBUG] Error al loggear formData:", err);
+    }
+  }, [formData]);
 
   // ====== DERIVADOS ======
   const isMaterialFlow = useMemo(() => {
