@@ -1,7 +1,7 @@
 
 // config/navigation.js
 import { 
-  Home, Users, Truck, UserCheck, HardHat, Shield
+  Home, Users, Truck, UserCheck, HardHat, Shield, BarChart3
 } from 'lucide-react';
 
 // ========================
@@ -16,6 +16,8 @@ import {
 // - Ver reportes eliminados: solo superadmin
 // - Restaurar reportes: solo superadmin
 // - Ver resúmenes: solo superadmin
+// - Ver auditoría: superadmin, ingeniero, inspector
+// - Gestionar auditoría: solo superadmin
 // ========================
 export const rolePermissions = {
   user: ['dashboard'],
@@ -23,7 +25,7 @@ export const rolePermissions = {
   ingeniero: [
     'dashboard', 
     'transporte', // ✅ Crear/editar reportes
-    'auditoria-view' // ✅ Solo visualización de auditoría
+    'auditoria' // ✅ Auditoría con estadísticas integradas
   ],
   superadmin: [
     'dashboard', 
@@ -31,13 +33,14 @@ export const rolePermissions = {
     'transporte', // ✅ Crear/editar reportes
     'solicitudes-rol', // ✅ Aprobar solicitudes
     'operadores', // ✅ Ver/editar todos los operadores
-    'auditoria' // ✅ Acceso completo a auditoría (incluyendo resúmenes)
+    'auditoria' // ✅ Acceso completo a auditoría con estadísticas integradas
   ],
   guest: ['dashboard'],
   invitado: ['dashboard'],
   inspector: [
     'dashboard', 
-    'transporte' // ✅ Crear/editar reportes
+    'transporte', // ✅ Crear/editar reportes
+    'auditoria' // ✅ Ver auditoría del sistema con estadísticas básicas
   ],
   operario: [
     'dashboard',
@@ -97,13 +100,14 @@ export const sidebarData = {
       category: 'management'
     }
   ],
+
   system: [
     { 
       id: 'auditoria', 
-      name: 'Auditoría del Sistema', 
+      name: 'Auditoría y Estadísticas', 
       icon: Shield, 
       permission: 'auditoria',
-      description: 'Registro y seguimiento de todas las actividades del sistema',
+      description: 'Auditoría del sistema con estadísticas integradas y análisis completo',
       category: 'system'
     }
   ]
@@ -115,7 +119,7 @@ export const sidebarData = {
 export const categoryLabels = {
   main: 'Panel Principal',
   management: 'Gestión',
-  system: 'Sistema'
+  system: 'Análisis y Sistema'
 };
 
 // ========================

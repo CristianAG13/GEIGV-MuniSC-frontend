@@ -17,6 +17,7 @@ import { clearNavigationCache } from '@/utils/refreshNavigation';
 import TransporteModule from '../features/transporte/TransporteModule';
 import { OperadoresModule } from '../features/operadores';
 import { AuditoriaModule } from '../features/auditoria';
+
 import RequestRoleComponent from '../components/RequestRoleComponent';
 import RoleRequestNotifications from '../components/RoleRequestNotifications';
 import RoleRequestsManagement from '../components/RoleRequestsManagement';
@@ -747,8 +748,8 @@ export default function Dashboard() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-lg font-semibold text-gray-900">Gestión de auditoría</p>
-                <p className="text-sm text-gray-500 mt-2">Informes de gestión del sistema en general</p>
+                <p className="text-lg font-semibold text-gray-900">Auditoría y Estadísticas</p>
+                <p className="text-sm text-gray-500 mt-2">Sistema completo de auditoría con estadísticas integradas y análisis detallado</p>
                 <button 
                   onClick={() => setActiveSection('auditoria')}
                   className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm inline-flex items-center"
@@ -837,11 +838,29 @@ export default function Dashboard() {
                         className="w-full text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Sin rol</option>
-                        {roles.map(role => (
-                          <option key={role.id} value={role.name}>
-                            {role.name}
-                          </option>
-                        ))}
+                        {roles
+                          .filter(role => {
+                            const roleName = role.name.toLowerCase();
+                            const userCurrentRole = user.roles && user.roles.length > 0 ? user.roles[0].name.toLowerCase() : '';
+                            
+                            // Si es operario y el usuario ya lo tiene, mostrarlo
+                            if ((roleName === 'operario' || roleName === 'operator') && 
+                                (userCurrentRole === 'operario' || userCurrentRole === 'operator')) {
+                              return true;
+                            }
+                            
+                            // Para otros casos, ocultar operario
+                            if (roleName === 'operario' || roleName === 'operator') {
+                              return false;
+                            }
+                            
+                            return true;
+                          })
+                          .map(role => (
+                            <option key={role.id} value={role.name}>
+                              {role.name}
+                            </option>
+                          ))}
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap w-32">
@@ -931,7 +950,7 @@ export default function Dashboard() {
         return <TransporteModule />;
       case 'operadores':
         return <OperadoresModule />;
-    
+
       case 'configuracion':
         return <SweetAlertDemo />;
       case 'auditoria':

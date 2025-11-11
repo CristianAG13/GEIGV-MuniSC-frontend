@@ -1,19 +1,33 @@
 // features/auditoria/AuditoriaModule.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Shield, AlertCircle, BarChart3, Eye, Users } from 'lucide-react';
+import { 
+  Shield, AlertCircle, BarChart3, Eye, Users, Activity,
+  Truck, HardHat, FileText, TrendingUp
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import auditService from '@/services/auditService';
+import statisticsService from '@/services/statisticsService';
 import AuditTable from './components/AuditTable';
 import AuditFilters from './components/AuditFilters';
 import AuditStats from './components/AuditStats';
 import ActiveUsers from './components/ActiveUsers';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
 import { toast } from '@/hooks/use-toast';
+
+// Importar componentes de estadísticas del sistema
+import DashboardStats from '../estadisticas/components/DashboardStats';
+import OverviewStats from '../estadisticas/components/OverviewStats';
+import UsersStats from '../estadisticas/components/UsersStats';
+import MachineryStats from '../estadisticas/components/MachineryStats';
+import OperatorsStats from '../estadisticas/components/OperatorsStats';
+import ReportsStats from '../estadisticas/components/ReportsStats';
+import AuditStatsAdvanced from '../estadisticas/components/AuditStatsAdvanced';
+import TrendsStats from '../estadisticas/components/TrendsStats';
 
 // Importar las imágenes para el PDF
 import headerUrl from '@/assets/header.png';
@@ -43,7 +57,20 @@ const AuditoriaModule = () => {
     limit: 50
   });
 
-  // Verificar si el usuario es superadmin o ingeniero
+  // Estados para estadísticas del sistema
+  const [systemStats, setSystemStats] = useState({
+    dashboard: null,
+    overview: null,
+    users: null,
+    machinery: null,
+    operators: null,
+    reports: null,
+    auditAdvanced: null,
+    trends: null
+  });
+  const [isLoadingSystemStats, setIsLoadingSystemStats] = useState(false);
+
+  // Verificar si el usuario es superadmin, ingeniero o inspector
   const isSuperAdmin = user?.roles && (
     user.roles.includes('superadmin') || 
     user.roles.includes('SuperAdmin') ||
@@ -55,8 +82,17 @@ const AuditoriaModule = () => {
     user.roles.includes('Ingeniero')
   );
 
-  const canViewAudit = isSuperAdmin || isIngeniero;
+  const isInspector = user?.roles && (
+    user.roles.includes('inspector') ||
+    user.roles.includes('Inspector')
+  );
+
+  const canViewAudit = isSuperAdmin || isIngeniero || isInspector;
   const canEditAudit = isSuperAdmin; // Solo superadmin puede editar/eliminar
+  
+  // Permisos específicos para estadísticas
+  const canViewStatistics = isSuperAdmin || isIngeniero || isInspector;
+  const canViewAdvancedStatistics = isSuperAdmin || isIngeniero;
 
   
   // Función para cargar logs con filtros
@@ -197,11 +233,11 @@ const AuditoriaModule = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit]);
 
   // Función para cargar estadísticas
   const loadAuditStats = useCallback(async (dateRange = {}) => {
-    if (!isSuperAdmin) return;
+    if (!canViewAudit) return;
     
     setIsLoadingStats(true);
     
@@ -216,7 +252,75 @@ const AuditoriaModule = () => {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit]);
+
+  // Función para cargar estadísticas específicas del sistema
+  const loadSystemStatistics = useCallback(async (statType) => {
+    if (!canViewAudit) return;
+    
+    setIsLoadingSystemStats(true);
+    
+    try {
+      let result;
+      
+      switch (statType) {
+        case 'dashboard':
+          result = await statisticsService.getDashboardStats();
+          break;
+        case 'overview':
+          result = await statisticsService.getOverviewStats();
+          break;
+        case 'users':
+          result = await statisticsService.getUsersStats();
+          break;
+        case 'machinery':
+          result = await statisticsService.getMachineryStats();
+          break;
+        case 'operators':
+          result = await statisticsService.getOperatorsStats();
+          break;
+        case 'reports':
+          result = await statisticsService.getReportsStats();
+          break;
+        case 'auditAdvanced':
+          result = await statisticsService.getAuditStats();
+          break;
+        case 'trends':
+          result = await statisticsService.getTrendsStats();
+          break;
+        default:
+          return;
+      }
+      
+      if (result.success) {
+        setSystemStats(prev => ({
+          ...prev,
+          [statType]: result.data
+        }));
+      } else {
+        // Si falla la API, usar datos simulados para desarrollo
+        if (statType === 'dashboard') {
+          const simulatedResult = statisticsService.getSimulatedDashboardStats();
+          setSystemStats(prev => ({
+            ...prev,
+            [statType]: simulatedResult.data
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`Error loading ${statType} statistics:`, error);
+      // Fallback a datos simulados para dashboard
+      if (statType === 'dashboard') {
+        const simulatedResult = statisticsService.getSimulatedDashboardStats();
+        setSystemStats(prev => ({
+          ...prev,
+          [statType]: simulatedResult.data
+        }));
+      }
+    } finally {
+      setIsLoadingSystemStats(false);
+    }
+  }, [canViewAudit]);
 
   // Manejar cambios en los filtros
   const handleFiltersChange = useCallback((newFilters) => {
@@ -586,14 +690,30 @@ const AuditoriaModule = () => {
 
   // Efecto inicial - cargar datos cuando el componente se monta
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (canViewAudit) {
       loadAuditLogs({ page: 1, limit: 50 });
       loadAuditStats();
+      
+      // Cargar todas las estadísticas del sistema si el usuario tiene permisos
+      if (canViewStatistics) {
+        // Cargar estadísticas básicas para todos
+        loadSystemStatistics('dashboard');
+        loadSystemStatistics('overview');
+        loadSystemStatistics('users');
+        
+        // Cargar estadísticas avanzadas solo para usuarios autorizados
+        if (canViewAdvancedStatistics) {
+          loadSystemStatistics('machinery');
+          loadSystemStatistics('operators');
+          loadSystemStatistics('reports');
+          loadSystemStatistics('trends');
+        }
+      }
     }
-  }, [isSuperAdmin]);
+  }, [canViewAudit, canViewStatistics, canViewAdvancedStatistics]);
 
-  // Si no es superadmin, mostrar mensaje de acceso denegado
-  if (!isSuperAdmin) {
+  // Si no tiene permisos para ver auditoría, mostrar mensaje de acceso denegado
+  if (!canViewAudit) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card className="max-w-md mx-auto">
@@ -603,7 +723,7 @@ const AuditoriaModule = () => {
               Acceso Denegado
             </h2>
             <p className="text-gray-600 text-center mb-4">
-              Solo los superadministradores pueden acceder al módulo de auditoría.
+              Solo los superadministradores, ingenieros e inspectores pueden acceder al módulo de auditoría.
             </p>
             <Badge variant="destructive">
               Permisos insuficientes
@@ -630,7 +750,7 @@ const AuditoriaModule = () => {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-green-600 border-green-600">
             <Eye className="h-3 w-3 mr-1" />
-            Superadmin
+            {isSuperAdmin ? 'Superadmin' : isIngeniero ? 'Ingeniero' : isInspector ? 'Inspector' : 'Usuario'}
           </Badge>
           <Badge variant="outline">
             {pagination.total} registros totales
@@ -638,8 +758,7 @@ const AuditoriaModule = () => {
         </div>
       </div>
 
-     
-   
+
 
       {/* Indicador de datos simulados */}
       {isUsingSimulatedData && (
@@ -783,35 +902,210 @@ const AuditoriaModule = () => {
           </div>
         </TabsContent>
 
-        {/* Tab de estadísticas */}
-        <TabsContent value="stats" className="space-y-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Estadísticas de Auditoría</h2>
-            <Button
-              variant="outline"
-              onClick={() => loadAuditStats(
-                currentFilters.startDate || currentFilters.endDate 
-                  ? { startDate: currentFilters.startDate, endDate: currentFilters.endDate }
-                  : {}
+        {/* Tab de estadísticas - Todas las estadísticas del sistema */}
+        <TabsContent value="stats" className="space-y-8">
+          {canViewStatistics ? (
+            <div>
+              {/* Header principal */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl p-6 text-white mb-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
+                      <BarChart3 className="h-8 w-8" />
+                      Estadísticas del Sistema
+                    </h2>
+                    <p className="text-blue-100 text-lg">
+                      Dashboard completo con métricas y análisis del sistema de gestión vial municipal
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        loadSystemStatistics('dashboard');
+                        loadSystemStatistics('overview');
+                        loadSystemStatistics('users');
+                        if (canViewAdvancedStatistics) {
+                          loadSystemStatistics('machinery');
+                          loadSystemStatistics('operators');
+                          loadSystemStatistics('reports');
+                          loadSystemStatistics('trends');
+                        }
+                      }}
+                      disabled={isLoadingSystemStats}
+                      className="bg-white text-blue-600 border-blue-200 hover:bg-blue-50 flex items-center gap-2"
+                    >
+                      <Activity className="h-4 w-4" />
+                      {isLoadingSystemStats ? 'Actualizando...' : 'Actualizar Todo'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid de estadísticas principales */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                {/* Dashboard General */}
+                <div className="lg:col-span-2">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-blue-200">
+                      <h3 className="text-xl font-semibold text-blue-900 flex items-center gap-2">
+                        <Activity className="h-5 w-5" />
+                        Dashboard General del Sistema
+                      </h3>
+                    </div>
+                    <div className="p-6">
+                      <DashboardStats 
+                        data={systemStats.dashboard}
+                        isLoading={isLoadingSystemStats}
+                        onRefresh={() => loadSystemStatistics('dashboard')}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resumen Ejecutivo */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-4 border-b border-green-200">
+                    <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      Resumen Ejecutivo
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <OverviewStats 
+                      data={systemStats.overview}
+                      isLoading={isLoadingSystemStats}
+                      onRefresh={() => loadSystemStatistics('overview')}
+                    />
+                  </div>
+                </div>
+
+                {/* Estadísticas de Usuarios */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-4 border-b border-purple-200">
+                    <h3 className="text-lg font-semibold text-purple-900 flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Usuarios del Sistema
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <UsersStats 
+                      data={systemStats.users}
+                      isLoading={isLoadingSystemStats}
+                      onRefresh={() => loadSystemStatistics('users')}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Estadísticas avanzadas (solo para usuarios autorizados) */}
+              {canViewAdvancedStatistics && (
+                <div className="space-y-8">
+                  <div className="border-t border-gray-200 pt-8">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                      <Shield className="h-6 w-6 text-blue-600" />
+                      Estadísticas Avanzadas
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Estadísticas de Maquinaria */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-gradient-to-r from-orange-50 to-orange-100 px-6 py-4 border-b border-orange-200">
+                          <h4 className="text-lg font-semibold text-orange-900 flex items-center gap-2">
+                            <Truck className="h-5 w-5" />
+                            Maquinaria y Equipos
+                          </h4>
+                        </div>
+                        <div className="p-6">
+                          <MachineryStats 
+                            data={systemStats.machinery}
+                            isLoading={isLoadingSystemStats}
+                            onRefresh={() => loadSystemStatistics('machinery')}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Estadísticas de Operadores */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 px-6 py-4 border-b border-yellow-200">
+                          <h4 className="text-lg font-semibold text-yellow-900 flex items-center gap-2">
+                            <HardHat className="h-5 w-5" />
+                            Operadores
+                          </h4>
+                        </div>
+                        <div className="p-6">
+                          <OperatorsStats 
+                            data={systemStats.operators}
+                            isLoading={isLoadingSystemStats}
+                            onRefresh={() => loadSystemStatistics('operators')}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Estadísticas de Reportes */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 px-6 py-4 border-b border-indigo-200">
+                          <h4 className="text-lg font-semibold text-indigo-900 flex items-center gap-2">
+                            <FileText className="h-5 w-5" />
+                            Reportes y Documentos
+                          </h4>
+                        </div>
+                        <div className="p-6">
+                          <ReportsStats 
+                            data={systemStats.reports}
+                            isLoading={isLoadingSystemStats}
+                            onRefresh={() => loadSystemStatistics('reports')}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Análisis de Tendencias */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-gradient-to-r from-teal-50 to-teal-100 px-6 py-4 border-b border-teal-200">
+                          <h4 className="text-lg font-semibold text-teal-900 flex items-center gap-2">
+                            <TrendingUp className="h-5 w-5" />
+                            Tendencias y Análisis
+                          </h4>
+                        </div>
+                        <div className="p-6">
+                          <TrendsStats 
+                            data={systemStats.trends}
+                            isLoading={isLoadingSystemStats}
+                            onRefresh={() => loadSystemStatistics('trends')}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-              disabled={isLoadingStats}
-            >
-              {isLoadingStats ? 'Actualizando...' : 'Actualizar'}
-            </Button>
-          </div>
-          
-          <AuditStats
-            stats={stats}
-            isLoading={isLoadingStats}
-            dateRange={
-              currentFilters.startDate || currentFilters.endDate
-                ? {
-                    startDate: currentFilters.startDate,
-                    endDate: currentFilters.endDate,
-                  }
-                : null
-            }
-          />
+
+              {/* Mensaje para usuarios con acceso limitado */}
+              {!canViewAdvancedStatistics && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mt-8">
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-6 w-6 text-yellow-600" />
+                    <div>
+                      <h4 className="font-semibold text-yellow-800">Estadísticas Limitadas</h4>
+                      <p className="text-yellow-700 text-sm mt-1">
+                        Como Inspector, tiene acceso a las estadísticas básicas. Para ver estadísticas avanzadas, contacte a un Ingeniero o Superadministrador.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Shield className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Acceso Restringido
+              </h3>
+              <p className="text-gray-600">
+                No tiene permisos para ver las estadísticas del sistema
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
