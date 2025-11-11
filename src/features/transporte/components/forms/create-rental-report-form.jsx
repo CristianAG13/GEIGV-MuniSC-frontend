@@ -8,6 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+import {
+  confirmAction,
+  confirmDelete,
+  showValidationError,
+  showSuccess,
+  showError,
+  showLoading,
+  closeLoading,
+  showToast,
+} from "@/utils/sweetAlert";
+
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
 import sourceService from "@/services/sourceService";
@@ -15,29 +26,27 @@ import sourceService from "@/services/sourceService";
 import {
   rentalSourceOptions,
   districts as districtList,
-  materialTypes, // ← (Escombros, Desechos, Tierra, Arena, Base, Subbase, Lastre, Alcantarilla)
+  materialTypes, // (Escombros, Desechos, Tierra, Arena, Base, Subbase, Lastre, Alcantarilla)
 } from "@/utils/districts";
 
 /* ---------- Catálogos ---------- */
 const TIPOS_MAQUINARIA = [
-  "vagoneta",
-  "cisterna",
-  "cabezal",
-  "excavadora",
-  "niveladora",
-  "compactadora",
-  "backhoe",
-  "cargador",
-  "tractor",
+  "Vagoneta",
+  "Cisterna",
+  "Cabezal",
+  "Excavadora",
+  "Niveladora",
+  "Compactadora",
+  "Backhoe",
+  "Cargador",
+  "Tractor",
 ];
 
 /** Fuente y Cantidad aplican a vagoneta/cisterna/cabezal */
 const TIPOS_CON_FUENTE = new Set(["vagoneta", "cisterna", "cabezal"]);
 const TIPOS_CON_CANTIDAD = new Set(["vagoneta", "cisterna", "cabezal"]);
-
 /** tipos que usan ESTACIÓN N+M */
 const TIPOS_CON_ESTACION = new Set(["niveladora", "excavadora", "compactadora", "backhoe", "tractor"]);
-
 /** tipos que usan BOLETA (solo estos) */
 const TIPOS_CON_BOLETA = new Set(["vagoneta", "cabezal"]);
 
@@ -46,7 +55,6 @@ const ACTIVIDADES_POR_TIPO = {
   cabezal: ["Acarreo de material", "Riego de agua"],
   cisterna: ["Riego de agua", "Transporte de agua"],
   excavadora: ["Extracción y cargo de material", "Colocación de alcantarillas", "Limpieza"],
-  // 👇 NUEVO
   tractor: ["Extracción y cargo de material", "Colocación de alcantarillas", "Limpieza"],
   niveladora: ["Limpieza", "Conformación", "Lastreado"],
   backhoe: [
@@ -140,7 +148,7 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
 
   /* Fuente depende del tipo/actividad (solo vagoneta/cisterna/cabezal) */
   const fuenteOptions = useMemo(() => {
-    const tipo = (formData.tipoMaquinaria || "").toLowerCase();
+    const tipo = formData.tipoMaquinaria; // ya guardamos en minúscula
     if (!tipo || !TIPOS_CON_FUENTE.has(tipo)) return [];
 
     const act = (formData.actividad || "").toLowerCase();
@@ -165,21 +173,19 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
   const showFuente = TIPOS_CON_FUENTE.has(formData.tipoMaquinaria) && fuenteOptions.length > 0;
   const showCantidad = TIPOS_CON_CANTIDAD.has(formData.tipoMaquinaria);
   const showEstacion = TIPOS_CON_ESTACION.has(formData.tipoMaquinaria);
-  const showHoras = true; // ← siempre visible
+  const showHoras = true;
 
-  /* Boleta municipal/KYLCSA según fuente y tipo */
   const isAcarreoMaterial = (formData.actividad || "").toLowerCase().includes("material");
-
-const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMaterial
-  ? (String(formData.fuente || "").toUpperCase() === "KYLCSA" ? "kylcsa" : "municipal")
-  : "disabled";
+  const boletaMode =
+    TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMaterial
+      ? (String(formData.fuente || "").toUpperCase() === "KYLCSA" ? "kylcsa" : "municipal")
+      : "disabled";
 
   /* Multi-boletas (Vagoneta/Cabezal + Acarreo de material) */
   const isMaterialFlow =
     (formData.tipoMaquinaria === "vagoneta" || formData.tipoMaquinaria === "cabezal") &&
     (formData.actividad || "").toLowerCase().includes("material");
-
-  const isMaterialActivity = (formData.actividad || '').toLowerCase().includes('material');
+  const isMaterialActivity = (formData.actividad || "").toLowerCase().includes("material");
 
   /* Totales por material (de boletas) */
   const materialBreakdown = useMemo(() => {
@@ -224,31 +230,29 @@ const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMat
     })();
   }, []);
 
-
   useEffect(() => {
-  if (!formData.tipoMaquinaria) return;
-  const ops = ACTIVIDADES_POR_TIPO[formData.tipoMaquinaria] || [];
-  if (!ops.includes(formData.actividad)) {
-    setFormData((p) => ({ ...p, actividad: ops[0] || "" }));
-  }
-}, [formData.tipoMaquinaria]); // eslint-disable-line
+    if (!formData.tipoMaquinaria) return;
+    const ops = ACTIVIDADES_POR_TIPO[formData.tipoMaquinaria] || [];
+    if (!ops.includes(formData.actividad)) {
+      setFormData((p) => ({ ...p, actividad: ops[0] || "" }));
+    }
+  }, [formData.tipoMaquinaria]); // eslint-disable-line
 
-
-const handleChangeTipo = (tipo) => {
-  const firstAct = firstActivityFor(tipo);
-
-  setFormData((p) => ({
-    ...p,
-    tipoMaquinaria: tipo,
-    actividad: firstAct,            // <-- autoseleccionada
-    fuente: "",
-    boleta: "",
-    boletaK: "",
-    estacion: TIPOS_CON_ESTACION.has(tipo) ? p.estacion : "",
-    ...(TIPOS_CON_CANTIDAD.has(tipo) ? {} : { cantidad: "" }),
-    boletas: [], // reset de boletas
-  }));
-};
+  const handleChangeTipo = (value) => {
+    const tipo = String(value || "").toLowerCase(); // guardamos en minúscula
+    const firstAct = firstActivityFor(tipo);
+    setFormData((p) => ({
+      ...p,
+      tipoMaquinaria: tipo,
+      actividad: firstAct,
+      fuente: "",
+      boleta: "",
+      boletaK: "",
+      estacion: TIPOS_CON_ESTACION.has(tipo) ? p.estacion : "",
+      ...(TIPOS_CON_CANTIDAD.has(tipo) ? {} : { cantidad: "" }),
+      boletas: [],
+    }));
+  };
 
   /* ---------- handlers simples ---------- */
   const handleChange = (e) => {
@@ -278,25 +282,20 @@ const handleChangeTipo = (tipo) => {
 
   /* ---------- Sección “boletas del día” ---------- */
   const addBoleta = () => {
+    const nextLen = (formData.boletas?.length || 0) + 1;
     setFormData((p) => ({
       ...p,
       boletas: [
         ...(p.boletas || []),
-        {
-          tipoMaterial: "", // ← usa materialTypes
-          fuente: "", // “Ríos”|“Tajo”|“KYLCSA”|…
-          subFuente: "", // nombre del río o tajo (catálogo)
-          boleta: "", // municipal (6)
-          boletaK: "", // KYLCSA (6)
-          m3: "", // m³ del viaje
-          distrito: "",
-          codigoCamino: "",
-        },
+        { tipoMaterial: "", fuente: "", subFuente: "", boleta: "", boletaK: "", m3: "", distrito: "", codigoCamino: "" },
       ],
     }));
+    showToast(`Boleta #${nextLen} agregada`, "success");
   };
 
-  const removeBoleta = (idx) => {
+  const removeBoleta = async (idx) => {
+    const r = await confirmDelete(`la boleta #${idx + 1}`);
+    if (!r.isConfirmed) return;
     setFormData((p) => {
       const copy = [...(p.boletas || [])];
       copy.splice(idx, 1);
@@ -328,7 +327,7 @@ const handleChangeTipo = (tipo) => {
         </div>
 
         <div className={`grid grid-cols-1 ${COLS[2]} gap-4`}>
-          {/* 1) Tipo de material (lista detallada) */}
+          {/* 1) Tipo de material */}
           <div>
             <Label>Tipo de material</Label>
             <Select value={b.tipoMaterial || ""} onValueChange={(v) => updateBoleta(idx, { tipoMaterial: v })}>
@@ -396,7 +395,7 @@ const handleChangeTipo = (tipo) => {
             </div>
           )}
 
-          {/* 3) N.º de boleta (municipal/KYLCSA) */}
+          {/* 3) N.º de boleta */}
           <div>
             <Label>{isK ? "Boleta KYLCSA (6 dígitos)" : "Boleta (6 dígitos)"}</Label>
             {isK ? (
@@ -462,236 +461,158 @@ const handleChangeTipo = (tipo) => {
     );
   };
 
+  /* ---------- Validación central ---------- */
+  const validateBeforeSubmit = () => {
+    const errs = [];
+
+    if (!formData.operadorId) errs.push("Selecciona el encargado.");
+    if (!formData.tipoMaquinaria) errs.push("Selecciona el tipo de maquinaria.");
+    if (!formData.actividad) errs.push("Selecciona la actividad.");
+
+    if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18) {
+      errs.push("Horas: ingresa un entero entre 0 y 18.");
+    }
+
+    const hoy = todayLocalISO();
+    if (formData.fecha > hoy) errs.push("Fecha: solo hoy o pasado.");
+
+    if (isMaterialFlow) {
+      if ((formData.boletas || []).length === 0) {
+        errs.push("Agrega al menos una boleta del día.");
+      } else {
+        (formData.boletas || []).forEach((b, i) => {
+          const idx = `Boleta #${i + 1}`;
+          if (!b.tipoMaterial) errs.push(`${idx}: selecciona el tipo de material.`);
+          if (!b.fuente) errs.push(`${idx}: selecciona la fuente.`);
+
+          const upper = String(b.fuente || "").toUpperCase();
+          const isK = upper === "KYLCSA";
+          const isRio = upper === "RÍOS" || upper === "RIOS";
+          const isTajo = upper === "TAJO";
+
+          if ((isRio || isTajo) && !b.subFuente) errs.push(`${idx}: selecciona ${isRio ? "río" : "tajo"}.`);
+          if (isK && !/^\d{6}$/.test(b.boletaK || "")) errs.push(`${idx}: boleta KYLCSA debe tener 6 dígitos.`);
+          if (!isK && b.boleta && !/^\d{6}$/.test(b.boleta)) errs.push(`${idx}: boleta municipal debe tener 6 dígitos.`);
+          if (!/^\d{3}$/.test(String(b.codigoCamino || ""))) errs.push(`${idx}: código de camino debe tener 3 dígitos.`);
+          if (!b.distrito) errs.push(`${idx}: selecciona el distrito.`);
+          const cant = Number(b.m3);
+          if (!Number.isFinite(cant) || cant <= 0) errs.push(`${idx}: m³ del viaje debe ser > 0.`);
+        });
+      }
+    } else {
+      if (!/^\d{3}$/.test(String(formData.codigoCamino || ""))) errs.push("Código de camino: 3 dígitos (ej. 015).");
+      if (!formData.distrito) errs.push("Selecciona un distrito.");
+
+      if (boletaMode !== "disabled") {
+        if (formData.fuente === "KYLCSA") {
+          if (!/^\d{6}$/.test(formData.boletaK || "")) errs.push("Boleta KYLCSA: ingresa exactamente 6 dígitos.");
+        } else if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
+          errs.push("Boleta municipal: 6 dígitos o déjala vacía.");
+        }
+      }
+
+      if (showCantidad) {
+        const cant = Number(formData.cantidad);
+        if (!Number.isFinite(cant) || cant <= 0) errs.push("m³ del viaje debe ser mayor a 0.");
+      }
+    }
+
+    return errs;
+  };
+
   /* ---------- submit ---------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
 
-    // Validaciones comunes
-    if (!formData.operadorId)
-      return toast({ title: "Encargado requerido", description: "Selecciona el encargado.", variant: "destructive" });
-    if (!formData.tipoMaquinaria)
-      return toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
-    if (!formData.actividad)
-      return toast({ title: "Actividad requerida", description: "Selecciona la actividad.", variant: "destructive" });
-
-    if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18)
-      return toast({ title: "Horas inválidas", description: "Ingresa un entero entre 0 y 18.", variant: "destructive" });
-
-    const hoy = todayLocalISO();
-    if (formData.fecha > hoy)
-      return toast({ title: "Fecha inválida", description: "Solo se permiten fechas de hoy o del pasado.", variant: "destructive" });
-
-    // Flujo con múltiples boletas (vagoneta/cabezal + Acarreo de material)
-    if (isMaterialFlow) {
-      if ((formData.boletas || []).length === 0) {
-        return toast({
-          title: "Agrega boletas",
-          description: "Para material puedes añadir varias boletas del día.",
-          variant: "destructive",
-        });
-      }
-      // validar cada boleta
-      for (const [i, b] of (formData.boletas || []).entries()) {
-        if (!b.tipoMaterial)
-          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona el tipo de material.", variant: "destructive" });
-        if (!b.fuente)
-          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona la fuente.", variant: "destructive" });
-
-        const upperFuente = String(b.fuente).toUpperCase();
-        const isK = upperFuente === "KYLCSA";
-        const isRio = upperFuente === "RÍOS" || upperFuente === "RIOS";
-        const isTajo = upperFuente === "TAJO";
-
-        if ((isRio || isTajo) && !b.subFuente) {
-          return toast({
-            title: `Boleta #${i + 1}`,
-            description: `Selecciona el ${isRio ? "río" : "tajo"}.`,
-            variant: "destructive",
-          });
-        }
-
-        if (isK && !/^\d{6}$/.test(b.boletaK || "")) {
-          return toast({ title: `Boleta #${i + 1}`, description: "Boleta KYLCSA debe tener 6 dígitos.", variant: "destructive" });
-        }
-        if (!isK && b.boleta && !/^\d{6}$/.test(b.boleta)) {
-          return toast({
-            title: `Boleta #${i + 1}`,
-            description: "Boleta municipal debe tener 6 dígitos (o dejar vacía).",
-            variant: "destructive",
-          });
-        }
-        if (!/^\d{3}$/.test(String(b.codigoCamino || ""))) {
-          return toast({ title: `Boleta #${i + 1}`, description: "Código de camino debe tener 3 dígitos.", variant: "destructive" });
-        }
-        if (!b.distrito) {
-          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona el distrito.", variant: "destructive" });
-        }
-        const cant = Number(b.m3);
-        if (!Number.isFinite(cant) || cant <= 0) {
-          return toast({ title: `Boleta #${i + 1}`, description: "m³ del viaje debe ser > 0.", variant: "destructive" });
-        }
-      }
-
-      // enviar una petición por boleta
-     try {
-  setLoading(true);
-
-  // Normaliza boletas al formato que guardaremos en detalles
-  const boletasDet = formData.boletas.map((b) => {
-    const isK = String(b.fuente || "").toUpperCase() === "KYLCSA";
-    return {
-      tipoMaterial: b.tipoMaterial || null,
-      fuente: b.fuente || null,        // "Ríos" | "Tajo" | "KYLCSA" | otro
-      subFuente: b.subFuente || null,  // nombre del río/tajo si aplica
-      m3: Number(b.m3) || 0,
-      distrito: b.distrito || null,
-      codigoCamino: b.codigoCamino || null,
-      boleta: isK ? null : (b.boleta || null),
-      boletaKylcsa: isK ? (b.boletaK || null) : null,
-    };
-  });
-
-  const totalM3 = boletasDet.reduce((a, b) => a + (Number(b.m3) || 0), 0);
-
-  // Si tu backend exige distrito/código camino top-level, usa el de la primera boleta
-  const first = formData.boletas[0] || {};
-
-  const payload = {
-    fecha: formData.fecha,
-    operadorId: Number(formData.operadorId),
-    tipoMaquinaria: formData.tipoMaquinaria,     // vagoneta | cabezal
-    placa: formData.placa || null,
-    actividad: formData.actividad,               // "Acarreo de material"
-    horas: Number(formData.horas),
-    cantidad: totalM3,                           // guarda total del día
-    // Top-level opcionales (si el backend los requiere al menos con algo)
-    codigoCamino: first.codigoCamino || null,
-    distrito: first.distrito || null,
-
-    // Para multi-boletas no tiene sentido establecer una sola fuente/boleta global:
-    fuente: null,
-    boleta: null,
-    boletaKylcsa: null,
-
-    // ✅ NUEVO: boletas del día embebidas
-    detalles: {
-      variante: "material",
-      boletas: boletasDet,
-    },
-  };
-
-  await machineryService.createRentalReport(payload);
-
-  toast({
-    title: "Reporte creado",
-    description: `Se registró 1 reporte con ${boletasDet.length} boleta(s).`
-  });
-
-  // reset
-  setFormData({
-    fecha: todayLocalISO(),
-    operadorId: "",
-    tipoMaquinaria: "",
-    placa: "",
-    actividad: "",
-    horas: "",
-    cantidad: "",
-    fuente: "",
-    boleta: "",
-    boletaK: "",
-    codigoCamino: "",
-    distrito: "",
-    estacion: "",
-    boletas: [],
-  });
-} catch (err) {
-  console.error("CREATE rentals error ->", err?.response?.data || err);
-  toast({
-    title: "Error al crear",
-    description: err?.response?.data?.message || "No se pudo guardar.",
-    variant: "destructive",
-  });
-} finally {
-  setLoading(false);
-}
-return;
-
-}
-    // Flujo normal (1 registro)
-    if (showFuente) {
-      if (formData.fuente === "KYLCSA") {
-        if (!/^\d{6}$/.test(formData.boletaK || "")) {
-          return toast({
-            title: "Boleta KYLCSA requerida",
-            description: "Ingrese exactamente 6 dígitos.",
-            variant: "destructive",
-          });
-        }
-      } else if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
-        return toast({
-          title: "Boleta inválida",
-          description: "Debe tener exactamente 6 dígitos (o dejar vacía).",
-          variant: "destructive",
-        });
-      }
+    // 1) Validar
+    const errors = validateBeforeSubmit();
+    if (errors.length) {
+      await showValidationError(errors);
+      return;
     }
 
-    if (showAnyBoleta) {
-  if (formData.fuente === "KYLCSA") {
-    if (!/^\d{6}$/.test(formData.boletaK || "")) {
-      return toast({ title: "Boleta KYLCSA requerida", description: "Ingrese exactamente 6 dígitos.", variant: "destructive" });
-    }
-  } else if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
-    return toast({ title: "Boleta inválida", description: "Debe tener exactamente 6 dígitos (o dejar vacía).", variant: "destructive" });
-  }
-}
-    if (!/^\d{3}$/.test(String(formData.codigoCamino || ""))) {
-      return toast({
-        title: "Código de camino inválido",
-        description: "Debes ingresar exactamente 3 dígitos (ej. 015).",
-        variant: "destructive",
+    const isMulti = isMaterialFlow && (formData.boletas?.length || 0) > 0;
+
+    // 2) Confirmar
+    const confirma = await confirmAction(
+      isMulti ? "¿Crear reporte de alquiler con varias boletas?" : "¿Crear boleta de alquiler?",
+      isMulti
+        ? `Se enviará 1 reporte con ${formData.boletas.length} boleta(s) embebidas.`
+        : "Se enviará un reporte de alquiler."
+    );
+    if (!confirma.isConfirmed) return;
+
+    // 3) Construir payload
+    let payload;
+    if (isMulti) {
+      const boletasDet = formData.boletas.map((b) => {
+        const isK = String(b.fuente || "").toUpperCase() === "KYLCSA";
+        return {
+          tipoMaterial: b.tipoMaterial || null,
+          fuente: b.fuente || null,
+          subFuente: b.subFuente || null,
+          m3: Number(b.m3) || 0,
+          distrito: b.distrito || null,
+          codigoCamino: b.codigoCamino || null,
+          boleta: isK ? null : b.boleta || null,
+          boletaKylcsa: isK ? b.boletaK || null : null,
+        };
       });
-    }
-    if (!formData.distrito) {
-      return toast({ title: "Distrito requerido", description: "Selecciona un distrito.", variant: "destructive" });
-    }
-    if (showCantidad) {
-      const cant = Number(formData.cantidad);
-      if (!Number.isFinite(cant) || cant <= 0) {
-        return toast({ title: "Cantidad inválida", description: "Debe ser mayor a 0.", variant: "destructive" });
-      }
+      const totalM3 = boletasDet.reduce((a, b) => a + (Number(b.m3) || 0), 0);
+      const first = formData.boletas[0] || {};
+
+      payload = {
+        fecha: formData.fecha,
+        operadorId: Number(formData.operadorId),
+        tipoMaquinaria: formData.tipoMaquinaria, // vagoneta|cabezal
+        placa: formData.placa || null,
+        actividad: formData.actividad, // "Acarreo de material"
+        horas: Number(formData.horas),
+        cantidad: totalM3,
+        codigoCamino: first.codigoCamino || null,
+        distrito: first.distrito || null,
+        fuente: null,
+        boleta: null,
+        boletaKylcsa: null,
+        detalles: { variante: "material", boletas: boletasDet },
+      };
+    } else {
+      const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
+      payload = {
+        fecha: formData.fecha,
+        operadorId: Number(formData.operadorId),
+        tipoMaquinaria: formData.tipoMaquinaria,
+        placa: formData.placa || null,
+        actividad: formData.actividad,
+        horas: Number(formData.horas),
+        cantidad: showCantidad ? Number(formData.cantidad) : null,
+        fuente: showFuente ? fuenteNorm || null : null,
+        boleta: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
+          ? formData.fuente === "KYLCSA"
+            ? null
+            : formData.boleta || null
+          : null,
+        boletaKylcsa: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
+          ? formData.fuente === "KYLCSA"
+            ? formData.boletaK || null
+            : null
+          : null,
+        codigoCamino: formData.codigoCamino,
+        distrito: formData.distrito,
+        estacion: showEstacion ? formData.estacion || null : null,
+      };
     }
 
-    const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
-    const payload = {
-      fecha: formData.fecha,
-      operadorId: Number(formData.operadorId),
-      tipoMaquinaria: formData.tipoMaquinaria,
-      placa: formData.placa || null,
-      actividad: formData.actividad,
-      horas: Number(formData.horas),
-      cantidad: showCantidad ? Number(formData.cantidad) : null,
-      fuente: showFuente ? (fuenteNorm || null) : null,
-      boleta: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
-        ? formData.fuente === "KYLCSA"
-          ? null
-          : formData.boleta || null
-        : null,
-      boletaKylcsa: TIPOS_CON_BOLETA.has(formData.tipoMaquinaria)
-        ? formData.fuente === "KYLCSA"
-          ? formData.boletaK || null
-          : null
-        : null,
-      codigoCamino: formData.codigoCamino,
-      distrito: formData.distrito,
-      estacion: showEstacion ? formData.estacion || null : null,
-    };
-
+    // 4) Guardar con loader + alertas
     try {
       setLoading(true);
+      showLoading("Guardando...", "Por favor, espere");
       await machineryService.createRentalReport(payload);
-      toast({ title: "Boleta de alquiler creada", description: "Se registró correctamente." });
+      closeLoading();
+      await showSuccess("Registro creado", "Se guardó correctamente.");
+
+      // Reset
       setFormData({
         fecha: todayLocalISO(),
         operadorId: "",
@@ -710,20 +631,16 @@ return;
       });
     } catch (err) {
       console.error("CREATE rental error ->", err?.response?.data || err);
-      toast({
-        title: "Error al crear boleta",
-        description: err?.response?.data?.message || "No se pudo guardar el registro.",
-        variant: "destructive",
-      });
+      closeLoading();
+      await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el registro.");
     } finally {
       setLoading(false);
     }
   };
 
   /* ---------- layout ---------- */
-  const rowTopCols = 3; // Encargado, Fecha, Tipo, Placa (+ Horas aparte)
+  const rowTopCols = 3;
   const showAnyBoleta = boletaMode !== "disabled" && isMaterialActivity;
-  const rowSpecificCols = 2;
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
@@ -734,7 +651,7 @@ return;
 
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* ---------- Bloque superior (orden general) ---------- */}
+          {/* ---------- Bloque superior ---------- */}
           <div className={`grid grid-cols-1 ${COLS[rowTopCols]} gap-4`}>
             {/* Encargado */}
             <div className="space-y-2">
@@ -759,7 +676,7 @@ return;
               <Input id="fecha" name="fecha" type="date" value={formData.fecha} onChange={handleChange} max={todayLocalISO()} required />
             </div>
 
-            {/* Tipo */}
+            {/* Tipo de maquinaria */}
             <div className="space-y-2">
               <Label>Tipo de maquinaria</Label>
               <Select value={formData.tipoMaquinaria} onValueChange={handleChangeTipo}>
@@ -768,7 +685,7 @@ return;
                 </SelectTrigger>
                 <SelectContent>
                   {TIPOS_MAQUINARIA.map((t) => (
-                    <SelectItem key={t} value={t}>
+                    <SelectItem key={t} value={t.toLowerCase()}>
                       {t}
                     </SelectItem>
                   ))}
@@ -776,29 +693,26 @@ return;
               </Select>
             </div>
 
-            {/* Tipo de actividad (SIEMPRE visible) */}
-<div className="space-y-2">
-  <Label>Tipo de actividad</Label>
-  <Select
-    value={formData.actividad}
-    onValueChange={(v) => setFormData((p) => ({ ...p, actividad: v }))}
-    disabled={!formData.tipoMaquinaria}
-  >
-    <SelectTrigger>
-      <SelectValue
-        placeholder={formData.tipoMaquinaria ? "Seleccionar actividad" : "Elige un tipo primero"}
-      />
-    </SelectTrigger>
-    <SelectContent>
-      {actividadOptions.map((a) => (
-        <SelectItem key={a} value={a}>
-          {a}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-</div>
-
+            {/* Tipo de actividad */}
+            <div className="space-y-2">
+              <Label>Tipo de actividad</Label>
+              <Select
+                value={formData.actividad}
+                onValueChange={(v) => setFormData((p) => ({ ...p, actividad: v }))}
+                disabled={!formData.tipoMaquinaria}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={formData.tipoMaquinaria ? "Seleccionar actividad" : "Elige un tipo primero"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {actividadOptions.map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {a}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Placa */}
             <div className="space-y-2">
@@ -806,7 +720,7 @@ return;
               <Input id="placa" name="placa" value={formData.placa} onChange={handleChange} placeholder="SM 1234" />
             </div>
 
-            {/* Horas (siempre visible) */}
+            {/* Horas */}
             {showHoras && (
               <div className="space-y-2">
                 <Label htmlFor="horas">Horas laboradas</Label>
@@ -816,9 +730,7 @@ return;
             )}
           </div>
 
-          {/* ---------- CAMBIOS POR TIPO: sección específica o boletas ---------- */}
-
-          {/* == BOLETAS DEL DÍA (vagoneta/cabezal + acarreo material) == */}
+          {/* ---------- Boletas del día ---------- */}
           {isMaterialFlow && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -857,210 +769,149 @@ return;
             </div>
           )}
 
-          {/* == CAMPOS ESPECÍFICOS (para el resto de flujos) == */}
-{!isMaterialFlow && (
-  <>
-    <h3 className="text-base font-semibold">Campos específicos</h3>
+          {/* ---------- Campos específicos (resto de flujos) ---------- */}
+          {!isMaterialFlow && (
+            <>
+              <h3 className="text-base font-semibold">Campos específicos</h3>
 
-    {/** --- Caso especial: vagoneta/cabezal/cisterna con Riego de agua --- */}
-    {(["vagoneta", "cabezal", "cisterna"].includes(formData.tipoMaquinaria)) &&
-      (formData.actividad || "").toLowerCase().includes("riego") && (
-      <>
-        {/* Fila 1: Fuente + m3 */}
-        <div className={ROW2}>
-          {/* Fuente (si aplica) */}
-          {showFuente && (
-            <div className="space-y-2">
-              <Label>Fuente</Label>
-              <Select value={formData.fuente} onValueChange={handleFuenteChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar fuente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fuenteOptions.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+              {/* Caso especial: vagoneta/cabezal/cisterna + riego */}
+              {["vagoneta", "cabezal", "cisterna"].includes(formData.tipoMaquinaria) &&
+                (formData.actividad || "").toLowerCase().includes("riego") && (
+                  <>
+                    <div className={ROW2}>
+                      {showFuente && (
+                        <div className="space-y-2">
+                          <Label>Fuente</Label>
+                          <Select value={formData.fuente} onValueChange={handleFuenteChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar fuente" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fuenteOptions.map((f) => (
+                                <SelectItem key={f} value={f}>
+                                  {f}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-          {/* m³ del viaje (cantidad) */}
-          {showCantidad && (
-            <div className="space-y-2">
-              <Label htmlFor="cantidad">m³ del viaje</Label>
-              <Input
-                id="cantidad"
-                name="cantidad"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={formData.cantidad}
-                onChange={handleChange}
-              />
-            </div>
-          )}
-        </div>
+                      {showCantidad && (
+                        <div className="space-y-2">
+                          <Label htmlFor="cantidad">m³ del viaje</Label>
+                          <Input id="cantidad" name="cantidad" inputMode="decimal" placeholder="0.00" value={formData.cantidad} onChange={handleChange} />
+                        </div>
+                      )}
+                    </div>
 
-        {/* Fila 2: Distrito + Código Camino */}
-        <div className={ROW2}>
-          <div className="space-y-2">
-            <Label>Distrito</Label>
-            <Select value={formData.distrito} onValueChange={handleDistritoChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar distrito" />
-              </SelectTrigger>
-              <SelectContent>
-                {districtList.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                    <div className={ROW2}>
+                      <div className="space-y-2">
+                        <Label>Distrito</Label>
+                        <Select value={formData.distrito} onValueChange={handleDistritoChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar distrito" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districtList.map((d) => (
+                              <SelectItem key={d} value={d}>
+                                {d}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="codigoCamino">Código de camino (3 dígitos)</Label>
-            <Input
-              id="codigoCamino"
-              name="codigoCamino"
-              inputMode="numeric"
-              pattern="[0-9]{3}"
-              maxLength={3}
-              placeholder="000"
-              value={formData.codigoCamino}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-      </>
-    )}
+                      <div className="space-y-2">
+                        <Label htmlFor="codigoCamino">Código de camino (3 dígitos)</Label>
+                        <Input id="codigoCamino" name="codigoCamino" inputMode="numeric" pattern="[0-9]{3}" maxLength={3} placeholder="000" value={formData.codigoCamino} onChange={handleChange} />
+                      </div>
+                    </div>
+                  </>
+                )}
 
-    {/** --- Caso general (todo lo demás) --- */}
-    {!(["vagoneta", "cabezal", "cisterna"].includes(formData.tipoMaquinaria) &&
-       (formData.actividad || "").toLowerCase().includes("riego")) && (
-      <>
-        {/* Actividad + Fuente */}
-        <div className={ROW2}>
-          {showFuente && (
-            <div className="space-y-2">
-              <Label>Fuente</Label>
-              <Select value={formData.fuente} onValueChange={handleFuenteChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar fuente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fuenteOptions.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+              {/* Caso general */}
+              {!(
+                ["vagoneta", "cabezal", "cisterna"].includes(formData.tipoMaquinaria) &&
+                (formData.actividad || "").toLowerCase().includes("riego")
+              ) && (
+                <>
+                  <div className={ROW2}>
+                    {showFuente && (
+                      <div className="space-y-2">
+                        <Label>Fuente</Label>
+                        <Select value={formData.fuente} onValueChange={handleFuenteChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar fuente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fuenteOptions.map((f) => (
+                              <SelectItem key={f} value={f}>
+                                {f}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-          {/* Boleta cuando aplique (Acarreo de material) */}
-          {boletaMode !== "disabled" && (
-            <div className="space-y-2">
-              <Label>{boletaMode === "kylcsa" ? "N.º de boleta KYLCSA" : "N.º de boleta"}</Label>
-              {boletaMode === "kylcsa" ? (
-                <Input
-                  id="boletaK"
-                  name="boletaK"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={formData.boletaK}
-                  onChange={handleChange}
-                />
-              ) : (
-                <Input
-                  id="boleta"
-                  name="boleta"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={formData.boleta}
-                  onChange={handleChange}
-                />
+                    {/* Boleta cuando aplique */}
+                    {boletaMode !== "disabled" && (
+                      <div className="space-y-2">
+                        <Label>{boletaMode === "kylcsa" ? "N.º de boleta KYLCSA" : "N.º de boleta"}</Label>
+                        {boletaMode === "kylcsa" ? (
+                          <Input id="boletaK" name="boletaK" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={formData.boletaK} onChange={handleChange} />
+                        ) : (
+                          <Input id="boleta" name="boleta" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={formData.boleta} onChange={handleChange} />
+                        )}
+                      </div>
+                    )}
+
+                    {showCantidad && boletaMode === "disabled" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="cantidad">m³ del viaje</Label>
+                        <Input id="cantidad" name="cantidad" inputMode="decimal" placeholder="0.00" value={formData.cantidad} onChange={handleChange} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Estación si aplica */}
+                  {showEstacion && (
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="estacion">Estación (N+M)</Label>
+                        <Input id="estacion" name="estacion" placeholder="Ej: 12+500" value={formData.estacion} onChange={handleChange} />
+                        <p className="text-xs text-gray-500 mt-1">Formato N+M, p. ej. 12+500.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={ROW2}>
+                    <div className="space-y-2">
+                      <Label>Distrito</Label>
+                      <Select value={formData.distrito} onValueChange={handleDistritoChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar distrito" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {districtList.map((d) => (
+                            <SelectItem key={d} value={d}>
+                              {d}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="codigoCamino">Código de camino (3 dígitos)</Label>
+                      <Input id="codigoCamino" name="codigoCamino" inputMode="numeric" pattern="[0-9]{3}" maxLength={3} placeholder="000" value={formData.codigoCamino} onChange={handleChange} />
+                    </div>
+                  </div>
+                </>
               )}
-            </div>
+            </>
           )}
-
-          {/* Cantidad si aplica al tipo */}
-          {showCantidad && boletaMode === "disabled" && (
-            <div className="space-y-2">
-              <Label htmlFor="cantidad">m³ del viaje</Label>
-              <Input
-                id="cantidad"
-                name="cantidad"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={formData.cantidad}
-                onChange={handleChange}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Estación si aplica */}
-        {showEstacion && (
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="estacion">Estación (N+M)</Label>
-              <Input
-                id="estacion"
-                name="estacion"
-                placeholder="Ej: 12+500"
-                value={formData.estacion}
-                onChange={handleChange}
-              />
-              <p className="text-xs text-gray-500 mt-1">Formato N+M, p. ej. 12+500.</p>
-            </div>
-          </div>
-        )}
-
-        {/* Distrito + Código */}
-        <div className={ROW2}>
-          <div className="space-y-2">
-            <Label>Distrito</Label>
-            <Select value={formData.distrito} onValueChange={handleDistritoChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar distrito" />
-              </SelectTrigger>
-              <SelectContent>
-                {districtList.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="codigoCamino">Código de camino (3 dígitos)</Label>
-            <Input
-              id="codigoCamino"
-              name="codigoCamino"
-              inputMode="numeric"
-              pattern="[0-9]{3}"
-              maxLength={3}
-              placeholder="000"
-              value={formData.codigoCamino}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-      </>
-    )}
-  </>
-)}
 
           {/* Submit */}
           <div className="flex items-center justify-center gap-2 pt-2">
