@@ -13,6 +13,7 @@ import { showSuccess, showError } from "@/utils/sweetAlert";
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
 import sourceService from "@/services/sourceService";
+import usersService from "@/services/usersService";
 
 import {
   rentalSourceOptions,
@@ -203,34 +204,68 @@ const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMat
   useEffect(() => {
     (async () => {
       try {
+        console.log("🔍 Iniciando carga de operadores...");
+        console.log("👤 Usuario actual del contexto:", user);
+        
+        // 1. Obtener información del usuario actual usando el endpoint /users/me
+        let currentUserInfo = null;
+        try {
+          currentUserInfo = await usersService.getMe();
+          console.log("✅ Usuario actual desde /users/me:", currentUserInfo);
+        } catch (error) {
+          console.warn("⚠️ No se pudo obtener información del usuario actual:", error);
+        }
+
+        // 2. Cargar operadores
         const operators = await operatorsService.getAllOperators();
         const allOperators = Array.isArray(operators) ? operators : [];
+        console.log("📋 Operadores cargados:", allOperators.length);
         setOperatorsList(allOperators);
         
-        // Verificar si el usuario NO es superadmin
-        const isSuperAdmin = user?.roles?.some(role => 
-          typeof role === 'string' 
-            ? role.toLowerCase() === 'superadmin' 
-            : role?.name?.toLowerCase() === 'superadmin'
-        );
+        // 3. Verificar si el usuario NO es superadmin
+        const isSuperAdmin = user?.roles?.some(role => {
+          const roleName = typeof role === 'string' ? role : role?.name;
+          console.log("🔍 Verificando rol:", roleName);
+          return roleName?.toLowerCase() === 'superadmin';
+        });
+        
+        console.log("🎯 Es SuperAdmin:", isSuperAdmin);
         
         if (user && !isSuperAdmin) {
-          // Usuario normal (inspector/ingeniero): crear un operador ficticio con sus datos
-          const userAsOperator = {
-            id: `user_${user.id}`,
-            name: user.name || user.email?.split('@')[0] || 'Usuario',
-            last: user.last || '',
-            identification: user.email || '',
-            email: user.email
-          };
+          // Usuario normal (inspector/ingeniero)
+          let userAsOperator;
           
-          console.log("✅ Usuario como encargado:", userAsOperator);
+          if (currentUserInfo) {
+            // Usar datos reales del backend
+            userAsOperator = {
+              id: `user_${currentUserInfo.id}`,
+              name: currentUserInfo.name || 'Usuario',
+              last: currentUserInfo.lastname || '',
+              identification: currentUserInfo.email || '',
+              email: currentUserInfo.email || ''
+            };
+            console.log("✅ Usuario como encargado (desde /users/me):", userAsOperator);
+          } else {
+            // Fallback: usar datos del contexto
+            userAsOperator = {
+              id: `user_${user.id}`,
+              name: user.name || user.email?.split('@')[0] || 'Usuario',
+              last: user.last || user.lastname || '',
+              identification: user.email || '',
+              email: user.email || ''
+            };
+            console.log("⚠️ Usuario como encargado (desde contexto):", userAsOperator);
+          }
+          
+          console.log("📌 Configurando operadorId:", userAsOperator.id);
           setFilteredOperators([userAsOperator]);
           setFormData(prev => ({ ...prev, operadorId: String(userAsOperator.id) }));
-        } else {
+        } else if (user && isSuperAdmin) {
           // SuperAdmin: mostrar todos los operadores reales
-          console.log("ℹ️ SuperAdmin - mostrando todos los operadores");
+          console.log("ℹ️ SuperAdmin - mostrando todos los operadores:", allOperators);
           setFilteredOperators(allOperators);
+        } else {
+          console.warn("⚠️ No hay usuario en el contexto");
         }
       } catch (error) {
         console.error("❌ Error al cargar operadores:", error);
@@ -775,6 +810,14 @@ return;
   const showAnyBoleta = boletaMode !== "disabled" && isMaterialActivity;
   const rowSpecificCols = 2;
 
+  // Debug: mostrar estado actual
+  useEffect(() => {
+    console.log("🔍 Estado actual del formulario:");
+    console.log("  - operadorId:", formData.operadorId);
+    console.log("  - filteredOperators:", filteredOperators);
+    console.log("  - Coincidencia:", filteredOperators.find(op => String(op.id) === formData.operadorId));
+  }, [formData.operadorId, filteredOperators]);
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -789,22 +832,31 @@ return;
             {/* Encargado */}
             <div className="space-y-2">
               <Label>Encargado</Label>
-              <Select 
-                value={formData.operadorId} 
-                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
-                disabled={filteredOperators.length === 1}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar encargado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredOperators.map((op) => (
-                    <SelectItem key={op.id} value={String(op.id)}>
-                      {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {filteredOperators.length === 1 ? (
+                // Mostrar como Input deshabilitado cuando solo hay un usuario
+                <Input
+                  value={`${filteredOperators[0].name} ${filteredOperators[0].last}`.trim()}
+                  disabled
+                  className="bg-gray-100 cursor-not-allowed"
+                />
+              ) : (
+                // Select normal para superadmin
+                <Select 
+                  value={formData.operadorId} 
+                  onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar encargado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredOperators.map((op) => (
+                      <SelectItem key={op.id} value={String(op.id)}>
+                        {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Fecha */}
