@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { showSuccess, showError } from "@/utils/sweetAlert";
 
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
-import usersService from "@/services/usersService";
 import sourceService from "@/services/sourceService";
 
 import {
@@ -107,8 +108,10 @@ function normalizeFuenteRental(raw = "") {
 /* =============================================================== */
 export default function CreateRentalReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [operatorsList, setOperatorsList] = useState([]);
+  const [filteredOperators, setFilteredOperators] = useState([]);
 
   // Catálogos dinámicos de subfuentes
   const [riosList, setRiosList] = useState([]);
@@ -200,24 +203,41 @@ const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMat
   useEffect(() => {
     (async () => {
       try {
-        const allUsers = await usersService.getAllUsers();
+        const operators = await operatorsService.getAllOperators();
+        const allOperators = Array.isArray(operators) ? operators : [];
+        setOperatorsList(allOperators);
         
-        // Filtrar: Solo incluir usuarios que NO sean operarios
-        const nonOperatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
-          // Buscar cualquier referencia a "operario"
-          const userString = JSON.stringify(user).toLowerCase();
-          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+        // Verificar si el usuario NO es superadmin
+        const isSuperAdmin = user?.roles?.some(role => 
+          typeof role === 'string' 
+            ? role.toLowerCase() === 'superadmin' 
+            : role?.name?.toLowerCase() === 'superadmin'
+        );
+        
+        if (user && !isSuperAdmin) {
+          // Usuario normal (inspector/ingeniero): crear un operador ficticio con sus datos
+          const userAsOperator = {
+            id: `user_${user.id}`,
+            name: user.name || user.email?.split('@')[0] || 'Usuario',
+            last: user.last || '',
+            identification: user.email || '',
+            email: user.email
+          };
           
-          return !hasOperario; // Excluir si contiene "operario" en cualquier parte
-        }) : [];
-        
-        setOperatorsList(nonOperatorsOnly);
+          console.log("✅ Usuario como encargado:", userAsOperator);
+          setFilteredOperators([userAsOperator]);
+          setFormData(prev => ({ ...prev, operadorId: String(userAsOperator.id) }));
+        } else {
+          // SuperAdmin: mostrar todos los operadores reales
+          console.log("ℹ️ SuperAdmin - mostrando todos los operadores");
+          setFilteredOperators(allOperators);
+        }
       } catch (error) {
-        console.error("[CreateRentalReportForm] getAllUsers error:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+        console.error("❌ Error al cargar operadores:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los operadores.", variant: "destructive" });
       }
     })();
-  }, [toast]);
+  }, [toast, user]);
 
   // Prefetch ríos y tajos (para subfuente)
   useEffect(() => {
@@ -568,9 +588,19 @@ const handleChangeTipo = (tipo) => {
   // Si tu backend exige distrito/código camino top-level, usa el de la primera boleta
   const first = formData.boletas[0] || {};
 
+  // Determinar el operadorId real
+  let realOperadorId;
+  if (formData.operadorId.startsWith('user_')) {
+    // Es un usuario (inspector/ingeniero), usar el ID del usuario
+    realOperadorId = user?.id || null;
+  } else {
+    // Es un operador real
+    realOperadorId = Number(formData.operadorId);
+  }
+
   const payload = {
     fecha: formData.fecha,
-    operadorId: Number(formData.operadorId),
+    operadorId: realOperadorId,
     tipoMaquinaria: formData.tipoMaquinaria,     // vagoneta | cabezal
     placa: formData.placa || null,
     actividad: formData.actividad,               // "Acarreo de material"
@@ -594,10 +624,10 @@ const handleChangeTipo = (tipo) => {
 
   await machineryService.createRentalReport(payload);
 
-  toast({
-    title: "Reporte creado",
-    description: `Se registró 1 reporte con ${boletasDet.length} boleta(s).`
-  });
+  await showSuccess(
+    "Reporte creado", 
+    `Se registró 1 reporte con ${boletasDet.length} boleta(s) exitosamente.`
+  );
 
   // reset
   setFormData({
@@ -618,11 +648,10 @@ const handleChangeTipo = (tipo) => {
   });
 } catch (err) {
   console.error("CREATE rentals error ->", err?.response?.data || err);
-  toast({
-    title: "Error al crear",
-    description: err?.response?.data?.message || "No se pudo guardar.",
-    variant: "destructive",
-  });
+  await showError(
+    "Error al crear",
+    err?.response?.data?.message || "No se pudo guardar el reporte."
+  );
 } finally {
   setLoading(false);
 }
@@ -675,9 +704,20 @@ return;
     }
 
     const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
+    
+    // Determinar el operadorId real
+    let realOperadorId;
+    if (formData.operadorId.startsWith('user_')) {
+      // Es un usuario (inspector/ingeniero), usar el ID del usuario
+      realOperadorId = user?.id || null;
+    } else {
+      // Es un operador real
+      realOperadorId = Number(formData.operadorId);
+    }
+    
     const payload = {
       fecha: formData.fecha,
-      operadorId: Number(formData.operadorId),
+      operadorId: realOperadorId,
       tipoMaquinaria: formData.tipoMaquinaria,
       placa: formData.placa || null,
       actividad: formData.actividad,
@@ -702,7 +742,7 @@ return;
     try {
       setLoading(true);
       await machineryService.createRentalReport(payload);
-      toast({ title: "Boleta de alquiler creada", description: "Se registró correctamente." });
+      await showSuccess("Boleta de alquiler creada", "Se registró correctamente.");
       setFormData({
         fecha: todayLocalISO(),
         operadorId: "",
@@ -721,11 +761,10 @@ return;
       });
     } catch (err) {
       console.error("CREATE rental error ->", err?.response?.data || err);
-      toast({
-        title: "Error al crear boleta",
-        description: err?.response?.data?.message || "No se pudo guardar el registro.",
-        variant: "destructive",
-      });
+      await showError(
+        "Error al crear boleta",
+        err?.response?.data?.message || "No se pudo guardar el registro."
+      );
     } finally {
       setLoading(false);
     }
@@ -750,14 +789,18 @@ return;
             {/* Encargado */}
             <div className="space-y-2">
               <Label>Encargado</Label>
-              <Select value={formData.operadorId} onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}>
+              <Select 
+                value={formData.operadorId} 
+                onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
+                disabled={filteredOperators.length === 1}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar encargado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {operatorsList.map((user) => (
-                    <SelectItem key={user.id} value={String(user.id)}>
-                      {user.name} {user.lastname || user.last} {user.identification ? `(${user.identification})` : ""}
+                  {filteredOperators.map((op) => (
+                    <SelectItem key={op.id} value={String(op.id)}>
+                      {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
