@@ -31,53 +31,14 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
     );
   }
 
-  // Datos simulados para estadísticas de usuarios
-  const usersData = {
-    totalUsers: 125,
-    activeUsers: 89,
-    inactiveUsers: 36,
-    newUsersThisMonth: 12,
-    usersByRole: {
-      superadmin: 2,
-      ingeniero: 8,
-      inspector: 25,
-      operario: 90
-    },
-    userActivity: {
-      daily: 45,
-      weekly: 89,
-      monthly: 125
-    },
-    userGrowth: {
-      thisMonth: 12.5,
-      lastMonth: 8.3,
-      trend: 'up'
-    },
-    topActiveUsers: [
-      { id: 1, name: 'Juan Pérez', role: 'ingeniero', sessionsThisWeek: 28, lastActive: '2 min ago' },
-      { id: 2, name: 'María González', role: 'inspector', sessionsThisWeek: 24, lastActive: '5 min ago' },
-      { id: 3, name: 'Carlos López', role: 'operario', sessionsThisWeek: 22, lastActive: '15 min ago' },
-      { id: 4, name: 'Ana Martínez', role: 'inspector', sessionsThisWeek: 20, lastActive: '1 hour ago' },
-      { id: 5, name: 'Luis Rodriguez', role: 'operario', sessionsThisWeek: 18, lastActive: '2 hours ago' }
-    ],
-    registrationTrend: [
-      { month: 'Ene', count: 8 },
-      { month: 'Feb', count: 12 },
-      { month: 'Mar', count: 15 },
-      { month: 'Abr', count: 10 },
-      { month: 'May', count: 18 },
-      { month: 'Jun', count: 22 }
-    ],
-    sessionStats: {
-      averageSessionDuration: '2h 15m',
-      totalSessions: 1847,
-      activeSessions: 28
-    }
-  };
-
+  // Usar SOLO datos reales del backend - NO datos simulados
   if (!data) {
-    // Usar datos simulados si no hay datos reales
-    data = usersData;
+    return (
+      <div className="text-center py-8">
+        <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600">No hay datos de usuarios disponibles</p>
+      </div>
+    );
   }
 
   const roleConfig = {
@@ -143,9 +104,9 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Usuarios Inactivos</p>
-                <p className="text-2xl font-bold text-red-600">{data.inactiveUsers || (data.totalUsers - data.activeUsers)}</p>
+                <p className="text-2xl font-bold text-red-600">{(data.totalUsers || 0) - (data.activeUsers || 0)}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {(((data.totalUsers - data.activeUsers) / data.totalUsers) * 100).toFixed(1)}% del total
+                  {data.totalUsers > 0 ? ((((data.totalUsers - data.activeUsers) / data.totalUsers) * 100).toFixed(1)) : '0'}% del total
                 </p>
               </div>
               <div className="h-12 w-12 bg-red-50 rounded-lg flex items-center justify-center">
@@ -160,10 +121,10 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Nuevos Este Mes</p>
-                <p className="text-2xl font-bold text-blue-600">{data.newUsersThisMonth}</p>
+                <p className="text-2xl font-bold text-blue-600">{data.newUsersThisMonth || 0}</p>
                 <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" />
-                  +{data.userGrowth?.thisMonth || 12.5}% crecimiento
+                  Crecimiento mensual
                 </p>
               </div>
               <div className="h-12 w-12 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -178,9 +139,9 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Sesiones Activas</p>
-                <p className="text-2xl font-bold text-purple-600">{data.sessionStats?.activeSessions || 28}</p>
+                <p className="text-2xl font-bold text-purple-600">{data.activeUsers || 0}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Promedio: {data.sessionStats?.averageSessionDuration || '2h 15m'}
+                  Usuarios en línea
                 </p>
               </div>
               <div className="h-12 w-12 bg-purple-50 rounded-lg flex items-center justify-center">
@@ -203,35 +164,41 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(data.usersByRole).map(([role, count]) => {
-                const config = roleConfig[role] || {
-                  label: role,
-                  color: 'bg-gray-100 text-gray-800',
-                  icon: Users
-                };
-                const IconComponent = config.icon;
-                const percentage = ((count / data.totalUsers) * 100).toFixed(1);
-                
-                return (
-                  <div key={role} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 bg-gray-50 rounded-lg flex items-center justify-center">
-                        <IconComponent className="h-5 w-5 text-gray-600" />
+              {data.usersByRole && Object.keys(data.usersByRole).length > 0 ? (
+                Object.entries(data.usersByRole).map(([role, count]) => {
+                  const config = roleConfig[role] || {
+                    label: role,
+                    color: 'bg-gray-100 text-gray-800',
+                    icon: Users
+                  };
+                  const IconComponent = config.icon;
+                  const percentage = data.totalUsers > 0 ? ((count / data.totalUsers) * 100).toFixed(1) : '0';
+                  
+                  return (
+                    <div key={role} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-gray-50 rounded-lg flex items-center justify-center">
+                          <IconComponent className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <div>
+                          <Badge className={config.color}>
+                            {config.label}
+                          </Badge>
+                          <p className="text-xs text-gray-500 mt-1">{percentage}% del total</p>
+                        </div>
                       </div>
-                      <div>
-                        <Badge className={config.color}>
-                          {config.label}
-                        </Badge>
-                        <p className="text-xs text-gray-500 mt-1">{percentage}% del total</p>
+                      <div className="text-right">
+                        <span className="text-2xl font-bold text-gray-900">{count}</span>
+                        <p className="text-xs text-gray-500">usuarios</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-2xl font-bold text-gray-900">{count}</span>
-                      <p className="text-xs text-gray-500">usuarios</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No hay datos de roles disponibles</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -246,27 +213,33 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {data.topActiveUsers?.slice(0, 5).map((user, index) => (
-                <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-lg font-bold text-sm">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{user.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge className={roleConfig[user.role]?.color || 'bg-gray-100 text-gray-800'} variant="outline">
-                          {roleConfig[user.role]?.label || user.role}
-                        </Badge>
+              {data.topActiveUsers && data.topActiveUsers.length > 0 ? (
+                data.topActiveUsers.slice(0, 5).map((user, index) => (
+                  <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-lg font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{user.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge className={roleConfig[user.role]?.color || 'bg-gray-100 text-gray-800'} variant="outline">
+                            {roleConfig[user.role]?.label || user.role}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900">{user.sessionsThisWeek || user.sessions || 0} sesiones</p>
+                      <p className="text-xs text-gray-500">Últ. vez: {user.lastActive || user.lastLogin || 'N/A'}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{user.sessionsThisWeek} sesiones</p>
-                    <p className="text-xs text-gray-500">Últ. vez: {user.lastActive}</p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No hay datos de usuarios activos disponibles</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -290,7 +263,7 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
                   <p className="text-sm text-green-600">Usuarios activos</p>
                 </div>
                 <span className="text-2xl font-bold text-green-600">
-                  {data.userActivity?.daily || 45}
+                  {data.activeUsers || 0}
                 </span>
               </div>
               
@@ -300,7 +273,7 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
                   <p className="text-sm text-blue-600">Usuarios únicos</p>
                 </div>
                 <span className="text-2xl font-bold text-blue-600">
-                  {data.userActivity?.weekly || 89}
+                  {data.activeUsers || 0}
                 </span>
               </div>
               
@@ -310,7 +283,7 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
                   <p className="text-sm text-purple-600">Total de usuarios</p>
                 </div>
                 <span className="text-2xl font-bold text-purple-600">
-                  {data.userActivity?.monthly || 125}
+                  {data.totalUsers || 0}
                 </span>
               </div>
             </div>
@@ -329,7 +302,7 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
             <div className="space-y-4">
               <div className="text-center p-4 border rounded-lg">
                 <div className="text-3xl font-bold text-blue-600 mb-1">
-                  {data.sessionStats?.totalSessions || 1847}
+                  {data.totalUsers || 0}
                 </div>
                 <p className="text-sm text-gray-600">Sesiones Totales</p>
               </div>
@@ -337,16 +310,16 @@ const UsersStats = ({ data, isLoading, onRefresh }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <div className="text-xl font-bold text-gray-900 mb-1">
-                    {data.sessionStats?.activeSessions || 28}
+                    {data.activeUsers || 0}
                   </div>
                   <p className="text-xs text-gray-600">Activas Ahora</p>
                 </div>
                 
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
                   <div className="text-xl font-bold text-gray-900 mb-1">
-                    {data.sessionStats?.averageSessionDuration || '2h 15m'}
+                    {((data.activeUsers || 0) / (data.totalUsers || 1) * 100).toFixed(0)}%
                   </div>
-                  <p className="text-xs text-gray-600">Duración Promedio</p>
+                  <p className="text-xs text-gray-600">Tasa Actividad</p>
                 </div>
               </div>
             </div>

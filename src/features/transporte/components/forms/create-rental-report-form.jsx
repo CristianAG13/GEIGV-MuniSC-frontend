@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { showSuccess, showError } from "@/utils/sweetAlert";
 
 import {
   confirmAction,
@@ -21,8 +23,8 @@ import {
 
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
-import usersService from "@/services/usersService";
 import sourceService from "@/services/sourceService";
+import usersService from "@/services/usersService";
 
 import {
   rentalSourceOptions,
@@ -115,8 +117,10 @@ function normalizeFuenteRental(raw = "") {
 /* =============================================================== */
 export default function CreateRentalReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [operatorsList, setOperatorsList] = useState([]);
+  const [filteredOperators, setFilteredOperators] = useState([]);
 
   // Catálogos dinámicos de subfuentes
   const [riosList, setRiosList] = useState([]);
@@ -206,24 +210,75 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
   useEffect(() => {
     (async () => {
       try {
-        const allUsers = await usersService.getAllUsers();
+        console.log("🔍 Iniciando carga de operadores...");
+        console.log("👤 Usuario actual del contexto:", user);
         
-        // Filtrar: Solo incluir usuarios que NO sean operarios
-        const nonOperatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
-          // Buscar cualquier referencia a "operario"
-          const userString = JSON.stringify(user).toLowerCase();
-          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+        // 1. Obtener información del usuario actual usando el endpoint /users/me
+        let currentUserInfo = null;
+        try {
+          currentUserInfo = await usersService.getMe();
+          console.log("✅ Usuario actual desde /users/me:", currentUserInfo);
+        } catch (error) {
+          console.warn("⚠️ No se pudo obtener información del usuario actual:", error);
+        }
+
+        // 2. Cargar operadores
+        const operators = await operatorsService.getAllOperators();
+        const allOperators = Array.isArray(operators) ? operators : [];
+        console.log("📋 Operadores cargados:", allOperators.length);
+        setOperatorsList(allOperators);
+        
+        // 3. Verificar si el usuario NO es superadmin
+        const isSuperAdmin = user?.roles?.some(role => {
+          const roleName = typeof role === 'string' ? role : role?.name;
+          console.log("🔍 Verificando rol:", roleName);
+          return roleName?.toLowerCase() === 'superadmin';
+        });
+        
+        console.log("🎯 Es SuperAdmin:", isSuperAdmin);
+        
+        if (user && !isSuperAdmin) {
+          // Usuario normal (inspector/ingeniero)
+          let userAsOperator;
           
-          return !hasOperario; // Excluir si contiene "operario" en cualquier parte
-        }) : [];
-        
-        setOperatorsList(nonOperatorsOnly);
+          if (currentUserInfo) {
+            // Usar datos reales del backend
+            userAsOperator = {
+              id: `user_${currentUserInfo.id}`,
+              name: currentUserInfo.name || 'Usuario',
+              last: currentUserInfo.lastname || '',
+              identification: currentUserInfo.email || '',
+              email: currentUserInfo.email || ''
+            };
+            console.log("✅ Usuario como encargado (desde /users/me):", userAsOperator);
+          } else {
+            // Fallback: usar datos del contexto
+            userAsOperator = {
+              id: `user_${user.id}`,
+              name: user.name || user.email?.split('@')[0] || 'Usuario',
+              last: user.last || user.lastname || '',
+              identification: user.email || '',
+              email: user.email || ''
+            };
+            console.log("⚠️ Usuario como encargado (desde contexto):", userAsOperator);
+          }
+          
+          console.log("📌 Configurando operadorId:", userAsOperator.id);
+          setFilteredOperators([userAsOperator]);
+          setFormData(prev => ({ ...prev, operadorId: String(userAsOperator.id) }));
+        } else if (user && isSuperAdmin) {
+          // SuperAdmin: mostrar todos los operadores reales
+          console.log("ℹ️ SuperAdmin - mostrando todos los operadores:", allOperators);
+          setFilteredOperators(allOperators);
+        } else {
+          console.warn("⚠️ No hay usuario en el contexto");
+        }
       } catch (error) {
-        console.error("[CreateRentalReportForm] getAllUsers error:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+        console.error("❌ Error al cargar operadores:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los operadores.", variant: "destructive" });
       }
     })();
-  }, [toast]);
+  }, [toast, user]);
 
   // Prefetch ríos y tajos (para subfuente)
   useEffect(() => {
@@ -536,11 +591,190 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
     e.preventDefault();
     if (loading) return;
 
+
     // 1) Validar
     const errors = validateBeforeSubmit();
     if (errors.length) {
       await showValidationError(errors);
       return;
+    // Validaciones comunes
+    if (!formData.operadorId)
+      return toast({ title: "Encargado requerido", description: "Selecciona el encargado.", variant: "destructive" });
+    if (!formData.tipoMaquinaria)
+      return toast({ title: "Tipo requerido", description: "Selecciona el tipo de maquinaria.", variant: "destructive" });
+    if (!formData.actividad)
+      return toast({ title: "Actividad requerida", description: "Selecciona la actividad.", variant: "destructive" });
+
+    if (formData.horas === "" || !/^\d+$/.test(formData.horas) || Number(formData.horas) > 18)
+      return toast({ title: "Horas inválidas", description: "Ingresa un entero entre 0 y 18.", variant: "destructive" });
+
+    const hoy = todayLocalISO();
+    if (formData.fecha > hoy)
+      return toast({ title: "Fecha inválida", description: "Solo se permiten fechas de hoy o del pasado.", variant: "destructive" });
+
+    // Flujo con múltiples boletas (vagoneta/cabezal + Acarreo de material)
+    if (isMaterialFlow) {
+      if ((formData.boletas || []).length === 0) {
+        return toast({
+          title: "Agrega boletas",
+          description: "Para material puedes añadir varias boletas del día.",
+          variant: "destructive",
+        });
+      }
+      // validar cada boleta
+      for (const [i, b] of (formData.boletas || []).entries()) {
+        if (!b.tipoMaterial)
+          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona el tipo de material.", variant: "destructive" });
+        if (!b.fuente)
+          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona la fuente.", variant: "destructive" });
+
+        const upperFuente = String(b.fuente).toUpperCase();
+        const isK = upperFuente === "KYLCSA";
+        const isRio = upperFuente === "RÍOS" || upperFuente === "RIOS";
+        const isTajo = upperFuente === "TAJO";
+
+        if ((isRio || isTajo) && !b.subFuente) {
+          return toast({
+            title: `Boleta #${i + 1}`,
+            description: `Selecciona el ${isRio ? "río" : "tajo"}.`,
+            variant: "destructive",
+          });
+        }
+
+        if (isK && !/^\d{6}$/.test(b.boletaK || "")) {
+          return toast({ title: `Boleta #${i + 1}`, description: "Boleta KYLCSA debe tener 6 dígitos.", variant: "destructive" });
+        }
+        if (!isK && b.boleta && !/^\d{6}$/.test(b.boleta)) {
+          return toast({
+            title: `Boleta #${i + 1}`,
+            description: "Boleta municipal debe tener 6 dígitos (o dejar vacía).",
+            variant: "destructive",
+          });
+        }
+        if (!/^\d{3}$/.test(String(b.codigoCamino || ""))) {
+          return toast({ title: `Boleta #${i + 1}`, description: "Código de camino debe tener 3 dígitos.", variant: "destructive" });
+        }
+        if (!b.distrito) {
+          return toast({ title: `Boleta #${i + 1}`, description: "Selecciona el distrito.", variant: "destructive" });
+        }
+        const cant = Number(b.m3);
+        if (!Number.isFinite(cant) || cant <= 0) {
+          return toast({ title: `Boleta #${i + 1}`, description: "m³ del viaje debe ser > 0.", variant: "destructive" });
+        }
+      }
+
+      // enviar una petición por boleta
+     try {
+  setLoading(true);
+
+  // Normaliza boletas al formato que guardaremos en detalles
+  const boletasDet = formData.boletas.map((b) => {
+    const isK = String(b.fuente || "").toUpperCase() === "KYLCSA";
+    return {
+      tipoMaterial: b.tipoMaterial || null,
+      fuente: b.fuente || null,        // "Ríos" | "Tajo" | "KYLCSA" | otro
+      subFuente: b.subFuente || null,  // nombre del río/tajo si aplica
+      m3: Number(b.m3) || 0,
+      distrito: b.distrito || null,
+      codigoCamino: b.codigoCamino || null,
+      boleta: isK ? null : (b.boleta || null),
+      boletaKylcsa: isK ? (b.boletaK || null) : null,
+    };
+  });
+
+  const totalM3 = boletasDet.reduce((a, b) => a + (Number(b.m3) || 0), 0);
+
+  // Si tu backend exige distrito/código camino top-level, usa el de la primera boleta
+  const first = formData.boletas[0] || {};
+
+  // Determinar el operadorId real
+  let realOperadorId;
+  if (formData.operadorId.startsWith('user_')) {
+    // Es un usuario (inspector/ingeniero), usar el ID del usuario
+    realOperadorId = user?.id || null;
+  } else {
+    // Es un operador real
+    realOperadorId = Number(formData.operadorId);
+  }
+
+  const payload = {
+    fecha: formData.fecha,
+    operadorId: realOperadorId,
+    tipoMaquinaria: formData.tipoMaquinaria,     // vagoneta | cabezal
+    placa: formData.placa || null,
+    actividad: formData.actividad,               // "Acarreo de material"
+    horas: Number(formData.horas),
+    cantidad: totalM3,                           // guarda total del día
+    // Top-level opcionales (si el backend los requiere al menos con algo)
+    codigoCamino: first.codigoCamino || null,
+    distrito: first.distrito || null,
+
+    // Para multi-boletas no tiene sentido establecer una sola fuente/boleta global:
+    fuente: null,
+    boleta: null,
+    boletaKylcsa: null,
+
+    // ✅ NUEVO: boletas del día embebidas
+    detalles: {
+      variante: "material",
+      boletas: boletasDet,
+    },
+  };
+
+  await machineryService.createRentalReport(payload);
+
+  await showSuccess(
+    "Reporte creado", 
+    `Se registró 1 reporte con ${boletasDet.length} boleta(s) exitosamente.`
+  );
+
+  // reset
+  setFormData({
+    fecha: todayLocalISO(),
+    operadorId: "",
+    tipoMaquinaria: "",
+    placa: "",
+    actividad: "",
+    horas: "",
+    cantidad: "",
+    fuente: "",
+    boleta: "",
+    boletaK: "",
+    codigoCamino: "",
+    distrito: "",
+    estacion: "",
+    boletas: [],
+  });
+} catch (err) {
+  console.error("CREATE rentals error ->", err?.response?.data || err);
+  await showError(
+    "Error al crear",
+    err?.response?.data?.message || "No se pudo guardar el reporte."
+  );
+} finally {
+  setLoading(false);
+}
+return;
+
+}
+    // Flujo normal (1 registro)
+    if (showFuente) {
+      if (formData.fuente === "KYLCSA") {
+        if (!/^\d{6}$/.test(formData.boletaK || "")) {
+          return toast({
+            title: "Boleta KYLCSA requerida",
+            description: "Ingrese exactamente 6 dígitos.",
+            variant: "destructive",
+          });
+        }
+      } else if (formData.boleta && !/^\d{6}$/.test(formData.boleta)) {
+        return toast({
+          title: "Boleta inválida",
+          description: "Debe tener exactamente 6 dígitos (o dejar vacía).",
+          variant: "destructive",
+        });
+      }
+
     }
 
     const isMulti = isMaterialFlow && (formData.boletas?.length || 0) > 0;
@@ -615,15 +849,34 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
       };
     }
 
+
     // 4) Guardar con loader + alertas
+    const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
+    
+    // Determinar el operadorId real
+    let realOperadorId;
+    if (formData.operadorId.startsWith('user_')) {
+      // Es un usuario (inspector/ingeniero), usar el ID del usuario
+      realOperadorId = user?.id || null;
+    } else {
+      // Es un operador real
+      realOperadorId = Number(formData.operadorId);
+    }
+    
+
+
     try {
       setLoading(true);
       showLoading("Guardando...", "Por favor, espere");
       await machineryService.createRentalReport(payload);
+
       closeLoading();
       await showSuccess("Registro creado", "Se guardó correctamente.");
 
       // Reset
+
+      await showSuccess("Boleta de alquiler creada", "Se registró correctamente.");
+
       setFormData({
         fecha: todayLocalISO(),
         operadorId: "",
@@ -642,8 +895,13 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
       });
     } catch (err) {
       console.error("CREATE rental error ->", err?.response?.data || err);
+
       closeLoading();
-      await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el registro.");
+      await showError("Error al crear", err?.response?.data?.message || "No se pudo guardar el registro.");      await showError(
+        "Error al crear boleta",
+        err?.response?.data?.message || "No se pudo guardar el registro."
+      );
+
     } finally {
       setLoading(false);
     }
@@ -652,6 +910,14 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
   /* ---------- layout ---------- */
   const rowTopCols = 3;
   const showAnyBoleta = boletaMode !== "disabled" && isMaterialActivity;
+
+  // Debug: mostrar estado actual
+  useEffect(() => {
+    console.log("🔍 Estado actual del formulario:");
+    console.log("  - operadorId:", formData.operadorId);
+    console.log("  - filteredOperators:", filteredOperators);
+    console.log("  - Coincidencia:", filteredOperators.find(op => String(op.id) === formData.operadorId));
+  }, [formData.operadorId, filteredOperators]);
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
@@ -667,18 +933,31 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
             {/* Encargado */}
             <div className="space-y-2">
               <Label>Encargado</Label>
-              <Select value={formData.operadorId} onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar encargado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {operatorsList.map((user) => (
-                    <SelectItem key={user.id} value={String(user.id)}>
-                      {user.name} {user.lastname || user.last} {user.identification ? `(${user.identification})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {filteredOperators.length === 1 ? (
+                // Mostrar como Input deshabilitado cuando solo hay un usuario
+                <Input
+                  value={`${filteredOperators[0].name} ${filteredOperators[0].last}`.trim()}
+                  disabled
+                  className="bg-gray-100 cursor-not-allowed"
+                />
+              ) : (
+                // Select normal para superadmin
+                <Select 
+                  value={formData.operadorId} 
+                  onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar encargado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredOperators.map((op) => (
+                      <SelectItem key={op.id} value={String(op.id)}>
+                        {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Fecha */}
@@ -948,4 +1227,5 @@ export default function CreateRentalReportForm({ onGoToCatalog }) {
       </CardContent>
     </Card>
   );
+}
 }

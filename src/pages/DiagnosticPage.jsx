@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import StatisticsDiagnostic from '@/components/StatisticsDiagnostic';
 import BackendDiagnostic from '@/components/BackendDiagnostic';
 import OperatorDiagnostic from '@/components/OperatorDiagnostic';
+import UserMeDiagnostic from '@/components/UserMeDiagnostic';
 
 const DiagnosticPage = () => {
   return (
@@ -17,6 +18,9 @@ const DiagnosticPage = () => {
             </p>
           </CardContent>
         </Card>
+
+        {/* Diagnóstico de Usuario Actual (/users/me) */}
+        <UserMeDiagnostic />
 
         {/* Diagnóstico de Operadores */}
         <OperatorDiagnostic />
