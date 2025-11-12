@@ -615,7 +615,7 @@ function buildMunicipalExportRow(r) {
 const EXPORT_HEADERS_RENTAL = [
   "Tipo",
   "ID",
-  "Operador",
+  "Encargado",
   "Tipo Maquinaria",
   "Placa",
   "Actividad",
@@ -1058,12 +1058,13 @@ export default function ReportsTable({
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <KV
-            label="Operador"
+            label="Encargado"
             value={
-              r?.operador
-                ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""
-                }`
-                : r?.operadorId
+              r?.instructorIngeniero
+                ? `${r.instructorIngeniero?.name ?? ""} ${r.instructorIngeniero?.last ?? ""}${r.instructorIngeniero?.identification ? ` (${r.instructorIngeniero.identification})` : ""}`
+                : (r?.usuario || r?.user)
+                ? `${(r.usuario || r.user)?.name ?? ""} ${(r.usuario || r.user)?.last ?? ""}${(r.usuario || r.user)?.email ? ` (${(r.usuario || r.user).email})` : ""}`
+                : r?.instructorIngenieroId ? `ID: ${r.instructorIngenieroId}` : "—"
             }
           />
           <KV label="Tipo maquinaria" value={r?.tipoMaquinaria} />
@@ -1183,6 +1184,7 @@ export default function ReportsTable({
   const [endDate, setEndDate] = useState("");
   const [codigoFilter, setCodigoFilter] = useState("");
   const [distritoFilter, setDistritoFilter] = useState("");
+  const [operadorFilter, setOperadorFilter] = useState("");
 
   const [typeFilter, setTypeFilter] = useState("");
   const [variantFilter, setVariantFilter] = useState("");
@@ -1223,6 +1225,18 @@ export default function ReportsTable({
         return true;
       });
     }
+    
+    // Filtro por operador (aplica a ambos tipos de reportes)
+    if (operadorFilter) {
+      rows = rows.filter((r) => {
+        // Para reportes de alquiler usa instructorIngenieroId, para municipales usa operadorId
+        const operadorId = isMunicipal 
+          ? (r?.operadorId || r?.operador?.id)
+          : (r?.instructorIngenieroId || r?.instructorIngeniero?.id);
+        return operadorId && String(operadorId) === String(operadorFilter);
+      });
+    }
+    
     if (isMunicipal) {
       if (distritoFilter) {
         const target = _norm(distritoFilter);
@@ -1242,7 +1256,7 @@ export default function ReportsTable({
     }
 
     return rows;
-  }, [activeReports, startDate, endDate, distritoFilter, codigoFilter, isMunicipal]);
+  }, [activeReports, startDate, endDate, distritoFilter, codigoFilter, operadorFilter, isMunicipal]);
 
   /* ========= TIPOS DISPONIBLES ========= */
   const tiposDisponiblesRental = useMemo(() => {
@@ -1303,6 +1317,38 @@ export default function ReportsTable({
     const t = String(typeFilter || "").toLowerCase();
     return actividadesPorTipoRental[t] ?? [];
   }, [isRental, typeFilter, actividadesPorTipoRental]);
+
+  /* ========= OPERADORES DISPONIBLES ========= */
+  const operadoresDisponibles = useMemo(() => {
+    const map = new Map();
+    activeReports.forEach(r => {
+      // Para reportes de alquiler usa instructorIngenieroId, para municipales usa operadorId
+      const id = isMunicipal 
+        ? (r?.operadorId || r?.operador?.id)
+        : (r?.instructorIngenieroId || r?.instructorIngeniero?.id);
+      if (!id) return;
+      
+      // Para reportes de alquiler usa instructorIngeniero, para municipales usa operador
+      const operadorObj = isMunicipal ? r?.operador : r?.instructorIngeniero;
+      const name = operadorObj?.name || "";
+      const last = operadorObj?.last || "";
+      const identification = operadorObj?.identification || "";
+      
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          name,
+          last,
+          identification,
+          displayName: `${name} ${last}${identification ? ` (${identification})` : ""}`.trim()
+        });
+      }
+    });
+    
+    return Array.from(map.values()).sort((a, b) => 
+      a.displayName.localeCompare(b.displayName)
+    );
+  }, [activeReports, isMunicipal]);
 
   /* ---------- autoselección de TIPO al entrar en Municipales ---------- */
   useEffect(() => {
@@ -1406,7 +1452,7 @@ export default function ReportsTable({
 
   const columns = useMemo(() => {
     if (!isMunicipal)
-      return ["ID", "Operador", "Tipo Maquinaria", "Placa", "Actividad", "Fecha"];
+      return ["ID", "Encargado", "Tipo Maquinaria", "Placa", "Actividad", "Fecha"];
     if (!typeFilter) return COLUMNS_MUNICIPAL_BASE;
     const t = (typeFilter || "").toLowerCase();
     const cols = [...COLUMNS_MUNICIPAL_BASE];
@@ -1481,10 +1527,18 @@ export default function ReportsTable({
     switch (col) {
       case "ID":
         return r.id;
-      case "Operador":
-        return r?.operador
-          ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
-          : r?.operadorId ?? "—";
+      case "Encargado":
+        // Primero intenta con instructorIngeniero
+        if (r?.instructorIngeniero) {
+          return `${r.instructorIngeniero?.name ?? ""} ${r.instructorIngeniero?.last ?? ""}${r.instructorIngeniero?.identification ? ` (${r.instructorIngeniero.identification})` : ""}`;
+        }
+        // Si no hay instructorIngeniero, intenta con usuario
+        if (r?.usuario || r?.user) {
+          const usr = r.usuario || r.user;
+          return `${usr?.name ?? ""} ${usr?.last ?? ""}${usr?.email ? ` (${usr.email})` : ""}`;
+        }
+        // Último recurso: mostrar el ID
+        return r?.instructorIngenieroId ? `ID: ${r.instructorIngenieroId}` : "—";
       case "Tipo Maquinaria":
         return showText(r?.tipoMaquinaria);
       case "Placa":
@@ -1607,7 +1661,7 @@ export default function ReportsTable({
   // Mapea RENTAL al formulario
   function mapRentalToForm(rep) {
     return {
-      operadorId: rep?.operadorId ?? rep?.operador?.id ?? "",
+      operadorId: rep?.instructorIngenieroId ?? rep?.instructorIngeniero?.id ?? "",
       tipoMaquinaria: rep?.tipoMaquinaria ?? "",
       placa: rep?.placa ?? "",
       actividad: rep?.actividad ?? "",
@@ -1951,7 +2005,7 @@ export default function ReportsTable({
     return {
       Tipo: "Alquiler",
       ID: r.id,
-      Operador: operadorTxt,
+      Encargado: operadorTxt,
       TipoMaquinaria: r?.tipoMaquinaria ?? "",
       Placa: r?.placa ?? "",
       Actividad: r?.actividad ?? "",
@@ -2187,6 +2241,7 @@ export default function ReportsTable({
             setActiveReportTab("municipal");
             setVariantFilter("");
             setActividadFilter("");
+            setOperadorFilter("");
             setPage(1);
             appliedDefaultType.current = false;
             appliedDefaultVariant.current = false;
@@ -2209,6 +2264,7 @@ export default function ReportsTable({
             setTypeFilter("");
             setVariantFilter("");
             setActividadFilter("");
+            setOperadorFilter("");
             setPage(1);
           }}
           className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${isRental
@@ -2254,6 +2310,7 @@ export default function ReportsTable({
                 setEndDate("");
                 setCodigoFilter("");
                 setDistritoFilter("");
+                setOperadorFilter("");
                 setTypeFilter("");
                 setVariantFilter("");
                 setActividadFilter("");
@@ -2267,7 +2324,7 @@ export default function ReportsTable({
               <RefreshCcw className="h-4 w-4" />
             </Button>
 
-            <div className="flex items-center gap-2 pl-3 border-l md:flex hidden">
+            <div className="hidden md:flex items-center gap-2 pl-3 border-l">
               <Button
                 className="bg-green-500 hover:bg-green-600 text-white whitespace-nowrap"
                 onClick={exportExcel}
@@ -2370,6 +2427,7 @@ export default function ReportsTable({
                 setEndDate("");
                 setCodigoFilter("");
                 setDistritoFilter("");
+                setOperadorFilter("");
                 setTypeFilter("");
                 setVariantFilter("");
                 setActividadFilter("");
@@ -2386,6 +2444,31 @@ export default function ReportsTable({
           <div className="my-3 border-t" />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Selector de operador (inspector/ingeniero) */}
+            <div>
+              <div className="text-sm font-medium text-gray-700 mb-1">
+                Inspector/Ingeniero
+              </div>
+              <Select
+                value={operadorFilter}
+                onValueChange={(v) => {
+                  setOperadorFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los inspectores" />
+                </SelectTrigger>
+                <SelectContent>
+                  {operadoresDisponibles.map((op) => (
+                    <SelectItem key={op.id} value={String(op.id)}>
+                      {op.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div>
               <div className="text-sm font-medium text-gray-700 mb-1">Tipo</div>
               <Select
@@ -2501,7 +2584,7 @@ export default function ReportsTable({
                 const w =
                   {
                     ID: "w-14",
-                    Operador: "w-[220px]",
+                    Encargado: "w-[220px]",
                     "Tipo Maquinaria": "w-[200px]",
                     Placa: "w-28",
                     Actividad: "w-[160px]",
@@ -3002,10 +3085,12 @@ export default function ReportsTable({
               return (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <FieldBox label="Operador">
-                      {r?.operador
-                        ? `${r.operador?.name ?? ""} ${r.operador?.last ?? ""}${r.operador?.identification ? ` (${r.operador.identification})` : ""}`
-                        : r?.operadorId || "—"}
+                    <FieldBox label="Encargado">
+                      {r?.instructorIngeniero
+                        ? `${r.instructorIngeniero?.name ?? ""} ${r.instructorIngeniero?.last ?? ""}${r.instructorIngeniero?.identification ? ` (${r.instructorIngeniero.identification})` : ""}`
+                        : (r?.usuario || r?.user)
+                        ? `${(r.usuario || r.user)?.name ?? ""} ${(r.usuario || r.user)?.last ?? ""}${(r.usuario || r.user)?.email ? ` (${(r.usuario || r.user).email})` : ""}`
+                        : r?.instructorIngenieroId || "—"}
                     </FieldBox>
 
                     <FieldBox label="Tipo maquinaria (texto)">

@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { showSuccess, showError } from "@/utils/sweetAlert";
 
 import machineryService from "@/services/machineryService";
 import operatorsService from "@/services/operatorsService";
-import usersService from "@/services/usersService";
 import sourceService from "@/services/sourceService";
+import usersService from "@/services/usersService";
 
 import {
   rentalSourceOptions,
@@ -107,8 +109,10 @@ function normalizeFuenteRental(raw = "") {
 /* =============================================================== */
 export default function CreateRentalReportForm({ onGoToCatalog }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [operatorsList, setOperatorsList] = useState([]);
+  const [filteredOperators, setFilteredOperators] = useState([]);
 
   // Catálogos dinámicos de subfuentes
   const [riosList, setRiosList] = useState([]);
@@ -200,24 +204,75 @@ const boletaMode = TIPOS_CON_BOLETA.has(formData.tipoMaquinaria) && isAcarreoMat
   useEffect(() => {
     (async () => {
       try {
-        const allUsers = await usersService.getAllUsers();
+        console.log("🔍 Iniciando carga de operadores...");
+        console.log("👤 Usuario actual del contexto:", user);
         
-        // Filtrar: Solo incluir usuarios que NO sean operarios
-        const nonOperatorsOnly = Array.isArray(allUsers) ? allUsers.filter(user => {
-          // Buscar cualquier referencia a "operario"
-          const userString = JSON.stringify(user).toLowerCase();
-          const hasOperario = userString.includes('operario') || userString.includes('operator') || userString.includes('operador');
+        // 1. Obtener información del usuario actual usando el endpoint /users/me
+        let currentUserInfo = null;
+        try {
+          currentUserInfo = await usersService.getMe();
+          console.log("✅ Usuario actual desde /users/me:", currentUserInfo);
+        } catch (error) {
+          console.warn("⚠️ No se pudo obtener información del usuario actual:", error);
+        }
+
+        // 2. Cargar operadores
+        const operators = await operatorsService.getAllOperators();
+        const allOperators = Array.isArray(operators) ? operators : [];
+        console.log("📋 Operadores cargados:", allOperators.length);
+        setOperatorsList(allOperators);
+        
+        // 3. Verificar si el usuario NO es superadmin
+        const isSuperAdmin = user?.roles?.some(role => {
+          const roleName = typeof role === 'string' ? role : role?.name;
+          console.log("🔍 Verificando rol:", roleName);
+          return roleName?.toLowerCase() === 'superadmin';
+        });
+        
+        console.log("🎯 Es SuperAdmin:", isSuperAdmin);
+        
+        if (user && !isSuperAdmin) {
+          // Usuario normal (inspector/ingeniero)
+          let userAsOperator;
           
-          return !hasOperario; // Excluir si contiene "operario" en cualquier parte
-        }) : [];
-        
-        setOperatorsList(nonOperatorsOnly);
+          if (currentUserInfo) {
+            // Usar datos reales del backend
+            userAsOperator = {
+              id: `user_${currentUserInfo.id}`,
+              name: currentUserInfo.name || 'Usuario',
+              last: currentUserInfo.lastname || '',
+              identification: currentUserInfo.email || '',
+              email: currentUserInfo.email || ''
+            };
+            console.log("✅ Usuario como encargado (desde /users/me):", userAsOperator);
+          } else {
+            // Fallback: usar datos del contexto
+            userAsOperator = {
+              id: `user_${user.id}`,
+              name: user.name || user.email?.split('@')[0] || 'Usuario',
+              last: user.last || user.lastname || '',
+              identification: user.email || '',
+              email: user.email || ''
+            };
+            console.log("⚠️ Usuario como encargado (desde contexto):", userAsOperator);
+          }
+          
+          console.log("📌 Configurando operadorId:", userAsOperator.id);
+          setFilteredOperators([userAsOperator]);
+          setFormData(prev => ({ ...prev, operadorId: String(userAsOperator.id) }));
+        } else if (user && isSuperAdmin) {
+          // SuperAdmin: mostrar todos los operadores reales
+          console.log("ℹ️ SuperAdmin - mostrando todos los operadores:", allOperators);
+          setFilteredOperators(allOperators);
+        } else {
+          console.warn("⚠️ No hay usuario en el contexto");
+        }
       } catch (error) {
-        console.error("[CreateRentalReportForm] getAllUsers error:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+        console.error("❌ Error al cargar operadores:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los operadores.", variant: "destructive" });
       }
     })();
-  }, [toast]);
+  }, [toast, user]);
 
   // Prefetch ríos y tajos (para subfuente)
   useEffect(() => {
@@ -568,9 +623,19 @@ const handleChangeTipo = (tipo) => {
   // Si tu backend exige distrito/código camino top-level, usa el de la primera boleta
   const first = formData.boletas[0] || {};
 
+  // Determinar el operadorId real
+  let realOperadorId;
+  if (formData.operadorId.startsWith('user_')) {
+    // Es un usuario (inspector/ingeniero), usar el ID del usuario
+    realOperadorId = user?.id || null;
+  } else {
+    // Es un operador real
+    realOperadorId = Number(formData.operadorId);
+  }
+
   const payload = {
     fecha: formData.fecha,
-    operadorId: Number(formData.operadorId),
+    operadorId: realOperadorId,
     tipoMaquinaria: formData.tipoMaquinaria,     // vagoneta | cabezal
     placa: formData.placa || null,
     actividad: formData.actividad,               // "Acarreo de material"
@@ -594,10 +659,10 @@ const handleChangeTipo = (tipo) => {
 
   await machineryService.createRentalReport(payload);
 
-  toast({
-    title: "Reporte creado",
-    description: `Se registró 1 reporte con ${boletasDet.length} boleta(s).`
-  });
+  await showSuccess(
+    "Reporte creado", 
+    `Se registró 1 reporte con ${boletasDet.length} boleta(s) exitosamente.`
+  );
 
   // reset
   setFormData({
@@ -618,11 +683,10 @@ const handleChangeTipo = (tipo) => {
   });
 } catch (err) {
   console.error("CREATE rentals error ->", err?.response?.data || err);
-  toast({
-    title: "Error al crear",
-    description: err?.response?.data?.message || "No se pudo guardar.",
-    variant: "destructive",
-  });
+  await showError(
+    "Error al crear",
+    err?.response?.data?.message || "No se pudo guardar el reporte."
+  );
 } finally {
   setLoading(false);
 }
@@ -675,9 +739,20 @@ return;
     }
 
     const { fuente: fuenteNorm } = normalizeFuenteRental(formData.fuente);
+    
+    // Determinar el operadorId real
+    let realOperadorId;
+    if (formData.operadorId.startsWith('user_')) {
+      // Es un usuario (inspector/ingeniero), usar el ID del usuario
+      realOperadorId = user?.id || null;
+    } else {
+      // Es un operador real
+      realOperadorId = Number(formData.operadorId);
+    }
+    
     const payload = {
       fecha: formData.fecha,
-      operadorId: Number(formData.operadorId),
+      operadorId: realOperadorId,
       tipoMaquinaria: formData.tipoMaquinaria,
       placa: formData.placa || null,
       actividad: formData.actividad,
@@ -702,7 +777,7 @@ return;
     try {
       setLoading(true);
       await machineryService.createRentalReport(payload);
-      toast({ title: "Boleta de alquiler creada", description: "Se registró correctamente." });
+      await showSuccess("Boleta de alquiler creada", "Se registró correctamente.");
       setFormData({
         fecha: todayLocalISO(),
         operadorId: "",
@@ -721,11 +796,10 @@ return;
       });
     } catch (err) {
       console.error("CREATE rental error ->", err?.response?.data || err);
-      toast({
-        title: "Error al crear boleta",
-        description: err?.response?.data?.message || "No se pudo guardar el registro.",
-        variant: "destructive",
-      });
+      await showError(
+        "Error al crear boleta",
+        err?.response?.data?.message || "No se pudo guardar el registro."
+      );
     } finally {
       setLoading(false);
     }
@@ -735,6 +809,14 @@ return;
   const rowTopCols = 3; // Encargado, Fecha, Tipo, Placa (+ Horas aparte)
   const showAnyBoleta = boletaMode !== "disabled" && isMaterialActivity;
   const rowSpecificCols = 2;
+
+  // Debug: mostrar estado actual
+  useEffect(() => {
+    console.log("🔍 Estado actual del formulario:");
+    console.log("  - operadorId:", formData.operadorId);
+    console.log("  - filteredOperators:", filteredOperators);
+    console.log("  - Coincidencia:", filteredOperators.find(op => String(op.id) === formData.operadorId));
+  }, [formData.operadorId, filteredOperators]);
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
@@ -750,18 +832,31 @@ return;
             {/* Encargado */}
             <div className="space-y-2">
               <Label>Encargado</Label>
-              <Select value={formData.operadorId} onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar encargado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {operatorsList.map((user) => (
-                    <SelectItem key={user.id} value={String(user.id)}>
-                      {user.name} {user.lastname || user.last} {user.identification ? `(${user.identification})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {filteredOperators.length === 1 ? (
+                // Mostrar como Input deshabilitado cuando solo hay un usuario
+                <Input
+                  value={`${filteredOperators[0].name} ${filteredOperators[0].last}`.trim()}
+                  disabled
+                  className="bg-gray-100 cursor-not-allowed"
+                />
+              ) : (
+                // Select normal para superadmin
+                <Select 
+                  value={formData.operadorId} 
+                  onValueChange={(v) => setFormData((p) => ({ ...p, operadorId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar encargado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredOperators.map((op) => (
+                      <SelectItem key={op.id} value={String(op.id)}>
+                        {op.name} {op.last} {op.identification ? `(${op.identification})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             {/* Fecha */}
