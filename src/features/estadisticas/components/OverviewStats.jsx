@@ -37,19 +37,8 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
     );
   }
 
-  // Datos simulados para el componente Overview - más simple que dashboard
-  const overviewData = {
-    systemHealth: 96.8,
-    activeUsers: 89,
-    totalOperations: 1247,
-    efficiency: 91.2,
-    recentActivity: 'Alta actividad en el turno actual',
-    alerts: 2,
-    completedToday: 45,
-    pendingTasks: 12
-  };
-
-  const healthScore = overviewData.systemHealth;
+  // Usar SOLO datos reales del backend
+  const healthScore = data.systemUptime || 0;
   const healthColor = healthScore >= 90 ? 'green' : healthScore >= 70 ? 'yellow' : 'red';
   
   const healthColorClasses = {
@@ -81,7 +70,7 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Usuarios Activos</p>
-                <p className="text-2xl font-bold text-gray-900">{overviewData.activeUsers}</p>
+                <p className="text-2xl font-bold text-gray-900">{data.activeUsers || 0}</p>
                 <p className="text-xs text-green-600 mt-1">↑ En línea ahora</p>
               </div>
               <div className="h-12 w-12 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -96,7 +85,7 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Operaciones Totales</p>
-                <p className="text-2xl font-bold text-gray-900">{overviewData.totalOperations}</p>
+                <p className="text-2xl font-bold text-gray-900">{data.completedReports || 0}</p>
                 <p className="text-xs text-gray-500 mt-1">Hasta la fecha</p>
               </div>
               <div className="h-12 w-12 bg-green-50 rounded-lg flex items-center justify-center">
@@ -111,8 +100,8 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 mb-1">Eficiencia Global</p>
-                <p className="text-2xl font-bold text-gray-900">{overviewData.efficiency}%</p>
-                <p className="text-xs text-green-600 mt-1">↑ +2.3% vs ayer</p>
+                <p className="text-2xl font-bold text-gray-900">{(healthScore || 0).toFixed(1)}%</p>
+                <p className="text-xs text-green-600 mt-1">↑ Sistema operativo</p>
               </div>
               <div className="h-12 w-12 bg-purple-50 rounded-lg flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-purple-600" />
@@ -125,9 +114,9 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Completados Hoy</p>
-                <p className="text-2xl font-bold text-gray-900">{overviewData.completedToday}</p>
-                <p className="text-xs text-orange-600 mt-1">{overviewData.pendingTasks} pendientes</p>
+                <p className="text-sm font-medium text-gray-600 mb-1">Reportes Pendientes</p>
+                <p className="text-2xl font-bold text-gray-900">{data.pendingReports || 0}</p>
+                <p className="text-xs text-orange-600 mt-1">Requieren atención</p>
               </div>
               <div className="h-12 w-12 bg-orange-50 rounded-lg flex items-center justify-center">
                 <FileText className="h-6 w-6 text-orange-600" />
@@ -162,7 +151,7 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div>
                 <p className="font-medium text-gray-900">Actividad</p>
-                <p className="text-sm text-gray-600">{overviewData.recentActivity}</p>
+                <p className="text-sm text-gray-600">Sistema en operación normal</p>
               </div>
               <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse"></div>
             </div>
@@ -174,9 +163,9 @@ const OverviewStats = ({ data, isLoading, onRefresh }) => {
                 <p className="text-sm text-gray-600">Requieren atención</p>
               </div>
               <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                overviewData.alerts > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                (data.pendingReports || 0) > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
               }`}>
-                {overviewData.alerts}
+                {data.pendingReports || 0}
               </div>
             </div>
           </CardContent>

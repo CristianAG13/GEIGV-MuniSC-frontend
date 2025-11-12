@@ -4,6 +4,30 @@
 import apiClient from '../config/api.js';
 
 class UsersService {
+  /**
+   * Obtiene la información del usuario autenticado actual
+   * Útil para que inspectores e ingenieros obtengan su propio ID
+   * al rellenar boletas
+   */
+  async getMe() {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+      
+      const response = await apiClient.get('/users/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      console.log('✅ Usuario actual obtenido:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error al obtener usuario actual:', error);
+      throw new Error(error.response?.data?.message || 'Error al obtener información del usuario');
+    }
+  }
+
   async getAllUsers() {
     try {
       const token = localStorage.getItem('access_token');
